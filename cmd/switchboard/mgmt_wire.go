@@ -1221,6 +1221,15 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}
 
+	// F-4B / AC-012 PC-4 / Ruling 12: emit INFO log for the control management
+	// listener bind address. Mirrors the router bind log at runRouter:825.
+	// Emitted after newMgmtServer succeeds (bind has completed) and before
+	// serveMgmtServer (before any connections are accepted).
+	if w != nil {
+		_, _ = fmt.Fprintf(w, "switchboard control: control management listener bound to %s\n",
+			resolveManagementSocket(cfg, "control"))
+	}
+
 	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
 	// Control mode has no routing subsystem — pass nil router; the paths.list
 	// source is an empty registry, and BC-2.06.003 EC-001 "no active paths"

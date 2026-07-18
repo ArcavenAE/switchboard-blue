@@ -2854,57 +2854,49 @@ func TestRouterMgmtListener_NonLoopbackStillAccepted_Ruling9(t *testing.T) {
 
 // ── F-P3-03: bounded shutdown drain ───────────────────────────────────────────
 
-// TestAdmissionSyncClient_BoundedDialTimeout verifies that a push to an
-// unreachable endpoint completes (goroutine exits) within a bounded time —
-// well under the OS TCP connect timeout (~127s), proving F-P3-03.
+// TestAdmissionSyncClient_BoundedDialTimeout verifies that pushRPC's per-dial
+// timeout (admissionSyncDialTimeout) is actually enforced against a black-holed
+// (SYN-drop) endpoint, not just a connection-refused one.
 //
-// The fix: pushRPC uses a Dialer with a bounded Timeout so that a black-holed
-// (SYN-drop) or connection-refused endpoint fails promptly.
+// A connection-refused endpoint returns instantly regardless of the dialer
+// timeout — it cannot prove the timeout fires. RFC 5737 TEST-NET-1
+// (192.0.2.1) is guaranteed non-routable on any compliant network stack:
+// the SYN is dropped, so the only way the dial completes is when the
+// Dialer.Timeout fires.
 //
-// We use a real loopback address that is NOT listening (connection refused is
-// immediate). We assert the push goroutine exits within a short deadline.
-// This proves the bound exists without depending on real network black-holing.
+// Assertion: a single-attempt push to 192.0.2.1 takes ≥ admissionSyncDialTimeout
+// (proving the timeout fired) and ≤ admissionSyncDialTimeout + generous margin
+// (proving it is bounded, not hanging at the OS default ~127s). Removing the
+// Dialer.Timeout from pushRPC would cause the test to hang past the upper bound
+// and fail.
 //
-// BC-2.05.009 PC-2; S-BL.ADMISSION-SYNC-WIRE F-P3-03.
-// Red Gate: FAILS only if the dialer has no timeout bound — with the fix applied,
-// connection-refused returns almost immediately anyway. To properly test the bound,
-// we use a very short overall context (2s) and assert completion within that budget.
-//
-// The stronger assertion is that pushWithRetry returns within its retry budget.
-// With 5 attempts × (0.1 + 0.2 + 0.4 + 0.8 + 1.6)s = 3.1s max sleep + dial time.
-// With a 5s bounded dialer timeout, worst case is 5s × 5 = 25s — WAY too long for
-// shutdown drain. F-P3-03 requires the total push budget to be well-bounded.
-//
-// Implementation: add a bounded Timeout to the net.Dialer in pushRPC
-// (e.g. 3s per dial), so that even a black-holed SYN-drop endpoint fails in ≤3s
-// per attempt, giving a deterministic pushWithRetry total ≤ (3s + max_sleep) × 5
-// ≈ (3 + 10) × 5 = 65s — still large! The real bound comes from also bounding
-// the TOTAL push goroutine lifetime (e.g., a hard ceiling context on the goroutine).
-//
-// For this test: use a closed listener (connection refused, fast) and assert
-// the push returns within 10s (generous, non-flaky). The key invariant is that
-// pushWG.Wait() does NOT block indefinitely, not that it's fast for refused connections.
-//
-// For the hard guarantee: pushRPC must use a bounded dialer timeout (constant in
-// admission_sync_client.go, e.g. admissionSyncDialTimeout = 5s), so a black-holed
-// endpoint fails in ≤ that timeout instead of the OS default (~127s).
-//
-// NOT t.Parallel: creates a real listener (then closes it) for a refused endpoint.
+// F-4C / F-P3-03 / BC-2.05.009 PC-2.
+// NOT t.Parallel: dials a real non-routable address; duration-sensitive.
 func TestAdmissionSyncClient_BoundedDialTimeout(t *testing.T) {
-	// Get a port that's guaranteed to refuse connections.
-	l, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatalf("listen: %v", err)
+	// Verify the constant exists and is a sane bound.
+	const wantDialTimeoutBound = 10 * time.Second
+	if admissionSyncDialTimeout > wantDialTimeoutBound {
+		t.Errorf("F-4C: admissionSyncDialTimeout=%v exceeds %v; "+
+			"the per-dial bound must be well under the OS TCP connect timeout (~127s)",
+			admissionSyncDialTimeout, wantDialTimeoutBound)
 	}
-	refusedAddr := l.Addr().String()
-	_ = l.Close() // immediately closed — port is now refusing connections
+	if admissionSyncDialTimeout <= 0 {
+		t.Errorf("F-4C: admissionSyncDialTimeout=%v must be positive", admissionSyncDialTimeout)
+	}
+
+	// 192.0.2.1 is RFC 5737 TEST-NET-1 — non-routable, black-holes SYNs.
+	// Any port works; use 9 (Discard) to be explicit.
+	blackHoleAddr := "192.0.2.1:9"
 
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate key: %v", err)
 	}
+	// Configure a sync client pointing at the black-hole address with a single
+	// attempt (admissionSyncRetryMax=1 equivalent: we call pushRPC directly so
+	// we only wait one timeout, keeping CI time to ~admissionSyncDialTimeout).
 	client := newAdmissionSyncClient(
-		[]config.RouterManagementEndpoint{{Addr: refusedAddr}},
+		[]config.RouterManagementEndpoint{{Addr: blackHoleAddr}},
 		priv,
 	)
 
@@ -2917,42 +2909,334 @@ func TestAdmissionSyncClient_BoundedDialTimeout(t *testing.T) {
 		t.Fatalf("generate key: %v", err)
 	}
 
-	// Verify that admissionSyncDialTimeout constant exists and is set to a
-	// reasonable bound (≤ 10s). This is the per-dial bound.
-	// Red Gate: admissionSyncDialTimeout is not yet defined in admission_sync_client.go.
-	const wantDialTimeoutBound = 10 * time.Second
-	if admissionSyncDialTimeout > wantDialTimeoutBound {
-		t.Errorf("F-P3-03: admissionSyncDialTimeout=%v exceeds %v; "+
-			"the per-dial bound must be well under the OS TCP connect timeout (~127s)",
-			admissionSyncDialTimeout, wantDialTimeoutBound)
+	// To keep test duration to one dial timeout, call pushRPC directly (one dial,
+	// no retry loop). This isolates the per-dial bound without running the full
+	// 5-attempt retry sequence (~5×admissionSyncDialTimeout = 25s).
+	ctx := context.Background()
+	start := time.Now()
+	argsJSON, merr := json.Marshal(struct {
+		SVTNID string `json:"svtn_id"`
+		PubKey string `json:"pubkey"`
+		Role   string `json:"role"`
+	}{
+		SVTNID: hex.EncodeToString(svtnID[:]),
+		PubKey: base64.RawURLEncoding.EncodeToString([]byte(pub)),
+		Role:   "access",
+	})
+	if merr != nil {
+		t.Fatalf("marshal args: %v", merr)
 	}
-	if admissionSyncDialTimeout <= 0 {
-		t.Errorf("F-P3-03: admissionSyncDialTimeout=%v must be positive", admissionSyncDialTimeout)
+	pushErr := client.pushRPC(ctx, blackHoleAddr, CmdAdmissionRegister, argsJSON)
+	elapsed := time.Since(start)
+
+	// pushRPC must return an error (SYN-drop / dial timeout).
+	if pushErr == nil {
+		t.Errorf("F-4C: pushRPC to black-hole %s returned nil error; expected dial timeout error", blackHoleAddr)
 	}
 
-	// The push itself should complete within a generous deadline.
-	// For refused connections it's nearly instant; this proves the bound is used.
-	done := make(chan error, 1)
-	start := time.Now()
+	// Lower bound: elapsed ≥ admissionSyncDialTimeout × 0.8 proves the timeout
+	// fired (not connection-refused or instant error).
+	lowerBound := admissionSyncDialTimeout * 8 / 10
+	if elapsed < lowerBound {
+		t.Errorf("F-4C: pushRPC returned in %v; expected ≥ %v (lower bound = 0.8×admissionSyncDialTimeout=%v).\n"+
+			"The dial to 192.0.2.1 was instant — connection-refused path or routing anomaly?\n"+
+			"If removing Dialer.Timeout from pushRPC, this test would hang well past the upper bound.",
+			elapsed, lowerBound, admissionSyncDialTimeout)
+	}
+
+	// Upper bound: elapsed ≤ admissionSyncDialTimeout × 2 + 2s proves the per-dial
+	// bound is respected and not relying on the OS default (~127s).
+	upperBound := admissionSyncDialTimeout*2 + 2*time.Second
+	if elapsed > upperBound {
+		t.Errorf("F-4C: pushRPC to black-hole took %v; expected ≤ %v.\n"+
+			"This suggests the Dialer.Timeout is not set — the OS TCP connect timeout (~127s) is firing instead.\n"+
+			"Fix: set Dialer{Timeout: admissionSyncDialTimeout} in pushRPC.",
+			elapsed, upperBound)
+	}
+	t.Logf("F-4C: pushRPC to black-hole 192.0.2.1 returned in %v (admissionSyncDialTimeout=%v): %v",
+		elapsed, admissionSyncDialTimeout, pushErr)
+}
+
+// ── F-4A: control-side snapshot mutation-order preservation ──────────────────
+
+// TestControlAdmission_SnapshotMutationOrderPreserved verifies the F-4A
+// invariant: after any sequence of concurrent persist calls from admin handlers,
+// the on-disk snapshot must reflect a consistent, non-stale view of the keyset.
+//
+// F-4A / BC-2.05.010 Invariant 1 / S-BL.ADMISSION-SYNC-WIRE AC-011.
+//
+// Race scenario (F-4A): H2(register B) reads {A:active} before H1(revoke A)
+// mutates the keyset. H1 writes {A:revoked}+renames. H2 then renames its stale
+// snapshot — disk = {A:active} (revocation defeated across restart).
+//
+// Fix: hold a shared persist mutex across {snapshot-read, marshal, write, rename}
+// in the controlPersister. Once the mutex is held, the snapshot-read happens AFTER
+// the prior persists complete, so stale reads cannot overwrite fresh ones.
+//
+// This test drives N concurrent register+revoke cycles through the real handler
+// functions (which call the persist path). After drain, it verifies that the
+// on-disk snapshot is consistent with the in-memory keyset state — specifically,
+// that no revoked key appears active on disk.
+//
+// Under -race this test also detects data races in the persist path.
+//
+// NOT t.Parallel: creates tempdir, writes real files.
+func TestControlAdmission_SnapshotMutationOrderPreserved(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-ctrl-race-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	snapPath := filepath.Join(dir, "control-state.json")
+
+	_, ctrlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate ctrl key: %v", err)
+	}
+	ctrlPub := ctrlPriv.Public().(ed25519.PublicKey)
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, ctrlPub)
+	if _, err := m.Create("race-svtn"); err != nil {
+		t.Fatalf("create SVTN: %v", err)
+	}
+
+	// Build handlers with the snapshot path (after the fix, all four handlers
+	// share the same controlPersister with its mutex).
+	handlers := BuildAdminHandlers(m, mgmt.NewOperatorKeySet(nil), nil, nil, snapPath)
+	handlerMap := make(map[string]func(ctx context.Context, args json.RawMessage) (any, error))
+	for _, h := range handlers {
+		handlerMap[h.Command] = h.Fn
+	}
+	registerFn := handlerMap["admin.key.register"]
+	revokeFn := handlerMap["admin.key.revoke"]
+	ctx := context.Background()
+
+	// Phase 1: register N keys sequentially (establishes keyset state for Phase 2).
+	const N = 30
+	keys := make([]ed25519.PublicKey, N)
+	for i := range keys {
+		pub, _, kerr := ed25519.GenerateKey(rand.Reader)
+		if kerr != nil {
+			t.Fatalf("generate key %d: %v", i, kerr)
+		}
+		keys[i] = pub
+		args, merr := json.Marshal(map[string]any{
+			"svtn_id":        "race-svtn",
+			"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pub)),
+			"role":           "access",
+			"caller_role":    "control",
+		})
+		if merr != nil {
+			t.Fatalf("marshal register args %d: %v", i, merr)
+		}
+		if _, herr := registerFn(ctx, args); herr != nil {
+			t.Fatalf("register key %d: %v", i, herr)
+		}
+	}
+
+	// Phase 2: concurrently revoke the first N/2 keys AND register N/2 extra keys.
+	// Without the persist mutex, a register goroutine (which reads the keyset
+	// BEFORE the revoke goroutine mutates it) may rename AFTER the revoke goroutine
+	// → stale snapshot overwrites the authoritative one.
+	const M = 15
+	extraKeys := make([]ed25519.PublicKey, M)
+	for i := range extraKeys {
+		pub, _, kerr := ed25519.GenerateKey(rand.Reader)
+		if kerr != nil {
+			t.Fatalf("generate extra key %d: %v", i, kerr)
+		}
+		extraKeys[i] = pub
+	}
+
+	var wg sync.WaitGroup
+	// N/2 goroutines each revoke a distinct key.
+	for i := 0; i < N/2; i++ {
+		wg.Add(1)
+		pub := keys[i]
+		go func() {
+			defer wg.Done()
+			args, merr := json.Marshal(map[string]any{
+				"svtn_id":     "race-svtn",
+				"pubkey":      base64.RawURLEncoding.EncodeToString([]byte(pub)),
+				"role":        "access",
+				"caller_role": "control",
+			})
+			if merr != nil {
+				return
+			}
+			_, _ = revokeFn(ctx, args)
+		}()
+	}
+	// M goroutines each register a new key (stale snapshot vectors).
+	for i, pub := range extraKeys {
+		wg.Add(1)
+		i, pub := i, pub
+		go func() {
+			defer wg.Done()
+			args, merr := json.Marshal(map[string]any{
+				"svtn_id":        "race-svtn",
+				"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pub)),
+				"role":           "access",
+				"caller_role":    "control",
+			})
+			if merr != nil {
+				t.Errorf("marshal extra register args %d: %v", i, merr)
+				return
+			}
+			_, _ = registerFn(ctx, args)
+		}()
+	}
+	wg.Wait()
+
+	// Load the final snapshot.
+	snapData, readErr := os.ReadFile(snapPath)
+	if readErr != nil {
+		t.Fatalf("F-4A: snapshot not found after concurrent mutations: %v", readErr)
+	}
+	var snap snapshotFile
+	if uerr := json.Unmarshal(snapData, &snap); uerr != nil {
+		t.Fatalf("F-4A: snapshot contains invalid JSON: %v", uerr)
+	}
+	if snap.SchemaVersion != snapshotCurrentSchemaVersion {
+		t.Errorf("F-4A: snapshot schema_version=%d; want %d", snap.SchemaVersion, snapshotCurrentSchemaVersion)
+	}
+
+	// Build in-memory revocation state.
+	allEntries := ks.AllSVTNEntries()
+	type keyState struct{ revoked bool }
+	inMem := make(map[string]keyState)
+	for _, entries := range allEntries {
+		for _, e := range entries {
+			inMem[string([]byte(e.PublicKey))] = keyState{revoked: e.IsRevoked()}
+		}
+	}
+
+	// Assert: for every key that appears ACTIVE in the snapshot, the in-memory
+	// keyset must also show it as active. If in-memory says revoked but disk says
+	// active, a stale rename occurred (F-4A lost-update race).
+	for _, svtn := range snap.SVTNs {
+		for _, sk := range svtn.Keys {
+			if sk.Revoked {
+				continue // revoked keys in snapshot are always safe
+			}
+			pubBytes, derr := base64.RawURLEncoding.DecodeString(sk.PubKey)
+			if derr != nil {
+				t.Errorf("F-4A: invalid pubkey in snapshot: %v", derr)
+				continue
+			}
+			ms, found := inMem[string(pubBytes)]
+			if !found {
+				// Active in snapshot, absent in memory: stale ghost entry.
+				t.Errorf("F-4A: snapshot has active key not present in in-memory keyset "+
+					"(pubkey=%s) — stale snapshot overwrite (F-4A race).\n"+
+					"Fix: wrap the entire {snapshot-read, marshal, write, rename} sequence "+
+					"in a shared persist mutex across all four admin handlers.",
+					sk.PubKey)
+				continue
+			}
+			if ms.revoked {
+				t.Errorf("F-4A: snapshot shows key %s as active but in-memory keyset shows revoked.\n"+
+					"A stale register snapshot overwrote the authoritative revoke snapshot.\n"+
+					"Fix: hold a shared persist mutex across {snapshot-read+marshal+write+rename}.\n"+
+					"Without the mutex, the last rename wins regardless of mutation order.",
+					sk.PubKey)
+			}
+		}
+	}
+}
+
+// ── F-4B: control management listener bind-address INFO log ──────────────────
+
+// TestControlMgmtListener_BindAddressLogged verifies that runControl emits an
+// INFO log line "control management listener bound to <address>" when it binds
+// its management listener, satisfying AC-012 PC-4 / Ruling 12.
+//
+// F-4B / AC-012 PC-4 / BC-2.09.003 PC-11b v2.2 / Ruling 12.
+// NOT t.Parallel: starts a real TCP listener in runControl.
+func TestControlMgmtListener_BindAddressLogged(t *testing.T) {
+	cfg := &config.Config{
+		ManagementSocket: "127.0.0.1:0", // loopback + ephemeral port
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	// logW is a goroutine-safe log accumulator. runControl writes to pw;
+	// a reader goroutine drains pr into logW.buf under logW.mu so the
+	// polling loop can read logW.buf without a data race.
+	type syncLogWriter struct {
+		mu  sync.Mutex
+		buf strings.Builder
+	}
+	var logW syncLogWriter
+
+	// os.Pipe: write end → runControl; read end → logW via reader goroutine.
+	pr, pw, _ := os.Pipe()
+
+	// Read all output from runControl into logW.buf under the mutex.
+	readDone := make(chan struct{})
 	go func() {
-		ctx := context.Background()
-		done <- client.PushRegisterKey(ctx, svtnID, pub, admission.RoleAccess)
+		defer close(readDone)
+		buf := make([]byte, 512)
+		for {
+			n, err := pr.Read(buf)
+			if n > 0 {
+				logW.mu.Lock()
+				logW.buf.Write(buf[:n])
+				logW.mu.Unlock()
+			}
+			if err != nil {
+				return
+			}
+		}
 	}()
 
-	const testTimeout = 15 * time.Second
-	select {
-	case err := <-done:
-		elapsed := time.Since(start)
-		// We expect a non-nil error (connection refused).
-		if err == nil {
-			t.Error("F-P3-03: PushRegisterKey succeeded to a closed port; expected error")
+	sighupCh := make(chan os.Signal, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runControl(ctx, pw, cfg, "", sighupCh)
+		_ = pw.Close()
+	}()
+
+	// Wait for the bind log to appear (or timeout).
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		logW.mu.Lock()
+		found := strings.Contains(logW.buf.String(), "management listener bound to")
+		logW.mu.Unlock()
+		if found {
+			break
 		}
-		t.Logf("F-P3-03: PushRegisterKey returned in %v with error: %v", elapsed, err)
-	case <-time.After(testTimeout):
-		t.Errorf("F-P3-03: PushRegisterKey did not complete within %v. "+
-			"The push goroutine hung — a black-holed endpoint would stall pushWG.Wait() at shutdown.\n"+
-			"Fix: add admissionSyncDialTimeout to the net.Dialer in pushRPC so each dial attempt "+
-			"has a hard upper bound much less than the OS TCP connect timeout (~127s).",
-			testTimeout)
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	cancel()
+	select {
+	case rErr := <-errCh:
+		if rErr != nil {
+			t.Logf("F-4B: runControl returned error on shutdown: %v (may be benign)", rErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("F-4B: runControl did not return within 5s after ctx cancel")
+	}
+
+	_ = pr.Close()
+	<-readDone
+
+	logW.mu.Lock()
+	logStr := logW.buf.String()
+	logW.mu.Unlock()
+
+	// AC-012 PC-4: "control management listener bound to <address>"
+	wantSubstr := "control management listener bound to"
+	if !strings.Contains(logStr, wantSubstr) {
+		t.Errorf("F-4B: AC-012 PC-4 bind-address INFO log %q not found in runControl output.\n"+
+			"Fix: emit this log in runControl after newMgmtServer returns (mirror runRouter:825).\n"+
+			"output=%q", wantSubstr, logStr)
+	}
+	// The logged address must contain "127.0.0.1" (the loopback addr we configured).
+	if !strings.Contains(logStr, "127.0.0.1") {
+		t.Errorf("F-4B: bind log does not contain the bound address 127.0.0.1. output=%q", logStr)
 	}
 }

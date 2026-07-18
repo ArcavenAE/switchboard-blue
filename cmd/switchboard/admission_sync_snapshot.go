@@ -42,6 +42,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -52,6 +53,53 @@ import (
 // via errors.Is — no real code returns this value after implementation
 // (S-BL.ADMISSION-SYNC-WIRE AC-006/007).
 var errSnapshotNotImplemented = errors.New("admission snapshot: not implemented")
+
+// controlPersister serialises concurrent persist calls from the four admin
+// handlers (register, revoke, expire, admin.svtn.destroy) via a shared mutex.
+//
+// F-4A fix (BC-2.05.010 Invariant 1 / S-BL.ADMISSION-SYNC-WIRE AC-011):
+// Without this mutex, a handler that read the keyset EARLIER (e.g., register)
+// can os.Rename LATER than a handler that read it AFTER a revocation —
+// resurrecting the revoked key on disk despite the authoritative keyset
+// already reflecting the revocation. The fix: hold mu across the entire
+// {snapshot-read, marshal, write-temp, rename} sequence so that rename order
+// matches keyset-read order, which matches mutation order.
+//
+// Router-side: writeSnapshotAtomic calls from admission_sync_wire.go are
+// router-side handler invocations (router is a cache; control re-pushes on
+// restart self-heal any transient staleness — BC-2.05.010 Inv-2). They do NOT
+// share the control-side persist mutex. Each router-side path is single-handler
+// per RPC (no concurrent router-side handlers share a path), so staleness is
+// transient rather than permanent.
+type controlPersister struct {
+	path string
+	mu   sync.Mutex
+}
+
+// newControlPersister returns a *controlPersister for path.
+// Returns nil if path is empty (no persistence configured).
+func newControlPersister(path string) *controlPersister {
+	if path == "" {
+		return nil
+	}
+	return &controlPersister{path: path}
+}
+
+// persist writes the current keyset state to disk under the persist mutex.
+// The mutex serialises {snapshot-read, marshal, write, rename} across all four
+// admin handlers so rename order == mutation order (F-4A fix).
+// Write failure is advisory (AC-005 PC-2 / BC-2.05.010 PC-2).
+// Safe to call with a nil receiver (no-op when no persistence configured).
+func (p *controlPersister) persist(ks *admission.AdmittedKeySet) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := writeSnapshotAtomic(p.path, ks); err != nil {
+		_ = err // advisory: do not propagate write failure to RPC caller
+	}
+}
 
 // snapshotCurrentSchemaVersion is the schema_version written and accepted by
 // this implementation (BC-2.05.010; Decision 6). Forward-compat gate: an
