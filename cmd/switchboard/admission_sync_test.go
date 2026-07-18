@@ -2789,6 +2789,84 @@ func TestControlAdmission_FailClosedOnCorruptSnapshot(t *testing.T) {
 	}
 }
 
+// TestControlAdmission_RunControlWithKey_FailClosedOnCorruptSnapshot verifies
+// that runControlWithKey (the seam under test) returns an error wrapping E-KEY-002
+// when cfg.ControlAdmissionStateFile points at a corrupt snapshot, and that this
+// error is returned BEFORE binding the management listener.
+//
+// AC-011 PC-3 requires runControl to fail-closed on a corrupt
+// control_admission_state_file. The load occurs at the top of runControlWithKey
+// (mgmt_wire.go loadSnapshotFromFile call), before newMgmtServer / buildMgmtListener
+// is called — so a corrupt file must produce an immediate error return with no
+// listener bound.
+//
+// This test is the runControlWithKey-level guard; TestControlAdmission_FailClosedOnCorruptSnapshot
+// covers the same property at the loadSnapshotFromFile helper level.
+//
+// Revert-sensitivity: if the fail-closed load guard were removed from
+// runControlWithKey, this test would fail with nil error instead of E-KEY-002.
+//
+// NOT t.Parallel: creates real temp files; avoids umask race with t.Parallel.
+// AC-011 PC-3 / BC-2.05.009 PC-7 v1.2; S-BL.ADMISSION-SYNC-WIRE F-4.
+func TestControlAdmission_RunControlWithKey_FailClosedOnCorruptSnapshot(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-ctrl-corrupt-rck-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	// Write a corrupt snapshot: malformed JSON that cannot be parsed.
+	snapshotPath := filepath.Join(dir, "corrupt-admission-state.json")
+	if err := os.WriteFile(snapshotPath, []byte("{corrupt json{{"), 0o600); err != nil {
+		t.Fatalf("WriteFile corrupt snapshot: %v", err)
+	}
+
+	// Generate a real keypair — key correctness is irrelevant here since
+	// runControlWithKey must fail before using it.
+	_, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	cfg := &config.Config{
+		// No management socket configured — if runControlWithKey gets past the
+		// load guard it would fail on listener construction, not on load.
+		ControlAdmissionStateFile: snapshotPath,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sighupCh := make(chan os.Signal, 1)
+	loadErr := runControlWithKey(ctx, nil, cfg, "", sighupCh, controlPriv)
+
+	// Must return a non-nil error wrapping E-KEY-002.
+	if loadErr == nil {
+		t.Fatal("AC-011 PC-3 FailClosed: runControlWithKey returned nil for corrupt snapshot; " +
+			"must return E-KEY-002 (fail-closed) before binding any listener")
+	}
+	if !strings.Contains(loadErr.Error(), "E-KEY-002") {
+		t.Errorf("AC-011 PC-3 FailClosed: error does not contain E-KEY-002: %v", loadErr)
+	}
+
+	// Bind-ordering guard: the error must originate from the load path, not from
+	// listener construction. The error message must contain "load control admission
+	// snapshot" (the runControlWithKey wrapper text), confirming early return.
+	if !strings.Contains(loadErr.Error(), "load control admission snapshot") {
+		t.Errorf("AC-011 PC-3 FailClosed: error does not contain expected wrapper text "+
+			"'load control admission snapshot'; got: %v\n"+
+			"This suggests the error did NOT originate from the fail-closed load guard — "+
+			"check that loadSnapshotFromFile is called before newMgmtServer.", loadErr)
+	}
+
+	// Verify errors.Is behaviour if E-KEY-002 is ever promoted to a sentinel.
+	// For now, string containment is the codebase convention (see
+	// TestControlAdmission_FailClosedOnCorruptSnapshot). This block is
+	// intentionally symmetric with that test.
+	_ = errors.Unwrap(loadErr) // ensure errors package is exercised (no-op but prevents import drop)
+}
+
 // TestControlAdmission_MissingFileEmptyKeyset verifies that when
 // control_admission_state_file is configured but the file does not exist,
 // the control daemon starts with an empty keyset (fresh install — no error).
@@ -4644,12 +4722,22 @@ func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_LastUnreachable_PastExpiry
 }
 
 // TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_ReachableEndpointCorrect
-// verifies that when the FIRST endpoint immediately rejects connections (RST) and
-// the SECOND is reachable, the reachable endpoint is fully and correctly processed:
-// active key present/admissible-eligible, revoked key absent (Ruling 13 skip-register).
+// verifies per-endpoint independence when the FIRST endpoint immediately rejects
+// connections (RST) and the SECOND is reachable: the reachable endpoint must be
+// fully and correctly processed regardless of the first endpoint's failures.
 //
-// This proves per-endpoint independence regardless of order: the first endpoint's
-// failures must not prevent the second endpoint from being fully processed.
+// Assertions: active key present/admissible-eligible on the reachable router;
+// revoked key absent (Ruling 13 skip-register).
+//
+// Note: this test passes under both old and new (17h) implementations because the
+// old pushWithRetry path fanned to ALL endpoints within a single call — endpoint[0]
+// failing did NOT prevent endpoint[1] from being tried. Per-endpoint independence
+// for the first-endpoint-fails case was not broken by the old flatten path. This
+// test is a valid non-vacuous assertion of real router state, but is NOT the
+// discriminating 17h guard. The revert-sensitive 17h guard is
+// TestAdmissionSync_PushFullSnapshot_MultiEndpoint_LastUnreachable_PastExpiry_ReachableEndpointNonAdmissible,
+// which fails without 17h because the last-endpoint-fails case breaks the
+// compensating-revoke sequence on the reachable endpoint.
 //
 // Note on "unreachable" endpoint design: a closed local port (RST on connect) is used
 // rather than a black-hole IP (SYN-drop) for the first endpoint. Both are equally valid
@@ -4770,7 +4858,7 @@ func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_Reachable
 
 // ── 17i (F-P8-02): runControl load→push ordering guard ───────────────────────
 
-// TestControlAdmission_RunControl_LoadThenPush_E2E_RealKey tests the REAL
+// TestControlAdmission_RunControl_LoadThenPush_E2E tests the REAL
 // load→push ordering through runControlWithKey: loads a snapshot with 1 active +
 // 1 revoked key, pushes to a real in-process router using an AUTHENTICATED key
 // (controlPriv registered in the router's OperatorKeySet), and asserts the router
@@ -4782,16 +4870,14 @@ func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_Reachable
 // the load AFTER PushFullSnapshot, the router receives an empty push and the
 // active-key assertion fails.
 //
-// The existing TestControlAdmission_RunControl_LoadThenPush_E2E uses a direct
-// helper fallback because runControl generates its own ephemeral key (not in
-// the router's OperatorKeySet) — authentication fails so the push is advisory-
-// no-op and the router state cannot be directly asserted. This new test uses
-// runControlWithKey to inject the pre-registered key, making the router assertion
-// a REAL behavioral guard.
+// runControlWithKey is used to inject the pre-registered key, making the router
+// assertion a REAL behavioral guard. (runControl generates its own ephemeral key
+// that is not in the router's OperatorKeySet — authentication fails and the push
+// is advisory-no-op, so router state cannot be directly asserted from runControl.)
 //
 // NOT t.Parallel: starts real TCP listeners + runControlWithKey goroutine.
 // AC-009 PC-2 / AC-011 PC-3 / BC-2.05.009 PC-7 v1.6; S-BL.ADMISSION-SYNC-WIRE LOW-2 / F-P8-02.
-func TestControlAdmission_RunControl_LoadThenPush_E2E_RealKey(t *testing.T) {
+func TestControlAdmission_RunControl_LoadThenPush_E2E(t *testing.T) {
 	dir, err := os.MkdirTemp("", "sb-ctrl-e2e-realkey-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp: %v", err)
