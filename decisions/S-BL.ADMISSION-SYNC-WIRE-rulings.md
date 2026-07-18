@@ -1,7 +1,7 @@
 ---
 artifact_id: S-BL.ADMISSION-SYNC-WIRE-rulings
 document_type: rulings
-version: "1.6"
+version: "1.7"
 status: draft
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
@@ -21,12 +21,13 @@ related_code:
   - internal/mgmt/mgmt.go
 ---
 
-# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.6
+# S-BL.ADMISSION-SYNC-WIRE: Elaboration Rulings 1.7
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.7 | 2026-07-18 | F-P8-01 adjudicated (Ruling 15): multi-endpoint layer of the Invariant-6 durability question. Root cause: `pushSnapshotEntries` per-entry state machine (register→expire→compensate) was designed for single-endpoint semantics; `pushWithRetry` collapses multi-endpoint results to a lossy aggregate error — last-endpoint failure causes the `continue` on register-fail (17f(i)) to suppress expire and compensating-revoke for already-registered earlier endpoints. Chosen model: **option (a) variant** — `PushFullSnapshot` iterates endpoints at the outer level; a new `pushSnapshotToEndpoint` helper runs the full per-entry state machine against ONE endpoint using `pushRPC`-with-retry directly (no `pushWithRetry` fan-out). `pushSnapshotEntries` and the `admissionSyncer` interface are unchanged; delta-push paths are unchanged. Spec: BC-2.05.009 PC-7 and Invariant 6 are IMPL-ONLY fixes — the spec's "each configured router endpoint" intent was always per-endpoint sequential; the impl merely violates it. Single clarifying sentence added to PC-7 (see Ruling 15 §i). Ruling 14 single-endpoint assumption in PC-3b(i) remains correctly scoped by the new per-endpoint sequencing — no BC text change beyond the PC-7 clarification. Over-restrictive sub-case (compensating revoke fans to all on single-endpoint expire-fail in delta-push): FAIL-SAFE, KEEP as-is; in `PushFullSnapshot`, per-endpoint sequencing eliminates it automatically. F-P8-02 (runControl LoadThenPush ordering guard): inject `daemonPriv` via a new `runControlWithKey` test-seam variant so the test can pre-authorize control's key on the router and observe the pushed keyset directly; see Ruling 15 §F-P8-02. |
 | 1.6 | 2026-07-18 | F-P7-01 adjudicated (Ruling 14): past-expiry partial-failure gap (register-succeed/expire-fail) resolved via approach (c) scoped to past-expiry — compensating best-effort `internal.admission.revoke` when expire fails for a key whose expiry is already in the past. Future-expiry partial-failure ruled PC-5 stale/missing (permitted): at push time the key is currently active in control, the router's active-no-expiry state correctly represents the current admission status, and the divergence only materializes after time T — not an immediately-less-restrictive state. AdmitNode code-verified to NOT check expiry (admission.go:457–526); only ReAuthenticate checks expiry (reauth.go:195,219) — this confirms past-expiry partial-failure IS immediately exploitable at handshake and sharpens the Invariant 6 obligation. PC-7b amended: remove "regardless of whether the expiry timestamp is past or future" blanket mandate; add compensating-revoke obligation for past-expiry partial failure. Invariant 6 amended: add explicit future-vs-past-expiry carve-out. EC-010 amended. Router expire handler: no change (key-not-found remains E-ADM-013 — expire should not arrive for absent keys since it always follows register in PushFullSnapshot for active entries; making it idempotent-success would mask sequencing bugs). No wire format change. |
 | 1.5 | 2026-07-17 | F-P6-02 adjudicated (Ruling 13): partial-failure gap in PushFullSnapshot for revoked entries resolved via approach (c) — skip `internal.admission.register` for revoked entries entirely; issue revoke-only RPC for entries already present on router. No wire format change. BC-2.05.009 Invariant 6 / PC-5 tension resolved: the "less-restrictive" prohibition is absolute; "stale/missing" (permitted by PC-5) and "actively made less-restrictive" (forbidden by Invariant 6) are distinct states. F-P6-01 confirmed as impl-only fix (no spec change). |
 | 1.4 | 2026-07-17 | F-P3-01 + F-P3-02 adversary pass-3 findings adjudicated (human decision: both in-scope). Code-verified: (1) `runControl` (`mgmt_wire.go:1176`) constructs `ks := admission.NewAdmittedKeySet()` fresh; no load path; `PushFullSnapshot` at line 1222 hits the empty-keyset early return at `admission_sync_client.go:378–381` — EC-007 resync guarantee is inert today; (2) no persist-write hook in any of the four admin handlers (`admin_handlers.go`); (3) `writeSnapshotAtomic` / `loadSnapshotFromFile` / `marshalSnapshot` / `unmarshalSnapshot` in `admission_sync_snapshot.go` are fully implemented and reusable as-is; (4) `mgmtListenAddr` (`mgmt_wire.go:187–199`) auto-detect fires for ALL non-console modes — control and access modes with a `host:port` `management_socket` silently bind TCP on all interfaces; (5) `buildMgmtListener` loopback guard at line 221 checks `if mode == "console"` — control/access TCP has no guard and no bind log. Ruling 11 added: control-side admission keyset persistence via new `control_admission_state_file` config field (control-mode-only, PC-15 in BC-2.09.003; write on each committed admin.key.*/admin.svtn.* mutation, before dispatchPush, advisory; load before PushFullSnapshot on startup, fail-closed on corrupt, missing→empty). Ruling 12 added: scope-correct the TCP auto-detect + loopback guard — router mode keeps no loopback guard (Ruling 9 unchanged); control/access modes with a host:port management_socket apply the loopback guard and MUST emit a bind-address INFO log; only router mode may bind non-loopback TCP. Summary table rows added for Rulings 11 and 12. BC/story propagation list specified. |
@@ -674,6 +675,9 @@ interaction is needed.
 | PushFullSnapshot past-expiry partial-failure | **PAST-expiry entries:** if `register` succeeds but `expire` fails, issue best-effort `internal.admission.revoke` (compensating action). Router ends non-admissible (revoked), which satisfies Invariant 6. **FUTURE-expiry entries:** register-succeed/expire-fail is PC-5 stale/missing (permitted). The key is currently active in control; the router's active-no-expiry state is not immediately less-restrictive at push time. The staleness manifests only after time T elapses. See Ruling 14. |
 | AdmitNode expiry check | AdmitNode does NOT check expiry (admission.go:457–526 — checks only `revoked`). Only ReAuthenticate checks expiry (reauth.go:195,219). A past-expiry key left active-and-non-expiring on the router IS immediately admissible at initial handshake — sharpening the Invariant 6 obligation for past-expiry partial failure (Ruling 14). |
 | Router expire handler key-not-found | Remains E-ADM-013 (error). No change to idempotency contract. Expire only runs after a successful register in PushFullSnapshot for active entries; key-not-found on expire indicates a sequencing bug, not the Ruling 13 skip-register scenario (which is revoke-only). |
+| PushFullSnapshot multi-endpoint sequencing | **Per-endpoint outer loop (Ruling 15):** `PushFullSnapshot` iterates endpoints at outer level; new `pushSnapshotToEndpoint` runs the full per-entry state machine per endpoint using single-endpoint retry directly. `pushSnapshotEntries` and `admissionSyncer` interface unchanged. Delta-push paths unchanged. BC-2.05.009 IMPL-ONLY fix (one PC-7 clarifying sentence). |
+| Over-restrictive compensating-revoke (multi-endpoint) | **Delta-push: KEEP fail-safe** (revoke fans to all endpoints on single-endpoint expire-fail — still non-admissible). **PushFullSnapshot: structurally eliminated** by per-endpoint sequencing. See Ruling 15. |
+| runControl load→push ordering guard (F-P8-02) | **`runControlWithKey` test seam:** new unexported function accepts caller-provided `daemonPriv`; `runControl` wraps it. Test uses `runControlWithKey` + prepared `controlPriv` to pre-authorize control on router; asserts `routerKS.AllSVTNEntries()` directly. See Ruling 15 §F-P8-02. |
 | Open human flags | None — all findings adjudicated. |
 
 ---
@@ -1738,4 +1742,400 @@ success per Ruling 13). Both cases are correct.
 | `S-BL.ADMISSION-SYNC-WIRE.md` | Amend AC-009 PC-3b; add `TestAdmissionSync_PushFullSnapshot_PastExpiry_ExpireFails_CompensatingRevoke` test name; add impl task 17f. Story-writer executes. |
 | `admission_sync_client.go` | Amend `PushFullSnapshot` active-entry loop: (1) short-circuit on register-fail (skip expire); (2) on past-expiry expire-fail, issue compensating `PushRevokeKey`; (3) future-expiry expire-fail: no compensating action. Implementer executes. |
 | `admission_sync_wire.go` | No change. Expire handler key-not-found remains E-ADM-013. Revoke handler idempotent-success (Ruling 13) is already in place and handles the compensating-revoke-on-unregistered-entry case correctly. |
+
+---
+
+## Ruling 15 — PushFullSnapshot multi-endpoint partial-failure (F-P8-01) + runControl ordering guard (F-P8-02)
+
+### F-P8-01: the multi-endpoint layer of the Invariant-6 durability question
+
+#### Root cause (code-verified)
+
+`pushWithRetry` (admission_sync_client.go:273–303) iterates endpoints sequentially. For each
+endpoint it runs the retry loop and tracks `lastErr`. When an endpoint succeeds (`pushRPC`
+returns nil), `lastErr` is reset to nil (line 285). When an endpoint fails after all retries,
+`lastErr` holds the error. The function returns `lastErr` — the aggregate reflects the LAST
+endpoint's outcome, not the logical OR of all outcomes.
+
+Concrete collapse scenario with `[{A reachable}, {B unreachable}]` (B is last):
+
+- `PushRegisterKey`: A succeeds → `lastErr=nil`; B fails 5× → `lastErr=B's error` → returns
+  non-nil.
+- `pushSnapshotEntries` line 426–428 (17f(i)): `if err := s.PushRegisterKey(...); err != nil {
+  lastErr = err; continue }` — the `continue` fires.
+- Consequence: expire is never pushed to A (which has the key registered active-and-non-expiring)
+  and the past-expiry compensating revoke never fires for A.
+- DURABLE: on every subsequent `PushFullSnapshot` (every control restart), B is still
+  unreachable → same `continue` → A's entry is never corrected. This is an Invariant 6
+  violation that self-heals only when B becomes reachable.
+
+The adversary's "over-restrictive" sub-case: when ALL endpoints receive register successfully
+but the last endpoint fails expire → compensating `PushRevokeKey` fans to ALL endpoints via
+`pushWithRetry` → endpoints that correctly processed expire are erroneously revoked. This is
+fail-safe (still non-admissible) but discards expiry metadata on correct routers and marks
+revoked-not-expired.
+
+**Root cause is shared:** both failure modes stem from the same architectural mismatch — the
+per-entry state machine (register→expire→compensate) operates at the "all endpoints" aggregate
+level, but the transitions (17f(i) skip-expire-on-register-fail, 17f(ii) compensate-on-past-
+expiry-expire-fail) require per-endpoint knowledge of which endpoints actually received each
+step.
+
+This is the multi-endpoint layer of the same Invariant-6 gap that Rulings 13 and 14 closed for
+the single-endpoint case. Rulings 13/14 explicitly reasoned "if register failed the router has
+no entry" — that assumption was single-endpoint. Ruling 15 closes the multi-endpoint layer.
+
+#### Chosen model: option (a) variant — endpoints outer, entries inner, no interface change
+
+**RULING: `PushFullSnapshot` iterates configured endpoints at the outer level. For each endpoint
+independently, it runs the full per-entry state machine via a new private helper
+`pushSnapshotToEndpoint`. The `admissionSyncer` interface and all four `Push*` methods are
+UNCHANGED. The `pushSnapshotEntries` helper is UNCHANGED. The delta-push paths (admin handlers
+calling `PushRegisterKey`, `PushRevokeKey`, etc.) are UNCHANGED.**
+
+This is the simplest correct resolution that makes per-endpoint sequencing honor the intended
+contract with the minimum blast radius.
+
+**Option (b) rejected:** returning `map[endpoint]error` from `pushWithRetry` / `Push*` methods
+requires changing the `admissionSyncer` interface, all four method signatures, all call sites in
+admin handlers, and all test mocks. It is the most invasive change and carries the highest
+regression risk for delta-push paths that are already verified correct.
+
+**Option (c) rejected:** dropping the `continue` on register-fail and always attempting expire
+does NOT fix the core problem. If B failed register (key-not-found on router B), its expire
+would return E-ADM-013 (Ruling 14 confirmed: expire on absent key stays E-ADM-013), triggering
+the `if e.KeyExpiry().Before(...)` compensating-revoke path — which fans to ALL endpoints via
+`pushWithRetry` — erroneously revoking A which was correctly in register+expire state. Option
+(c) would produce exactly the over-restrictive sub-case as a mandatory consequence of any
+multi-endpoint register-partial-failure, not just an edge case. Worse, it would do so silently
+on every such push. Option (c) is the wrong direction.
+
+**Why option (a) variant does not regress single-endpoint behavior:** when there is exactly one
+configured endpoint, the new outer loop iterates once, calling `pushSnapshotToEndpoint` for that
+one endpoint. The per-entry state machine inside is identical to the current `pushSnapshotEntries`
+logic. The single-endpoint Rulings 13/14 semantics are preserved exactly. The only behavioral
+change is in the multi-endpoint case, which was previously untested.
+
+#### Precise implementation specification (implementer directive)
+
+**New helper `pushSnapshotToEndpoint`** in `admission_sync_client.go`:
+
+```go
+// pushSnapshotToEndpoint runs the full per-entry admission-sync state machine for
+// a single router endpoint (addr). It issues the appropriate internal.admission.*
+// RPCs for each entry in allEntries, using pushRPC-with-retry directly (not
+// pushWithRetry, which fans to all endpoints). This is the per-endpoint sequencing
+// required by Ruling 15 / F-P8-01: each endpoint independently reaches the correct
+// terminal state without contaminating other endpoints' state machines.
+//
+// Per-entry logic mirrors pushSnapshotEntries exactly (Rulings 13+14 preserved):
+//   - REVOKED entry: revoke-only (skip register). Key-not-found on revoke = success.
+//   - ACTIVE entry: register → (on success) expire if non-zero expiry.
+//     Past-expiry expire-fail → compensating revoke for THIS endpoint.
+//     Future-expiry expire-fail → no compensating action.
+//   - Register-fail: skip expire (the endpoint has no entry; avoid E-ADM-013 dial).
+//
+// w is the log writer for advisory WARN emissions (nil → os.Stderr fallback).
+func (c *admissionSyncClient) pushSnapshotToEndpoint(
+    ctx context.Context,
+    addr string,
+    allEntries map[[16]byte][]admission.AdmittedKey,
+    w io.Writer,
+) error {
+    // pushOneRPC wraps pushRPC with the same retry-with-backoff as pushWithRetry,
+    // but for a single endpoint only.
+    pushOneRPC := func(command string, argsJSON json.RawMessage) error {
+        delay := admissionSyncRetryInitial
+        var lastErr error
+        for attempt := 0; attempt < admissionSyncRetryMax; attempt++ {
+            err := c.pushRPC(ctx, addr, command, argsJSON)
+            if err == nil {
+                return nil
+            }
+            lastErr = err
+            if attempt+1 < admissionSyncRetryMax {
+                select {
+                case <-ctx.Done():
+                    return fmt.Errorf("context cancelled after %d attempts on %s: %w",
+                        attempt+1, addr, ctx.Err())
+                case <-time.After(delay):
+                }
+                delay *= 2
+                if delay > admissionSyncRetryMaxDelay {
+                    delay = admissionSyncRetryMaxDelay
+                }
+            }
+        }
+        return lastErr
+    }
+    // ... per-entry state machine using pushOneRPC for register/expire/revoke RPCs ...
+    // (same logic as pushSnapshotEntries but calling pushOneRPC instead of s.Push*)
+}
+```
+
+**`PushFullSnapshot` change:**
+
+```go
+func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admission.AdmittedKeySet) error {
+    allEntries := ks.AllSVTNEntries()
+    if len(allEntries) == 0 {
+        return nil
+    }
+    endpoints := c.currentEndpoints()
+    if len(endpoints) == 0 {
+        return nil
+    }
+    var lastErr error
+    for _, ep := range endpoints {
+        if err := c.pushSnapshotToEndpoint(ctx, ep.Addr, allEntries, nil); err != nil {
+            lastErr = err
+        }
+    }
+    return lastErr
+}
+```
+
+**`pushSnapshotEntries` is UNCHANGED.** It is used by the existing test suite for the unit/spy
+path and remains the canonical reference for the per-entry logic. The new
+`pushSnapshotToEndpoint` replicates its logic with `pushOneRPC` substituted for the `admissionSyncer`
+interface methods. The two must stay in sync — when the per-entry logic changes (future rulings),
+both functions must be updated. The implementer SHOULD consider extracting the shared per-entry
+logic into a parameterized helper to avoid duplication, but this is at implementer discretion.
+
+**Delta-push paths (admin handlers → `PushRegisterKey` / `PushRevokeKey` / `PushSetKeyExpiry` /
+`PushRemoveSVTN`) are UNCHANGED.** They continue to fan to all endpoints via `pushWithRetry`.
+The delta-push paths are single-operation, not multi-step state machines — there is no
+register→expire→compensate sequence to corrupt across endpoints. The Invariant-6 violation only
+arises in `PushFullSnapshot`'s multi-step per-entry sequence. Delta-push partial failure is
+already covered by the PC-5 stale/missing tolerance (the router is stale until the next startup
+push resynchronizes it).
+
+#### Over-restrictive sub-case: disposition
+
+**RULING: KEEP fail-safe semantics for delta-push (single `PushRevokeKey` call to all
+endpoints); in `PushFullSnapshot`, per-endpoint sequencing eliminates the over-restrictive
+sub-case automatically.**
+
+For the delta-push case (admin handler issues a single `PushRevokeKey` to all endpoints
+simultaneously after a `m.RevokeKey` succeeds): if one endpoint's prior expire was correct and
+now receives a compensating revoke, the result is revoked-not-expired (still non-admissible).
+This is fail-safe. The next `PushFullSnapshot` on restart will push the full state including the
+expiry timestamp. The delta-push over-restrictive behavior is an acceptable transient state
+consistent with PC-5 stale/missing tolerance.
+
+For `PushFullSnapshot`: `pushSnapshotToEndpoint` runs the per-entry state machine
+independently for each endpoint. If endpoint A's expire succeeded, A already has the key in
+expired state — the compensating revoke logic (17f(ii)) fires only on `pushOneRPC`'s expire
+failure for THAT endpoint, not based on another endpoint's result. The over-restrictive sub-case
+is structurally impossible with per-endpoint sequencing.
+
+#### Entry-class × reachability correctness matrix
+
+The following matrix enumerates the terminal state on each reachable endpoint for every
+entry-class × endpoint-reachability combination after `PushFullSnapshot` under Ruling 15.
+
+| Entry class | All endpoints reachable | Endpoint A reachable, B unreachable | All endpoints unreachable |
+|-------------|------------------------|-------------------------------------|--------------------------|
+| **Revoked** | A: absent or revoked (Ruling 13); B: absent or revoked | A: absent or revoked (correct); B: no change (stale — absent or prior state) | all: no change (stale — PC-5 stale/missing, not less-restrictive) |
+| **Active + past-expiry** | A: expired (register+expire succeeded); B: same | A: register succeeded, expire succeeded → A expired (correct); B: register failed → B unchanged (stale, PC-5); OR register succeeded, expire failed → compensating revoke fired for A only → A revoked (non-admissible, Invariant 6 satisfied) | all: no change (stale — PC-5) |
+| **Active + future-expiry** | A: active with expiry; B: same | A: register+expire or register-only (per-endpoint outcome); B: stale | all: stale (PC-5 permitted — key currently active in control) |
+| **Active + no expiry** | A: active; B: active | A: active (correct); B: stale or prior state | all: stale (PC-5) |
+
+In every cell, reachable endpoints reach the correct terminal state (matching control's
+authoritative state) or a non-less-restrictive stale state (PC-5 permitted). No reachable
+endpoint is left in a state MORE permissive than control's authoritative state.
+
+**Single-endpoint regression check:** with one endpoint (B absent from list), the matrix
+collapses to the first column only. This is identical to the Rulings 13/14 single-endpoint
+semantics, confirming no regression.
+
+#### (i) Spec directive for PO — BC-2.05.009
+
+**RULING: BC-2.05.009 is an IMPL-ONLY fix at the code level. The spec's "each configured router
+endpoint" language in PC-7 already implies per-endpoint sequential semantics; the implementation
+violated the intent without the spec stating it incorrectly.**
+
+The PO MUST add ONE clarifying sentence to BC-2.05.009 PC-7 (the "Startup full-snapshot"
+postcondition), after the existing step (c) revoked-entry text, to make the per-endpoint
+sequencing obligation explicit:
+
+> **Per-endpoint sequencing obligation (Ruling 15 / F-P8-01):** The register→expire→compensate
+> state machine for each entry MUST be executed independently per configured router endpoint.
+> Control MUST NOT collapse multi-endpoint push results to a single aggregate error and apply
+> state-machine transitions (skip-expire on register-fail; compensating-revoke on past-expiry
+> expire-fail) based on that aggregate. Each endpoint independently reaches its correct terminal
+> state regardless of other endpoints' reachability.
+
+No change to Invariant 6, EC-008, EC-009, EC-010, or PC-5 is required. The existing Invariant 6
+text already states the absolute prohibition; the clarification in PC-7 explains the mechanism
+that satisfies it in the multi-endpoint case.
+
+**Ruling 14 §iii note on AC-009 PC-3b(i):** Ruling 14's `continue` on register-fail
+(AC-009 PC-3b(i): "If register (step a) fails, skip expire entirely — the router has no entry
+for this key; the expire RPC would return E-ADM-013") carries the implicit assumption "this
+endpoint has no entry." Under per-endpoint sequencing (Ruling 15), this assumption is restored
+to correctness: the `continue` skips expire for THIS endpoint (which failed register), not for
+all endpoints. No text change to AC-009 PC-3b(i) is required — the existing wording is correct
+given per-endpoint sequencing.
+
+#### (ii) Story directive for story-writer — S-BL.ADMISSION-SYNC-WIRE
+
+The story-writer MUST amend `S-BL.ADMISSION-SYNC-WIRE.md` as follows:
+
+1. **Add AC for multi-endpoint partial-failure** (new AC-013 or extend AC-009):
+
+   > **AC-013 — PushFullSnapshot multi-endpoint per-endpoint sequencing (Ruling 15 / F-P8-01)**
+   >
+   > **BC Anchor:** BC-2.05.009 PC-7 per-endpoint sequencing obligation.
+   >
+   > **Postconditions:**
+   > 1. When `RouterManagementEndpoints` contains multiple entries and one endpoint is
+   >    unreachable, `PushFullSnapshot` processes each endpoint independently through the full
+   >    per-entry register→expire→compensate state machine. A failure on endpoint B does NOT
+   >    suppress expire or compensating-revoke for endpoint A (which may have already received
+   >    register successfully).
+   > 2. For a past-expiry active entry: if endpoint A receives register successfully and
+   >    endpoint B is unreachable (register fails), the compensating-revoke for past-expiry
+   >    expire-fail fires only against endpoint A (if A's expire also fails), not against B.
+   >    B remains stale (PC-5 permitted). A ends non-admissible (Invariant 6 satisfied).
+   > 3. The `admissionSyncer` interface signatures for `PushRegisterKey`, `PushRevokeKey`,
+   >    `PushSetKeyExpiry`, and `PushRemoveSVTN` are UNCHANGED (Ruling 15 is impl-only for
+   >    the interface contract). Delta-push paths (admin handlers) are unchanged.
+   >
+   > **Test names:**
+   > - `TestAdmissionSync_PushFullSnapshot_MultiEndpoint_LastUnreachable_PastExpiry_ReachableEndpointNonAdmissible`
+   >   — concrete regression test for the F-P8-01 failure scenario: two endpoints configured,
+   >   B (last) unreachable, past-expiry entry in keyset; after `PushFullSnapshot`, endpoint A's
+   >   keyset has the entry non-admissible (expired or revoked); endpoint A does NOT have the
+   >   entry as active-and-non-expiring. Verify via `startRouterMgmtServerTCP` for A and a
+   >   non-listening address for B.
+   > - `TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_ReachableEndpointCorrect`
+   >   — two endpoints, A (first) unreachable, B (second) reachable; B receives the full per-entry
+   >   state machine correctly (register+expire for active entries; revoke-only for revoked).
+   >   A remains stale (PC-5). Verifies that the new outer-loop structure handles both orderings.
+
+2. **Add implementation task** (after task 17f):
+
+   > 17h. [ ] PushFullSnapshot per-endpoint sequencing (Ruling 15 / F-P8-01): replace the
+   > current `pushSnapshotEntries(ctx, c, allEntries, nil)` delegation in `PushFullSnapshot`
+   > with an outer loop over `c.currentEndpoints()` calling a new
+   > `c.pushSnapshotToEndpoint(ctx, ep.Addr, allEntries, nil)` helper. The helper replicates
+   > `pushSnapshotEntries` logic (Rulings 13+14 per-entry state machine) using a single-endpoint
+   > retry wrapper (`pushOneRPC`) instead of the `admissionSyncer` interface. `pushSnapshotEntries`
+   > and the `admissionSyncer` interface remain unchanged (used by spy tests and delta-push paths).
+   > Reference: Ruling 15 / F-P8-01. — implementer
+
+#### (iii) Implementer directive
+
+The precise restructure is specified in the "Implementation specification" section above
+(new `pushSnapshotToEndpoint` helper + `PushFullSnapshot` outer-loop change). Key constraints:
+
+1. `pushSnapshotToEndpoint` MUST use a local single-endpoint retry wrapper (not `pushWithRetry`).
+   The `pushRPC` function already accepts a single `addr string` — call it directly with retry.
+
+2. The per-entry logic in `pushSnapshotToEndpoint` MUST be semantically identical to
+   `pushSnapshotEntries` for the single-endpoint case (Rulings 13/14 preserved). A table-driven
+   comparison test between the two code paths is strongly recommended.
+
+3. `pushSnapshotEntries` is retained unchanged. It is the spy-test entry point and the
+   reference for the per-entry logic. The new `pushSnapshotToEndpoint` is the production
+   entry point called from `PushFullSnapshot`.
+
+4. The args marshaling helpers used by `PushRegisterKey`, `PushRevokeKey`, `PushSetKeyExpiry`
+   (the `map[string]any` → `json.Marshal` pattern) should be extracted to package-private
+   helpers and shared between the `Push*` methods and `pushSnapshotToEndpoint` to avoid
+   duplication. This is at implementer discretion — correctness over DRY if the refactor adds
+   risk.
+
+5. After this change, `PushFullSnapshot`'s return value semantics change: it now returns the
+   last endpoint error across ALL endpoints (previously it returned the last error across all
+   endpoints in the single fan-out per RPC). Callers (runControl) treat this as advisory-WARN
+   regardless — no change to call sites.
+
+### F-P8-02: runControl load→push ordering guard
+
+#### The gap
+
+`TestControlAdmission_RunControl_LoadThenPush_E2E` (admission_sync_test.go:4294) launches
+`runControl` with a pre-populated `ControlAdmissionStateFile` and a configured
+`RouterManagementEndpoints`. The test's own comment acknowledges: "runControl generates an
+ephemeral daemon key internally, not using controlPriv. For this test, we need the control
+daemon's key to match the router's authorized key." Because the test cannot inject its prepared
+`controlPriv` into `runControl`'s internally-generated keypair, `PushFullSnapshot` always fails
+(control's ephemeral key is not in the router's `authorized_operator_keys`). The test falls back
+to asserting the DIRECT-HELPER path (load the snapshot directly and call `PushFullSnapshot` from
+the test) — which does NOT observe `runControl`'s actual load→push ordering code path
+(`mgmt_wire.go:1203–1261`).
+
+The F-P3-01 fix (Ruling 11) lives at `mgmt_wire.go:1203–1207` (load before syncClient
+construction). The test MUST observe this path through `runControl` to provide a real behavioral
+guard. The current test structure provides NO coverage of the ordering within `runControl`
+itself.
+
+#### Chosen approach: `runControlWithKey` test-seam
+
+**RULING: Add a new unexported function `runControlWithKey(ctx, w, cfg, configPath, sighupCh,
+daemonPriv ed25519.PrivateKey)` in `mgmt_wire.go`. This function is identical to `runControl`
+except it accepts a caller-provided `daemonPriv` instead of generating an ephemeral one.
+`runControl` becomes a one-liner wrapper calling `runControlWithKey` with a freshly-generated
+ephemeral key. The test seam is unexported (`runControlWithKey` is not exported) — it is a
+test-internal mechanism, not a public API.**
+
+Rationale:
+- **Minimal**: `runControl` generates its ephemeral key on line 1181 (`ed25519.GenerateKey`).
+  Extracting this into a parameter requires no other structural change.
+- **Not exported**: the seam is not part of any public contract. No external callers are
+  affected.
+- **Correct semantics**: in production, `runControl` generates a fresh ephemeral key as it
+  always has. The seam is only exercised by the test.
+- **Avoids over-engineering**: alternatives (callback injection, a mock keygen interface,
+  environment variable override) are all heavier than a single unexported wrapper function.
+
+**Alternative considered and rejected: `runControl` reads from a `testDaemonPrivOverride`
+package-level var.** Package-level state is unsafe for parallel tests (`t.Parallel()` is used
+throughout the test suite). Rejected.
+
+**Alternative considered and rejected: inject via `config.Config`.** The `Config` struct carries
+operational configuration; injecting a test-only keypair into it conflates operator config with
+test seaming. Rejected.
+
+#### F-P8-02 test directive (story-writer)
+
+The story-writer MUST amend `TestControlAdmission_RunControl_LoadThenPush_E2E` as follows:
+
+1. **Use `runControlWithKey` with the prepared `controlPriv`** so the control daemon
+   authenticates to the router using the key that was pre-registered in the router's
+   `authorized_operator_keys`.
+
+2. **Assert the router's keyset directly** (not via the direct-helper fallback):
+   after `runControl` (via `runControlWithKey`) starts and calls `PushFullSnapshot`, inspect
+   `routerKS.AllSVTNEntries()` directly to confirm:
+   - The active key from the snapshot is present on the router.
+   - The revoked key is ABSENT on the router (Ruling 13: register skipped for revoked entries).
+   This replaces the current "fallback to load+push helper" assertion with a behavioral guard on
+   `runControl`'s own code path.
+
+3. **Test name** for the implementation task: `TestControlAdmission_RunControl_LoadThenPush_E2E`
+   is RETAINED with the amended assertions above. No rename needed — the test's stated purpose
+   (load-then-push ordering via `runControl`) is now actually tested.
+
+**Implementation task for story-writer** (add to story as task 17i):
+
+> 17i. [ ] F-P8-02: add `runControlWithKey(ctx, w, cfg, configPath, sighupCh,
+> daemonPriv ed25519.PrivateKey) error` in `mgmt_wire.go`; refactor `runControl` to call it
+> with a freshly-generated keypair. Amend `TestControlAdmission_RunControl_LoadThenPush_E2E`
+> to use `runControlWithKey` with the test's prepared `controlPriv`; remove the direct-helper
+> fallback; add direct assertion on `routerKS.AllSVTNEntries()` for active key present + revoked
+> key absent. Reference: Ruling 15 / F-P8-02. — implementer
+
+### Downstream propagation list (Ruling 15)
+
+| Artifact | Edit needed |
+|----------|-------------|
+| `BC-2.05.009.md` | Add one paragraph to PC-7 (after step c) stating the per-endpoint sequencing obligation. PO executes. No other BC change. |
+| `S-BL.ADMISSION-SYNC-WIRE.md` | Add AC-013 (multi-endpoint partial-failure test + postconditions); add impl tasks 17h + 17i. Story-writer executes. |
+| `admission_sync_client.go` | Add `pushSnapshotToEndpoint` helper; refactor `PushFullSnapshot` to iterate endpoints at outer level calling the helper. `pushSnapshotEntries`, `admissionSyncer` interface, and all delta-push paths unchanged. Implementer executes. |
+| `mgmt_wire.go` | Add `runControlWithKey`; refactor `runControl` to delegate to it. Implementer executes. |
+| `admission_sync_test.go` | Amend `TestControlAdmission_RunControl_LoadThenPush_E2E` per F-P8-02 directive above. Add multi-endpoint partial-failure tests per AC-013. Story-writer (test names) + implementer (test code). |
+| `admission_sync_wire.go` | No change. |
 
