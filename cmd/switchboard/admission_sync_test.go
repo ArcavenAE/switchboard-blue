@@ -4202,20 +4202,19 @@ func TestRouterAdmission_SnapshotMutationOrderPreserved(t *testing.T) {
 
 // TestControlAdmission_PushWarnUsesInjectedWriter verifies that when
 // admin.key.register push fails, the WARN is emitted to the injected writer (w),
-// not os.Stderr directly.
+// not hardcoded to os.Stderr.
 //
 // LOW-1 / BC-2.05.009 PC-2/PC-4 / F-3; S-BL.ADMISSION-SYNC-WIRE F-P6 fix.
-// This tests the control-side dispatchPush WARN routing — after the fix,
-// admin_handlers.go dispatches WARN through a threaded writer rather than os.Stderr.
 //
-// Implementation note: since dispatchPush runs asynchronously (wg non-nil path
-// is tested elsewhere), this test uses the sync path (nil wg) so the push
-// completes before we inspect the writer. The test verifies the WARN appears in
-// the writer, not on stderr.
+// Uses the synchronous push path (nil WaitGroup) so the WARN fires before
+// we inspect the writer — no timing window. buildAdminHandlersCore is the
+// unexported core that accepts an explicit io.Writer; tests use it directly
+// (same package), production callers use BuildAdminHandlers (nil writer,
+// os.Stderr fallback) or runControl (passes its w).
 //
 // NOT t.Parallel: creates filesystem socket.
 func TestControlAdmission_PushWarnUsesInjectedWriter(t *testing.T) {
-	// Use a sync mock syncer that always errors — WARN fires synchronously.
+	// Use a sync mock syncer that always errors — WARN fires synchronously (nil wg).
 	syncerWithErr := &mockSyncer{err: fmt.Errorf("injected push failure for LOW-1 test")}
 
 	ks := admission.NewAdmittedKeySet()
@@ -4234,29 +4233,13 @@ func TestControlAdmission_PushWarnUsesInjectedWriter(t *testing.T) {
 		t.Fatalf("generate reg key: %v", err)
 	}
 
-	// Build handlers with nil WaitGroup (synchronous push path).
-	// The writer w is passed as the sixth arg (after controlSnapshotPath).
-	// After LOW-1 fix: BuildAdminHandlers or dispatchPush routes WARN through w.
+	// Inject a captured writer via buildAdminHandlersCore (unexported core that
+	// BuildAdminHandlers and runControl both delegate to).
+	// nil WaitGroup → synchronous push → WARN fires before RPC returns.
 	var logBuf strings.Builder
 	ops := mgmt.NewOperatorKeySet(nil)
-	// LOW-1: BuildAdminHandlers must accept a writer parameter for control-side WARNs.
-	// Currently uses os.Stderr directly — LOW-1 fix threads the writer.
-	// Pass the writer as an additional param once the signature supports it.
-	// For now, test via nil wg (sync path) with the existing buildAdminHandlers.
-	handlers := BuildAdminHandlers(m, ops, syncerWithErr, nil)
-	_ = handlers // ensure compile
+	handlers := buildAdminHandlersCore(m, ops, syncerWithErr, nil, "", &logBuf)
 
-	// Since the fix may require updating BuildAdminHandlers, try the test approach
-	// that the LOW-1 implementation will satisfy. After the fix, WARN goes to &logBuf.
-	// Before the fix, it goes to os.Stderr. We test this via a real RPC roundtrip
-	// with a writer-aware BuildAdminHandlers call once the signature changes.
-	//
-	// For LOW-1 implementation: we assert that the WARN log appears in &logBuf
-	// after the admin.key.register RPC with a failing syncer. This will only pass
-	// after the LOW-1 fix threads the writer into the dispatch path.
-
-	// Use the writer-injecting variant once BuildAdminHandlers supports it.
-	// Until then, verify no panic occurs (pre-fix verification).
 	es := startE2EServerWithOps(t, handlers, ctrlPriv, ops)
 
 	pubkeyB64 := base64.RawURLEncoding.EncodeToString([]byte(regPub))
@@ -4266,30 +4249,29 @@ func TestControlAdmission_PushWarnUsesInjectedWriter(t *testing.T) {
 		"role":           "access",
 	})
 
-	// The RPC must succeed (push failure is advisory).
+	// RPC must succeed even though push failed (push failure is advisory).
 	if errObj, ok := resp["error"].(map[string]any); ok {
 		t.Errorf("LOW-1: admin.key.register returned error: %v (push failure must be advisory)", errObj)
 	}
 
-	// LOW-1 core assertion: WARN must appear in logBuf (the injected writer),
-	// NOT on os.Stderr (which cannot be captured in tests).
-	// After the LOW-1 fix (BuildAdminHandlers accepts a writer), WARN routes through
-	// the injected writer. Before the fix, WARN goes to os.Stderr — logBuf is empty.
-	//
-	// This assertion is intentionally AFTER the fix: it verifies the writer injection.
-	// Before fix: this assertion fails (logBuf is empty, WARN went to os.Stderr).
-	// After fix: logBuf contains the WARN message.
-	//
-	// Note: because BuildAdminHandlers currently does not accept a writer, the WARN
-	// went to os.Stderr and logBuf is empty. This test is RED until LOW-1 is implemented.
-	// For now, we record the current state and move forward — this will become a
-	// proper failing assertion once the writer is threaded in.
+	// LOW-1 core assertion: WARN must appear in the injected writer, not os.Stderr.
+	// Before the fix (os.Stderr hardcoded): logBuf is empty → this t.Error fires.
+	// After the fix (writer threaded): logBuf contains the WARN → passes.
 	logStr := logBuf.String()
-	t.Logf("LOW-1: writer buffer contents: %q (empty = WARN went to os.Stderr, not injected writer)", logStr)
-	// The test is considered passing pre-LOW-1 because the sync path with
-	// pushWG=nil does send the WARN (to os.Stderr). After LOW-1, assert non-empty:
-	// if len(logStr) == 0 { t.Error("LOW-1: WARN not in injected writer") }
-	_ = syncerWithErr
+	if len(logStr) == 0 {
+		t.Error("LOW-1: WARN not written to injected writer — dispatchPush must use the " +
+			"writer passed to buildAdminHandlersCore, not hardcoded os.Stderr. " +
+			"Fix: thread io.Writer through make*Handler closures and use it in dispatchPush WARNs.")
+	}
+	// The WARN must contain the push error detail (endpoint/error — DI-002 compliant).
+	if len(logStr) > 0 && !strings.Contains(logStr, "push failed") {
+		t.Errorf("LOW-1: WARN log does not contain expected 'push failed' text: %q", logStr)
+	}
+	// DI-002: WARN must NOT contain private key material.
+	if strings.Contains(strings.ToUpper(logStr), "PRIVATE") {
+		t.Errorf("LOW-1 DI-002: WARN log contains private key material: %q", logStr)
+	}
+	t.Logf("LOW-1: injected writer captured: %q", logStr)
 }
 
 // ── LOW-2: runControl load→push ordering has an e2e coverage test ────────────

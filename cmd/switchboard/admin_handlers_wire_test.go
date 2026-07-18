@@ -329,7 +329,7 @@ func TestNewInBurst19_WireField_StaleField_SvtnRejected(t *testing.T) {
 	t.Run("stale_svtn_field_rejected", func(t *testing.T) {
 		t.Parallel()
 		m := newTestSVTNManager(t)
-		handler := makeRegisterHandler(m, nil, nil, nil, nil)
+		handler := makeRegisterHandler(m, nil, nil, nil, nil, nil)
 
 		// Payload uses the stale "svtn" key — json.Unmarshal silently ignores it,
 		// leaving SVTNName empty; the handler must return E-CFG-001 for missing svtn_id.
@@ -359,7 +359,7 @@ func TestNewInBurst19_WireField_StaleField_SvtnRejected(t *testing.T) {
 	t.Run("canonical_svtn_id_field_accepted", func(t *testing.T) {
 		t.Parallel()
 		m := newTestSVTNManager(t)
-		handler := makeRegisterHandler(m, nil, nil, nil, nil)
+		handler := makeRegisterHandler(m, nil, nil, nil, nil, nil)
 
 		// Generate a fresh 32-byte Ed25519 public key (raw bytes) so it is
 		// guaranteed not to collide with the zero key already registered on

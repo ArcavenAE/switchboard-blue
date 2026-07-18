@@ -1221,10 +1221,13 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 	var pushWG sync.WaitGroup
 
 	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	// Pass the real syncClient AND pushWG AND controlSnapshotPath so push calls are
-	// wired into make*Handler and dispatched asynchronously (S-BL.ADMISSION-SYNC-WIRE
-	// AC-003/004 / F-1 fix / AC-011 / Ruling 11).
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, BuildAdminHandlers(m, ops, syncClient, &pushWG, controlSnapshotPath))
+	// Pass the real syncClient AND pushWG AND controlSnapshotPath AND w so push
+	// failure WARNs and persist WARNs route through the same writer as other
+	// control-daemon log output (LOW-1 fix / F-3).
+	// Uses buildAdminHandlersCore (the unexported core) to inject the writer; the
+	// public BuildAdminHandlers falls back to os.Stderr and is for callers without
+	// a writer.
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, buildAdminHandlersCore(m, ops, syncClient, &pushWG, controlSnapshotPath, w))
 	if mgmtErr != nil {
 		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
 	}
