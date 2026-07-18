@@ -618,6 +618,14 @@ func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admissio
 	// Ruling 15 option (a): iterate endpoints OUTER, entries INNER.
 	// Each endpoint's state machine runs independently — a failure on one
 	// endpoint does not affect another.
+	//
+	// w is nil here: the double-failure WARN (compensating revoke after past-expiry
+	// expire-fail) falls back to os.Stderr. This is acceptable — production's writer
+	// IS os.Stderr, and PushFullSnapshot is called from runControlWithKey which logs
+	// its own WARN when PushFullSnapshot returns non-nil. Threading runControl's
+	// io.Writer into admissionSyncClient would require adding a field to the struct
+	// and updating all construction sites; deferred until a future pass if deemed
+	// worth the churn (pass-10 NITPICK-2 assessment: option b — document and leave).
 	var lastErr error
 	for _, ep := range endpoints {
 		if err := c.pushSnapshotToEndpoint(ctx, ep.Addr, allEntries, nil); err != nil {

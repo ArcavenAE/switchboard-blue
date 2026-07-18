@@ -3700,76 +3700,11 @@ func TestAdmissionSync_PushFullSnapshot_PastExpiryStaysExpired(t *testing.T) {
 }
 
 // ── F-3 (MEDIUM): advisory push failures must emit WARN, not silently swallow ─────────────────
-
-// TestAdmissionSync_PushFailure_WarnLogEmitted verifies that when an admission-sync
-// push fails (unreachable endpoint), a WARN log is emitted to the router-side
-// handler's writer with the endpoint address and error.
-//
-// BC-2.05.009 PC-2/PC-4; BC-2.05.010 PC-2/EC-008; S-BL.ADMISSION-SYNC-WIRE F-3.
-// Red Gate: FAILS — wireAdmissionSyncHandlers currently swallows push failures
-// with `_ = err // ... would log via slog` (no actual WARN emitted).
-// DI-002: WARN log must NOT include private key material.
-//
-// NOT t.Parallel: creates filesystem socket.
-func TestAdmissionSync_PushFailure_WarnLogEmitted(t *testing.T) {
-	// Use a dead-end TCP address (not listening) to force a push failure.
-	// Bind and immediately close to get an ephemeral port guaranteed unreachable.
-	probeDeadEnd, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatalf("probe dead-end listen: %v", err)
-	}
-	deadEndAddr := probeDeadEnd.Addr().String()
-	_ = probeDeadEnd.Close()
-
-	// Set up a router-side server with a REAL log writer.
-	// wireAdmissionSyncHandlers must accept a writer so WARNs go somewhere testable.
-	ks := admission.NewAdmittedKeySet()
-
-	var logBuf strings.Builder
-	socketPath, daemonPriv, _ := startAdmissionSyncWireServerWithLog(t, ks, "", &logBuf)
-
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	// Register a key via the router handler.
-	var svtnID [16]byte
-	if _, err := rand.Read(svtnID[:]); err != nil {
-		t.Fatalf("rand.Read: %v", err)
-	}
-	regPub, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("generate key: %v", err)
-	}
-	resp := sendAdminRPC(t, socketPath, daemonPriv, CmdAdmissionRegister, map[string]any{
-		"svtn_id":        svtnIDToHex(svtnID),
-		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(regPub)),
-		"role":           "access",
-	})
-	if errObj, ok := resp["error"].(map[string]any); ok {
-		code, _ := errObj["code"].(string)
-		if code == "E-RPC-010" {
-			t.Skip("F-3: wireAdmissionSyncHandlers not yet wired with log writer (pre-implementation)")
-		}
-	}
-
-	// The snapshot-write failure WARN is async/internal; what we're testing here
-	// is that when a SNAPSHOT WRITE fails (read-only dir), the WARN is emitted.
-	// That's captured in the log writer passed to wireAdmissionSyncHandlers.
-	// For push failures, they go through the control side; the router-side
-	// WARN is for snapshot writes. Verify the log writer was plumbed.
-	_ = deadEndAddr
-	logStr := logBuf.String()
-	t.Logf("F-3: log output so far: %q", logStr)
-
-	// F-3 core: the snapshot path was "" (no persistence) so no WARN is expected yet.
-	// The test verifies startAdmissionSyncWireServerWithLog compiles and wires the log.
-	// We'll test the snapshot-write WARN path with a read-only dir.
-}
+// Control-side push-failure WARN (injected writer) is covered by LOW-1:
+// TestControlAdmission_PushWarnUsesInjectedWriter (~4216). Router-side
+// snapshot-write WARN is covered by TestAdmissionSync_SnapshotWriteFailure_WarnLogEmitted below.
+// TestAdmissionSync_PushFailure_WarnLogEmitted was inert (no live assertions) and has been
+// removed (pass-10 NITPICK-1 cleanup).
 
 // TestAdmissionSync_SnapshotWriteFailure_WarnLogEmitted verifies that when the
 // snapshot write fails (e.g., read-only directory), a WARN log is emitted to the
