@@ -1,7 +1,7 @@
 ---
 artifact_id: S-BL.ADMISSION-SYNC-WIRE-rulings
 document_type: rulings
-version: "1.4"
+version: "1.5"
 status: draft
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
@@ -27,6 +27,7 @@ related_code:
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-07-17 | F-P6-02 adjudicated (Ruling 13): partial-failure gap in PushFullSnapshot for revoked entries resolved via approach (c) — skip `internal.admission.register` for revoked entries entirely; issue revoke-only RPC for entries already present on router. No wire format change. BC-2.05.009 Invariant 6 / PC-5 tension resolved: the "less-restrictive" prohibition is absolute; "stale/missing" (permitted by PC-5) and "actively made less-restrictive" (forbidden by Invariant 6) are distinct states. F-P6-01 confirmed as impl-only fix (no spec change). |
 | 1.4 | 2026-07-17 | F-P3-01 + F-P3-02 adversary pass-3 findings adjudicated (human decision: both in-scope). Code-verified: (1) `runControl` (`mgmt_wire.go:1176`) constructs `ks := admission.NewAdmittedKeySet()` fresh; no load path; `PushFullSnapshot` at line 1222 hits the empty-keyset early return at `admission_sync_client.go:378–381` — EC-007 resync guarantee is inert today; (2) no persist-write hook in any of the four admin handlers (`admin_handlers.go`); (3) `writeSnapshotAtomic` / `loadSnapshotFromFile` / `marshalSnapshot` / `unmarshalSnapshot` in `admission_sync_snapshot.go` are fully implemented and reusable as-is; (4) `mgmtListenAddr` (`mgmt_wire.go:187–199`) auto-detect fires for ALL non-console modes — control and access modes with a `host:port` `management_socket` silently bind TCP on all interfaces; (5) `buildMgmtListener` loopback guard at line 221 checks `if mode == "console"` — control/access TCP has no guard and no bind log. Ruling 11 added: control-side admission keyset persistence via new `control_admission_state_file` config field (control-mode-only, PC-15 in BC-2.09.003; write on each committed admin.key.*/admin.svtn.* mutation, before dispatchPush, advisory; load before PushFullSnapshot on startup, fail-closed on corrupt, missing→empty). Ruling 12 added: scope-correct the TCP auto-detect + loopback guard — router mode keeps no loopback guard (Ruling 9 unchanged); control/access modes with a host:port management_socket apply the loopback guard and MUST emit a bind-address INFO log; only router mode may bind non-loopback TCP. Summary table rows added for Rulings 11 and 12. BC/story propagation list specified. |
 | 1.3 | 2026-07-17 | F-2 adversary defect (HIGH, feature-blocking): router TCP mgmt listener wiring gap. Code-verified facts: (1) `mgmtNetwork(mode)` (`mgmt_wire.go:159–164`) returns `"tcp"` ONLY for `"console"`; router/control/access all return `"unix"` — no existing TCP-bind path for router mode; (2) `admission_sync_client.go:142` always dials `"tcp"` — confirmed; (3) `buildMgmtListener` TCP branch (`mgmt_wire.go:194–208`) enforces `isMgmtLoopbackHost` and is only reached for console because `mgmtNetwork("router")=="unix"`; (4) `validateHostPort` (`internal/config/config.go:401`) uses `net.SplitHostPort` + numeric range check — reusable for auto-detect; (5) blast-radius: all existing router tests supply `tempSockPath(t)` → filesystem paths (e.g. `/tmp/sb-XXXXX/m.sock`); `net.SplitHostPort` fails on those paths (no colon), so auto-detect TCP-vs-unix on `management_socket` has zero impact on existing tests. Ruling 10 added: auto-detect mechanism — if `management_socket` parses as a valid `host:port` via `validateHostPort`, `mgmtNetwork` returns `"tcp"` for router mode and `buildMgmtListener` binds a TCP listener WITHOUT the `isMgmtLoopbackHost` guard (Ruling 9 already ratified: no loopback restriction for router); otherwise unix default preserved. Default when `management_socket` absent or a filesystem path: unix (existing behavior unchanged). AC-008 correction: current postconditions only assert config acceptance + INFO log; must also assert a real TCP bind and a real TCP connection succeed. Corrected postconditions and new test names specified. Summary table `Router TCP mgmt listener` row updated. F-1/F-2 interaction note added (async push: Decision 4 permit applies; the dial-on-demand connect in `pushRPC` is unaffected by the network-selection change — both changes are independent and compose cleanly). |
 | 1.2 | 2026-07-16 | Contradiction fix: Ruling 1 / Decision 2 wire encoding of `svtn_id` corrected from "SVTN name string" to "32 lowercase hex characters encoding the 16-byte `[16]byte` UUID". Code-verified facts: (1) `SVTN.ID` is `crypto/rand`-generated at `svtnmgmt.go:197–199`, not name-derived; (2) `hmac.DeriveKey` (`hmac.go:130`) and `frame.DeriveNodeAddress` (`address.go:11`) both consume the exact `[16]byte` as salt/input — any mismatch produces wrong FrameAuthKey/NodeAddr, defeating `AdmitNode`; (3) `runRouter` (`mgmt_wire.go:491`) constructs no `SVTNManager`, so the router has no name→ID map; (4) `makeRegisterHandler` (`admin_handlers.go:185`) holds `m *svtnmgmt.SVTNManager` with `SVTNByName(name) (SVTN, bool)` at `svtnmgmt.go:608` — control resolves name→ID before putting anything on the wire. `admissionSyncer` interface updated to take `svtnID [16]byte` instead of `svtnName string` (Decision 5 / Ruling 2); admin handlers resolve name→ID at the call site via `m.SVTNByName`. Summary table `svtn_id` row updated. All other rulings unchanged. |
@@ -668,6 +669,7 @@ interaction is needed.
 | ARCH-01 WaitGroup | Standard F-DWIP3-001 pattern if background goroutine used; otherwise no WaitGroup needed |
 | AC-008 correction | Real TCP bind + push handshake assertions; two new test names. See Ruling 10 §AC-008 Correction. |
 | Story points estimate | Revised to 10–11 pts (was 8): +2–3 pts for Ruling 11 control persistence. |
+| PushFullSnapshot revoked-entry handling | **Skip `internal.admission.register` for revoked entries.** Issue `internal.admission.revoke` only (router treats "key not found" as success — absent = correct non-admissible terminal state). The register+revoke two-RPC pattern is PROHIBITED for revoked entries; a partial-failure window where register succeeds but revoke fails actively violates Invariant 6. Approach (c). See Ruling 13. |
 | Open human flags | None — all findings adjudicated. |
 
 ---
@@ -1253,4 +1255,224 @@ loopback guard is never reached. No test behavior changes.
 | BC-2.09.003 | Add or amend a postcondition noting that TCP management listeners on control and access modes MUST be loopback-only (E-CFG-008 for non-loopback). Scoped note: router mode is exempt (Ruling 9). |
 | Story ACs | Add a new AC (e.g., AC-011) or extend an existing AC: "control-mode or access-mode daemon with `management_socket: "0.0.0.0:<port>"` returns E-CFG-008 at listener bind time; a loopback address (e.g., `127.0.0.1:<port>`) succeeds." This is a new testable postcondition not covered by the existing AC-008 (which tests router mode). |
 | Implementation task | Amend `buildMgmtListener`: replace `if mode == "console"` guard with `if mode != "router"`. Add INFO log for all TCP bind paths. |
+
+---
+
+## Ruling 13 — PushFullSnapshot partial-failure gap for revoked entries (F-P6-02)
+
+### The tension: PC-5 (advisory push) vs Invariant 6 (no less-restrictive state)
+
+Adversary pass 6 filed F-P6-02 (MEDIUM). The conflict is real, not illusory.
+
+**PC-5** holds that push failures are advisory — a router that does not receive a push is
+"stale," meaning it may be MISSING updates relative to control. Stale = still not more
+permissive than before the push attempt.
+
+**Invariant 6** holds an ABSOLUTE prohibition: `PushFullSnapshot` MUST NOT produce a router
+state that is LESS RESTRICTIVE than control's authoritative state. Revoked = not active.
+
+**The current spec (BC-2.05.009 v1.3 PC-7c, EC-009) mandates a two-RPC sequence** for each
+revoked entry in `PushFullSnapshot`:
+1. `internal.admission.register` — creates the entry as active on the router
+2. `internal.admission.revoke` — marks it revoked on the router
+
+Both RPCs are issued on independent dials, each advisory-continue on failure. In the
+partial-failure scenario where (1) succeeds but (2) fails, the router is left with the key
+in a REGISTERED-ACTIVE state. For a fresh router (empty keyset — the EC-008 scenario), the
+entry was ABSENT before the push; after the partial push it is PRESENT-AND-ACTIVE. The push
+has ACTIVELY made the router less restrictive for a revoked key.
+
+**PC-5's carve-out does not cover this.** PC-5 tolerates "router is missing an update" — the
+pre-push state on the router was NOT having that key at all (not admissible); after a partial
+push the state is having it as active (admissible). That is the wrong direction. PC-5 says
+"stale is ok"; it does not say "creating new incorrect admission is ok."
+
+The adversary is correct: "stale/missing" (PC-5 tolerates) and "actively less-restrictive"
+(Invariant 6 forbids) are distinct, and the current two-RPC sequence conflates them under the
+partial-failure case.
+
+### Ruling: approach (c) — skip register for revoked entries; send revoke-only RPC
+
+**RULING: For entries that are REVOKED in control's `AdmittedKeySet`, `PushFullSnapshot` MUST
+NOT issue `internal.admission.register` at all.** The correct push sequence for a revoked
+entry is:
+
+- If the router already has the entry (prior push was partial or it was registered before
+  revocation): issue `internal.admission.revoke` to mark it revoked. This is idempotent —
+  revoking an already-revoked entry is safe.
+- If the router does NOT have the entry (fresh router, empty keyset): issue NOTHING. A missing
+  key is not admissible, which is the correct terminal state for a revoked key. The router is
+  not less restrictive than control.
+
+**Why approach (c) is correct and sufficient:**
+
+The terminal state that satisfies Invariant 6 for a revoked key is "absent OR revoked" on the
+router. Both states are non-admissible. The problem with the two-RPC sequence was that
+"register" creates a transiently-admissible state on the router — and if the following "revoke"
+fails, that transient state persists. Approach (c) eliminates the transient admissible state
+entirely by never issuing the register.
+
+A fresh router with no entry for a revoked key is already in the correct terminal state
+(non-admissible). Issuing a register to immediately follow with a revoke provides no
+operational benefit — the router never needs to have a revoked key in ACTIVE state. The
+register+revoke pattern was chosen in BC-2.05.009 v1.3 to ensure the router's snapshot
+captures the revoked key's metadata for auditability; that motivation does not justify
+creating a partial-failure window that violates Invariant 6.
+
+**Why approach (a) (amend Invariant 6) is REJECTED:**
+
+Invariant 6 is a security-correctness invariant. Weakening it to accommodate an implementation
+pattern that creates a less-restrictive window would undermine the guarantee that
+`admin.key.revoke` is durable and effective. The invariant should be STRENGTHENED by choosing
+a push strategy that makes violation structurally impossible.
+
+**Why approach (b) (extend wire to carry `revoked bool` in register) is REJECTED for now:**
+
+Approach (b) is more robust in general (single idempotent RPC, no two-RPC gap) and may be
+the right direction for a future story. However, it requires changing Ruling 1/2 wire encoding,
+the register handler on the router, and `AdmittedKeySet.RegisterKey`'s call contract. Given
+that the simpler approach (c) closes the gap without any wire format change and without
+touching the router handler, approach (b) is unnecessary complexity for this story. It is
+recorded as a FOLLOW-ON option if operational needs (e.g., audit trail of revoked keys on
+router snapshot) justify it.
+
+### Precise obligations
+
+#### (i) BC-2.05.009 — Invariant 6 and PC-7 directive for PO
+
+The PO MUST amend BC-2.05.009 as follows:
+
+1. **PC-7c** (revoked entries in full-snapshot push): Replace the current text
+   "Issue `internal.admission.revoke` AFTER the `internal.admission.register` in step (a)"
+   with:
+
+   > For REVOKED entries: do NOT issue `internal.admission.register`. A fresh router has
+   > no entry for the revoked key, which is the correct non-admissible state. If the router
+   > already holds the entry (partial prior push or pre-revocation registration), issue
+   > `internal.admission.revoke` to mark it revoked. In either case, the router MUST NOT
+   > be left with the key registered-as-active. The register+revoke two-RPC pattern is
+   > PROHIBITED for revoked entries because a partial failure (register succeeds, revoke
+   > fails) leaves the router in a less-restrictive state, violating Invariant 6.
+
+2. **Invariant 6**: Add a clarifying sentence after the existing text:
+
+   > PC-5's advisory-push carve-out covers "router is missing an update" (stale, still
+   > not less restrictive than before the push attempt). It does NOT cover "router was
+   > actively made less restrictive by a partial push." The two states are distinct.
+   > A router missing a revoked key is non-admissible for that key (correct). A router
+   > holding a revoked key as active after a partial push is admissible for that key
+   > (incorrect). Invariant 6 forbids the latter absolutely; PC-5 is silent on it.
+
+3. **EC-009** (revoked key in snapshot on restart): Replace the current expected behavior:
+
+   > `PushFullSnapshot` MUST NOT issue `internal.admission.register` for the revoked entry.
+   > If the router already has the entry, issue `internal.admission.revoke`. If the router
+   > has no entry for the key (fresh router), issue nothing — absent = non-admissible =
+   > correct terminal state. The router's resulting state is either "absent" or "revoked" —
+   > both are non-admissible and satisfy Invariant 6.
+
+These amendments do NOT require a PC-5 change — PC-5 remains valid as written once
+Invariant 6 is clarified to draw the "stale/missing vs actively less-restrictive"
+distinction explicitly.
+
+#### (ii) Story — directive for story-writer
+
+The story-writer MUST amend S-BL.ADMISSION-SYNC-WIRE as follows:
+
+1. **AC-009 PC-3c** (full-snapshot push, revoked entries): Replace
+   "for REVOKED entries, issues `internal.admission.revoke` AFTER register" with:
+
+   > (c) for REVOKED entries: do NOT issue `internal.admission.register`. Issue
+   > `internal.admission.revoke` ONLY if the router already holds an entry for this
+   > key (i.e., a prior push partially registered it or the key was registered before
+   > revocation). If the router has no entry, issue nothing. A missing entry is
+   > non-admissible — the correct terminal state for a revoked key. This avoids the
+   > register+revoke two-RPC partial-failure window that would leave the key
+   > active on a fresh router (Ruling 13 / Invariant 6).
+
+2. **Test name change**: `TestAdmissionSync_PushFullSnapshot_RevokedKeyStaysRevoked`
+   is RETAINED but its assertion is strengthened: the test MUST verify that
+   `internal.admission.register` is NOT sent for a revoked entry (either by inspecting
+   the router's keyset state or by capturing the RPCs issued). A router that starts with
+   no entry for the key must end with no entry (not revoked-but-present, not active).
+
+3. **Add new test name**: `TestAdmissionSync_PushFullSnapshot_RevokedKey_RegisterNotSent`
+   — asserts that `PushFullSnapshot` for a control keyset containing a revoked entry
+   does NOT issue `internal.admission.register` for that entry. Verify via a spy/mock
+   `admissionSyncer` or by checking the router's keyset: on a fresh router, after
+   `PushFullSnapshot` with a revoked entry, the router's keyset has NO entry for that key.
+
+4. **Add implementation task** (after task 17):
+   > 17d. [ ] PushFullSnapshot revoked-entry handling (Ruling 13): for entries where
+   > `entry.IsRevoked()` is true, skip `PushRegisterKey`; issue `PushRevokeKey` ONLY
+   > if the router already holds the entry (check via prior knowledge of whether the
+   > entry was registered, or attempt revoke and treat ErrNotFound on router as success
+   > — absent is the correct state). The simpler and safe implementation: skip
+   > PushRegisterKey unconditionally for revoked entries; always attempt PushRevokeKey
+   > (a revoke against a not-present entry is a no-op on the router — the router handler
+   > should treat "key not found" as success since the desired state is "not active").
+   > Document the router handler's idempotent behavior for this case. — implementer
+
+#### (iii) Implementer — exact behavior change
+
+**In `PushFullSnapshot` (admission_sync_client.go), the loop body for each entry changes from:**
+
+```
+register(entry)
+if entry.expiry != 0 { expire(entry) }
+if entry.IsRevoked() { revoke(entry) }
+```
+
+**To:**
+
+```
+if entry.IsRevoked() {
+    // For revoked entries: skip register entirely.
+    // Attempt revoke in case the router already holds an active entry.
+    // If the router has no entry, the revoke is a no-op (absent = correct terminal state).
+    revoke(entry)  // advisory; failure logged at WARN
+    continue
+}
+// Active (non-revoked) entry: register, then set expiry if present.
+register(entry)
+if entry.expiry != 0 { expire(entry) }
+```
+
+**In the router-side `internal.admission.revoke` handler (admission_sync_wire.go):**
+
+The handler MUST treat "key not found" as a success response (or at minimum a non-error
+advisory). If the revoke RPC arrives for a key that is not in the router's keyset (because the
+router never received a register for it — correct for Ruling 13's skip-register path), the
+handler must not return an error. It should return success or a logged-WARN advisory, NOT an
+error that causes the push client to treat the push as failed. This ensures that for a fresh
+router receiving a revoke for an unregistered key, the push completes successfully with the
+router in the correct "absent" state.
+
+**No wire format change.** `internal.admission.revoke` args struct and the
+`internal.admission.register` args struct are UNCHANGED. Only the call sequence in
+`PushFullSnapshot` changes.
+
+### F-P6-01 confirmation
+
+**F-P6-01 (router-side writeSnapshotAtomic concurrent lost-update race) is a PURE
+IMPLEMENTATION FIX requiring NO spec change.**
+
+BC-2.05.010 already mandates correct VLR-local snapshot state — PC-1 ("after each successful
+push-handler invocation, write the updated snapshot") and the atomic-write invariant (BC-2.05.010
+Invariant 1) together require correct serialized snapshot writes. The concurrent lost-update race
+(two concurrent push RPCs writing the snapshot without serialization, last-write-wins on a stale
+keyset capture) is a code-level concurrency bug: adding a per-snapshot-write mutex in
+`wireAdmissionSyncHandlers` (or serializing snapshot writes via a channel or sequential
+post-handler callback) fully resolves it without any spec text change. The spec already says
+"write the snapshot"; the bug is in the implementation not serializing concurrent writes. No
+BC amendment required.
+
+### Downstream propagation list (Ruling 13)
+
+| Artifact | Edit needed |
+|----------|-------------|
+| `BC-2.05.009.md` | Amend PC-7c (revoked entries: skip register, revoke-only); amend Invariant 6 (add PC-5 vs Invariant 6 distinction); amend EC-009 (revoked key → no register, revoke-only or nothing). PO executes. |
+| `S-BL.ADMISSION-SYNC-WIRE.md` | Amend AC-009 PC-3c; strengthen `RevokedKeyStaysRevoked` test assertion; add `RevokedKey_RegisterNotSent` test name; add impl task 17d. Story-writer executes. |
+| `admission_sync_client.go` | `PushFullSnapshot` loop: revoked entries skip `PushRegisterKey`, issue `PushRevokeKey` only. Implementer executes. |
+| `admission_sync_wire.go` | `internal.admission.revoke` handler: treat "key not found" as no-error (absent = correct terminal state). Implementer executes. |
 
