@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.009
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-07-15T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "b951227"
+input-hash: "0b71f0c"
 extracted_from: null
 bc_id: BC-2.05.009
 subsystem: admission-security
@@ -27,6 +27,17 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-17
+    version: "1.4"
+    change: >
+      Ruling 13 propagation (F-P6-02): PC-7c amended — MUST NOT issue
+      internal.admission.register for revoked entries; issue
+      internal.admission.revoke only. Invariant 6 amended — explicit
+      PC-5 vs Invariant 6 distinction: stale/missing (permitted) vs
+      actively less-restrictive (forbidden). EC-009 updated to
+      skip-register semantics: fresh router ends with no entry (absent
+      = non-admissible = correct), not registered-then-revoked.
+      No wire format change; PC-5, EC-008, EC-010, Inv-4 unchanged.
   - date: 2026-07-16
     version: "1.1"
     change: >
@@ -142,10 +153,17 @@ on the router side (challenge-response handshake is required to flip `admitted=t
       active-and-non-expiring. The register+expire pair must be issued regardless of
       whether the expiry timestamp is past or future, so the router's state precisely
       mirrors control's.
-   c. **NEW:** If the entry is REVOKED in control's `AdmittedKeySet`, issue
-      `internal.admission.revoke` with `{svtn_id, pubkey_openssh, role, confirm}` AFTER
-      the `internal.admission.register` in step (a). This ensures the router's resulting
-      state has the key marked revoked, matching control's authoritative state.
+   c. **For REVOKED entries (Ruling 13 / F-P6-02):** do NOT issue
+      `internal.admission.register`. A fresh router has no entry for the revoked key,
+      which is the correct non-admissible terminal state. If the router already holds an
+      entry for the key (partial prior push or pre-revocation registration), issue
+      `internal.admission.revoke` with `{svtn_id, pubkey_openssh, role, confirm}` to
+      mark it revoked. In either case, the router MUST NOT be left with the key
+      registered-as-active. The register+revoke two-RPC pattern is PROHIBITED for
+      revoked entries because a partial failure (register succeeds, revoke fails) leaves
+      the router in a less-restrictive state, violating Invariant 6. The router's revoke
+      handler MUST treat "key not present" as success — absent is the correct
+      non-admissible terminal state for a revoked key.
 
    **Semantic-equivalence end-state postcondition:** After `PushFullSnapshot` completes
    (best-effort across all endpoints), the router's `AdmittedKeySet` is SEMANTICALLY
@@ -220,6 +238,22 @@ on the router side (challenge-response handshake is required to flip `admitted=t
    `admin.key.expire` — and becomes exploitable once challenge-response
    (`S-BL.NODE-IDENTIFY-WIRE`) is wired.
 
+   **PC-5 vs Invariant 6 distinction (Ruling 13):** PC-5's advisory-push carve-out covers
+   "router is missing an update" — the router did not receive a push (e.g. due to a push
+   failure) and remains in its PRIOR state. For a key it never had, that prior state is
+   ABSENT = non-admissible. This is PERMITTED by PC-5 (stale, but not less restrictive
+   than before). It does NOT cover "router was actively made less restrictive by a partial
+   push." The two states are distinct:
+   - **Stale / missing** — router did not receive an update; remains in prior state
+     (absent or as last known). This is the PC-5 carve-out. PERMITTED.
+   - **Actively less-restrictive** — router was MADE admissible for a key that is
+     revoked/expired in control (e.g., register succeeded, revoke failed in a two-RPC
+     sequence). This is NOT covered by PC-5. FORBIDDEN by Invariant 6, absolutely.
+   PC-5 tolerates a router MISSING updates. Invariant 6 forbids a push (or partial push)
+   that leaves a router MORE permissive than before for a revoked/expired key. Approach (c)
+   — skip register for revoked entries — satisfies both: a partial failure on the revoke-only
+   RPC cannot leave a revoked key active, because the register was never issued.
+
 ## Trigger
 
 - `admin.key.register`, `admin.key.revoke`, `admin.key.expire`, or `admin.svtn.destroy`
@@ -244,7 +278,7 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 | EC-006 | `internal.admission.register` sent to router for an SVTN the router has no record of | Router's `RegisterKey` creates the entry idempotently (per Ruling 1 — `RegisterKey` MUST be idempotent from the router's perspective for fresh-install races). |
 | EC-007 | Control restarts after prior push failures | `PushFullSnapshot(ctx)` on startup pushes the COMPLETE authoritative `AdmittedKeySet` state — including revoked status and expiry timestamps — to all configured routers, converging router state to semantic equivalence with control. "Correcting any staleness" means full state convergence, not merely re-adding active keys. |
 | EC-008 | Router is temporarily restarting when push arrives | Push fails (connection refused); WARN logged. Router loads from its VLR-local snapshot (BC-2.05.010) on restart and receives a fresh full-snapshot push when control next starts or the next per-write push arrives. |
-| EC-009 | Control restarts; keyset contains a REVOKED key | `PushFullSnapshot` must issue `internal.admission.register` THEN `internal.admission.revoke` for the revoked entry. The router's resulting state has the key revoked — it is NOT silently re-registered as active. Without this, revocation durability is defeated on every control restart. |
+| EC-009 | Control restarts; keyset contains a REVOKED key | `PushFullSnapshot` MUST NOT issue `internal.admission.register` for the revoked entry. If the router already holds an entry for the key (partial prior push or pre-revocation registration), issue `internal.admission.revoke` to mark it revoked. If the router has no entry for the key (fresh router), issue nothing — absent = non-admissible = correct terminal state. The router's resulting state is either "absent" or "revoked," both non-admissible, satisfying Invariant 6. The register+revoke two-RPC pattern is PROHIBITED for revoked entries (Ruling 13 / F-P6-02). |
 | EC-010 | Control restarts; keyset contains a key with a past-expiry timestamp | `PushFullSnapshot` issues `internal.admission.register` + `internal.admission.expire(originalExpiry)` regardless of whether the expiry is past or future. The router handles the past timestamp by marking the entry expired/inactive. The key is NOT re-registered as active-and-non-expiring. |
 
 ## Canonical Test Vectors
@@ -306,6 +340,7 @@ S-BL.ADMISSION-SYNC-WIRE — all postconditions in this BC trace to acceptance c
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-17 | Ruling 13 propagation (F-P6-02): PC-7c amended — MUST NOT issue `internal.admission.register` for revoked entries; issue `internal.admission.revoke` only (router treats "key not found" as success — absent = non-admissible = correct terminal state). The register+revoke two-RPC pattern is PROHIBITED for revoked entries. Invariant 6 amended — explicit PC-5 vs Invariant 6 distinction: "stale/missing" (router did not receive update, permitted by PC-5) vs "actively less-restrictive" (router was made more permissive by a partial push, forbidden absolutely by Invariant 6). EC-009 updated to skip-register semantics: fresh router ends with no entry for the revoked key (absent), not registered-then-revoked; existing-entry router ends revoked. No wire format change; PC-5, EC-008, EC-010, Inv-4 svtn_id exemption unchanged. |
 | 1.3 | 2026-07-17 | PC-7: full-snapshot push must propagate COMPLETE authoritative state including revoked status and expiry timestamps (not register-only). Router must converge to semantic equivalence with control (same keys, same roles, same revoked status, same expiries). Add Invariant 6 (security-correctness: PushFullSnapshot MUST NOT leave a router in a less-restrictive state than control holds — no un-revoking, no un-expiring). Add EC-009 (revoked key on restart: register then revoke, not register-as-active). Add EC-010 (past-expiry key on restart: register + expire(originalExpiry), not active-and-non-expiring). Update EC-007 wording: "correcting any staleness" means full state convergence including revocations. Add test vectors and VPs for revoked-key and past-expiry scenarios. Fixes F-1 (adversary pass 5): revoked key was silently resurrected as active on every control restart. |
 | 1.2 | 2026-07-17 | Amend PC-7 (startup full-snapshot): add qualifier that EC-007 resync guarantee holds ONLY when `control_admission_state_file` is configured (BC-2.09.003 PC-15); without it, `PushFullSnapshot` pushes an empty keyset and EC-007 is inert. Document control-side persist-write: synchronous `writeSnapshotAtomic` call on each committed `admin.key.*`/`admin.svtn.*` mutation, BEFORE `dispatchPush`, advisory on failure. Per Ruling 11 (F-P3-01). |
 | 1.1 | 2026-07-16 | Amend Invariant 4: exempt `svtn_id` from encoding-parity rule — on the `internal.admission.*` wire it is the 32-lowercase-hex-char encoding of the `[16]byte` SVTN UUID (not the human-readable name). Rulings v1.2 (commit 3d64ac2) / svtn_id hex-encoding fix. |
