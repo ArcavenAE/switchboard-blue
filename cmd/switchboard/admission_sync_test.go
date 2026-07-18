@@ -5029,9 +5029,9 @@ func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_Reachable
 		}
 	}
 	if !activeFound {
-		t.Errorf("F-P8-01 FirstUnreachable FAIL: active key NOT present on reachable (second) router. "+
-			"Per-endpoint sequencing must process the second endpoint independently of the first. "+
-			"This FAILS without 17h: the old flatten path may skip the second endpoint entirely "+
+		t.Errorf("F-P8-01 FirstUnreachable FAIL: active key NOT present on reachable (second) router. " +
+			"Per-endpoint sequencing must process the second endpoint independently of the first. " +
+			"This FAILS without 17h: the old flatten path may skip the second endpoint entirely " +
 			"when the first endpoint fails all retries.")
 	}
 
@@ -5190,9 +5190,9 @@ func TestControlAdmission_RunControl_LoadThenPush_E2E_RealKey(t *testing.T) {
 	}
 
 	if !activeFound {
-		t.Errorf("F-P8-02 RealKey FAIL: active key NOT present on router after runControlWithKey push. "+
-			"This FAILS if load happened AFTER PushFullSnapshot (empty push) or if the push failed "+
-			"due to auth mismatch (runControlWithKey must use the injected controlPriv). "+
+		t.Errorf("F-P8-02 RealKey FAIL: active key NOT present on router after runControlWithKey push. " +
+			"This FAILS if load happened AFTER PushFullSnapshot (empty push) or if the push failed " +
+			"due to auth mismatch (runControlWithKey must use the injected controlPriv). " +
 			"If this fires, check that runControlWithKey uses daemonPriv for the admissionSyncClient.")
 	}
 

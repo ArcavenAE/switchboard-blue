@@ -401,9 +401,9 @@ func TestWireMetricsHandlers_RegistersPingOnEveryMode(t *testing.T) {
 		// invariant ("every daemon mode wires metrics") continues to hold —
 		// runControlWithKey IS the control mode's daemon core.
 		wantCallers := map[string]bool{
-			"runRouter":       false,
-			"runAccess":       false,
-			"runConsole":      false,
+			"runRouter":         false,
+			"runAccess":         false,
+			"runConsole":        false,
 			"runControlWithKey": false,
 		}
 
