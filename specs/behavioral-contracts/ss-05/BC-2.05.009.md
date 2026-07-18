@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.009
 document_type: behavioral-contract
 level: L3
-version: "1.5"
+version: "1.6"
 status: draft
 producer: product-owner
 timestamp: 2026-07-15T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "e16e6ce"
+input-hash: "5ac543c"
 extracted_from: null
 bc_id: BC-2.05.009
 subsystem: admission-security
@@ -27,6 +27,13 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-07-18
+    version: "1.6"
+    change: >
+      Ruling 15 clarification (F-P8-01): add per-endpoint sequencing obligation paragraph to
+      PC-7 (after step c) — makes explicit that the register→expire→compensate state machine
+      MUST be applied per configured router endpoint independently. IMPL-ONLY fix; no change
+      to Invariant 6, EC-008/009/010, PC-5, PC-7c, or the Ruling 14 register-fail continue note.
   - date: 2026-07-18
     version: "1.5"
     change: >
@@ -182,6 +189,16 @@ on the router side (challenge-response handshake is required to flip `admitted=t
       the router in a less-restrictive state, violating Invariant 6. The router's revoke
       handler MUST treat "key not present" as success — absent is the correct
       non-admissible terminal state for a revoked key.
+
+   **Per-endpoint sequencing obligation (Ruling 15 / F-P8-01):** When multiple router
+   management endpoints are configured (E-CFG-016 `RouterManagementEndpoints`),
+   `PushFullSnapshot` applies the per-entry register→expire→compensating-revoke sequence
+   PER ENDPOINT: a register success on one endpoint MUST drive that endpoint's expire and
+   (for past-expiry) compensating-revoke independently of any other endpoint's
+   reachability. A push failure to one endpoint MUST NOT suppress the expire or
+   compensating-revoke obligations for endpoints where register succeeded — each reachable
+   endpoint MUST independently reach its correct terminal state (Invariant 6); unreachable
+   endpoints remain stale (PC-5 permitted).
 
    **Semantic-equivalence end-state postcondition:** After `PushFullSnapshot` completes
    (best-effort across all endpoints), the router's `AdmittedKeySet` is SEMANTICALLY
@@ -371,6 +388,7 @@ S-BL.ADMISSION-SYNC-WIRE — all postconditions in this BC trace to acceptance c
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.6 | 2026-07-18 | Ruling 15 clarification (F-P8-01): add per-endpoint sequencing obligation paragraph to PC-7 (after step c) — makes explicit that the register→expire→compensate state machine MUST be applied per configured router endpoint independently. IMPL-ONLY; no change to Invariant 6, EC-008/009/010, PC-5, PC-7c, or the Ruling 14 register-fail continue note. |
 | 1.5 | 2026-07-18 | Ruling 14 propagation (F-P7-01): PC-7b amended — add compensating best-effort `internal.admission.revoke` when `expire` fails AND expiry is already in the past, so router ends non-admissible (revoked, satisfying Invariant 6). Future-expiry expire-fail is PC-5 stale/missing (permitted) — no compensating action. Invariant 6 amended with explicit future-vs-past-expiry carve-out and AdmitNode no-expiry-check evidence (AdmitNode checks only `revoked`; only ReAuthenticate checks expiry). EC-010 updated: compensating revoke fires on past-expiry expire-fail; router ends non-admissible, never active-non-expiring. No wire format change; expire-handler key-not-found stays E-ADM-013; PC-5, PC-7c, Inv-4 svtn_id exemption unchanged. |
 | 1.4 | 2026-07-17 | Ruling 13 propagation (F-P6-02): PC-7c amended — MUST NOT issue `internal.admission.register` for revoked entries; issue `internal.admission.revoke` only (router treats "key not found" as success — absent = non-admissible = correct terminal state). The register+revoke two-RPC pattern is PROHIBITED for revoked entries. Invariant 6 amended — explicit PC-5 vs Invariant 6 distinction: "stale/missing" (router did not receive update, permitted by PC-5) vs "actively less-restrictive" (router was made more permissive by a partial push, forbidden absolutely by Invariant 6). EC-009 updated to skip-register semantics: fresh router ends with no entry for the revoked key (absent), not registered-then-revoked; existing-entry router ends revoked. No wire format change; PC-5, EC-008, EC-010, Inv-4 svtn_id exemption unchanged. |
 | 1.3 | 2026-07-17 | PC-7: full-snapshot push must propagate COMPLETE authoritative state including revoked status and expiry timestamps (not register-only). Router must converge to semantic equivalence with control (same keys, same roles, same revoked status, same expiries). Add Invariant 6 (security-correctness: PushFullSnapshot MUST NOT leave a router in a less-restrictive state than control holds — no un-revoking, no un-expiring). Add EC-009 (revoked key on restart: register then revoke, not register-as-active). Add EC-010 (past-expiry key on restart: register + expire(originalExpiry), not active-and-non-expiring). Update EC-007 wording: "correcting any staleness" means full state convergence including revocations. Add test vectors and VPs for revoked-key and past-expiry scenarios. Fixes F-1 (adversary pass 5): revoked key was silently resurrected as active on every control restart. |
