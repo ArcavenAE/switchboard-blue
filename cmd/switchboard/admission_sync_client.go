@@ -468,27 +468,182 @@ func pushSnapshotEntries(ctx context.Context, s admissionSyncer, allEntries map[
 	return lastErr
 }
 
+// pushOneRPC sends a single RPC to a single endpoint addr with the same
+// retry-with-backoff policy as pushWithRetry uses per endpoint:
+// 100ms base, ×2 backoff, capped at 10s, max 5 attempts.
+//
+// This is the per-endpoint retry primitive used by pushSnapshotToEndpoint.
+// It does NOT fan out to multiple endpoints (unlike pushWithRetry).
+func (c *admissionSyncClient) pushOneRPC(ctx context.Context, addr, command string, argsJSON json.RawMessage) error {
+	delay := admissionSyncRetryInitial
+	var lastErr error
+	for attempt := 0; attempt < admissionSyncRetryMax; attempt++ {
+		err := c.pushRPC(ctx, addr, command, argsJSON)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if attempt+1 < admissionSyncRetryMax {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled after %d attempts on %s: %w", attempt+1, addr, ctx.Err())
+			case <-time.After(delay):
+			}
+			delay *= 2
+			if delay > admissionSyncRetryMaxDelay {
+				delay = admissionSyncRetryMaxDelay
+			}
+		}
+	}
+	return lastErr
+}
+
+// pushSnapshotToEndpoint runs the per-entry admission snapshot state machine for
+// a SINGLE endpoint addr. It is the per-endpoint equivalent of pushSnapshotEntries,
+// called by PushFullSnapshot once per configured endpoint (Ruling 15 option (a)).
+//
+// Per-entry logic is identical to pushSnapshotEntries:
+//   - REVOKED entry (Ruling 13 / PC-7c): pushOneRPC(revoke) ONLY. MUST NOT register.
+//   - ACTIVE entry: (a) pushOneRPC(register); on failure → continue (17f(i)).
+//     (b) If non-zero expiry → pushOneRPC(expire); on failure for a PAST-expiry entry →
+//     best-effort pushOneRPC(compensating revoke) (17f(ii)). For FUTURE-expiry expire-fail →
+//     no compensating revoke (17f(iii) / PC-5).
+//
+// Because each endpoint is processed independently, a compensating revoke fires ONLY for
+// THIS endpoint — it does not affect other endpoints (Ruling 15 correctness matrix).
+// This structurally eliminates the fan-out-revoke-to-all problem (F-P8-01).
+//
+// w is the log writer for advisory WARNs (nil falls back to os.Stderr, F-3 pattern).
+func (c *admissionSyncClient) pushSnapshotToEndpoint(ctx context.Context, addr string, allEntries map[[16]byte][]admission.AdmittedKey, w io.Writer) error {
+	var lastErr error
+	for svtnID, entries := range allEntries {
+		for _, e := range entries {
+			if e.IsRevoked() {
+				// Ruling 13 / PC-7c: revoked entry — revoke-only; MUST NOT register.
+				args := map[string]any{
+					"svtn_id":        hex.EncodeToString(svtnID[:]),
+					"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
+					"role":           e.Role.String(),
+					"confirm":        true,
+				}
+				argsJSON, err := json.Marshal(args)
+				if err != nil {
+					lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal revoke args: %w", err)
+					continue
+				}
+				if err := c.pushOneRPC(ctx, addr, CmdAdmissionRevoke, argsJSON); err != nil {
+					lastErr = err
+				}
+				continue
+			}
+
+			// ACTIVE entry: (a) register.
+			regArgs := map[string]any{
+				"svtn_id":        hex.EncodeToString(svtnID[:]),
+				"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
+				"role":           e.Role.String(),
+			}
+			regJSON, err := json.Marshal(regArgs)
+			if err != nil {
+				lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal register args: %w", err)
+				continue
+			}
+			if err := c.pushOneRPC(ctx, addr, CmdAdmissionRegister, regJSON); err != nil {
+				// 17f(i): register failed — the router has no entry; skip expire.
+				lastErr = err
+				continue
+			}
+
+			// (b) expire if non-zero expiry.
+			if !e.KeyExpiry().IsZero() {
+				ttl := time.Until(e.KeyExpiry())
+				if ttl == 0 {
+					ttl = -1 * time.Millisecond
+				}
+				expArgs := map[string]any{
+					"svtn_id":        hex.EncodeToString(svtnID[:]),
+					"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
+					"after":          ttl.String(),
+				}
+				expJSON, err := json.Marshal(expArgs)
+				if err != nil {
+					lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal expire args: %w", err)
+					continue
+				}
+				if err := c.pushOneRPC(ctx, addr, CmdAdmissionExpire, expJSON); err != nil {
+					lastErr = err
+					// 17f(ii): compensating revoke for PAST-expiry only. A past-expiry entry
+					// whose expire-push failed is now registered as active-and-non-expiring
+					// on THIS endpoint — Invariant-6 violation. Compensating revoke is
+					// endpoint-scoped: affects only addr, not any other endpoint.
+					// 17f(iii): FUTURE-expiry expire-fail → NO compensating revoke (PC-5).
+					if e.KeyExpiry().Before(time.Now().UTC()) {
+						revArgs := map[string]any{
+							"svtn_id":        hex.EncodeToString(svtnID[:]),
+							"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
+							"role":           e.Role.String(),
+							"confirm":        true,
+						}
+						revJSON, err := json.Marshal(revArgs)
+						if err != nil {
+							lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal compensating revoke args: %w", err)
+							continue
+						}
+						if rErr := c.pushOneRPC(ctx, addr, CmdAdmissionRevoke, revJSON); rErr != nil {
+							ww := w
+							if ww == nil {
+								ww = os.Stderr
+							}
+							_, _ = fmt.Fprintf(ww,
+								"switchboard control: WARN: compensating revoke failed after past-expiry expire-fail: endpoint=%s svtn_id=%s err=%v\n",
+								addr, hex.EncodeToString(svtnID[:]), rErr)
+						}
+					}
+				}
+			}
+		}
+	}
+	return lastErr
+}
+
 // PushFullSnapshot iterates all admitted key entries across all SVTNs in ks
 // and issues the appropriate internal.admission.* RPCs to each configured router
-// endpoint. Delegates to pushSnapshotEntries for the per-entry logic.
+// endpoint using per-endpoint sequencing (Ruling 15 option (a) / F-P8-01 fix).
+//
+// Each endpoint is processed INDEPENDENTLY by pushSnapshotToEndpoint. One
+// endpoint's failure does NOT affect any other endpoint's state machine —
+// compensating revokes are endpoint-scoped. This eliminates the Invariant-6
+// violation that arose from the old pushSnapshotEntries fan-out path.
 //
 //   - REVOKED entry (Ruling 13 / BC-2.05.009 v1.4 PC-7c): issue revoke ONLY.
 //   - ACTIVE entry: register → (on success) expire if non-zero expiry.
-//     Past-expiry expire-fail → compensating revoke (Ruling 14 / 17f).
+//     Past-expiry expire-fail → compensating revoke (Ruling 14 / 17f) — endpoint-scoped.
 //     Future-expiry expire-fail → no compensating revoke (PC-5 / 17f(iii)).
 //
 // Called from runControl on startup, before the management server begins serving
 // (BC-2.05.009 v1.4 PC-7, Postcondition 7, Invariant 6 / AC-009 / Decision 10).
 //
-// An empty keyset is a no-op (return nil). Push errors are advisory — the
-// caller (runControl) logs WARN and continues.
+// An empty keyset or empty endpoint list is a no-op (return nil). Push errors are
+// advisory — the caller (runControl) logs WARN and continues.
 func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admission.AdmittedKeySet) error {
 	allEntries := ks.AllSVTNEntries()
 	if len(allEntries) == 0 {
 		// Empty keyset — no push attempt (AC-009 EmptyKeyset postcondition).
 		return nil
 	}
-	// Delegate to the shared inner loop, routing Push* calls through c (self).
-	// w is nil — compensating-revoke WARN falls back to os.Stderr.
-	return pushSnapshotEntries(ctx, c, allEntries, nil)
+	endpoints := c.currentEndpoints()
+	if len(endpoints) == 0 {
+		return nil
+	}
+
+	// Ruling 15 option (a): iterate endpoints OUTER, entries INNER.
+	// Each endpoint's state machine runs independently — a failure on one
+	// endpoint does not affect another.
+	var lastErr error
+	for _, ep := range endpoints {
+		if err := c.pushSnapshotToEndpoint(ctx, ep.Addr, allEntries, nil); err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
 }

@@ -4926,15 +4926,22 @@ func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_LastUnreachable_PastExpiry
 }
 
 // TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_ReachableEndpointCorrect
-// verifies that when the FIRST endpoint is black-holed and the SECOND is reachable,
-// the reachable endpoint is fully and correctly processed: active key present/admissible-eligible,
-// revoked key absent (Ruling 13 skip-register).
+// verifies that when the FIRST endpoint immediately rejects connections (RST) and
+// the SECOND is reachable, the reachable endpoint is fully and correctly processed:
+// active key present/admissible-eligible, revoked key absent (Ruling 13 skip-register).
 //
 // This proves per-endpoint independence regardless of order: the first endpoint's
 // failures must not prevent the second endpoint from being fully processed.
 //
+// Note on "unreachable" endpoint design: a closed local port (RST on connect) is used
+// rather than a black-hole IP (SYN-drop) for the first endpoint. Both are equally valid
+// for testing per-endpoint independence — the property under test is "does endpoint[1]
+// get processed when endpoint[0] fails ALL retries?", which holds for any failure mode.
+// A closed port makes retries fail in microseconds (vs ~5s per dial for a black-hole),
+// keeping the test fast regardless of how many entries are in the keyset.
+//
 // Setup:
-//   - endpoint[0] = "192.0.2.1:9" (black-hole)
+//   - endpoint[0] = closed local port (RST on connect — all retries fail fast)
 //   - endpoint[1] = real in-process router (startRouterMgmtServerTCP)
 //   - control keyset: 1 active key + 1 revoked key (same SVTN)
 //
@@ -4986,21 +4993,27 @@ func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_Reachable
 	routerKS := admission.NewAdmittedKeySet()
 	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
 
-	// endpoint[0] = black-hole (first endpoint, before reachable).
-	blackHoleAddr := "192.0.2.1:9"
+	// endpoint[0] = a closed local port (all connection attempts receive RST immediately).
+	// Allocate an ephemeral port and close it so the OS sends RST on connect.
+	closedLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for closed-port endpoint: %v", err)
+	}
+	closedAddr := closedLn.Addr().String()
+	_ = closedLn.Close() // closed = RST on every connect attempt
 
 	client := newAdmissionSyncClient(
 		[]config.RouterManagementEndpoint{
-			{Addr: blackHoleAddr},
+			{Addr: closedAddr},
 			{Addr: routerAddr},
 		},
 		controlPriv,
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// PushFullSnapshot — error from black-hole is expected and advisory.
+	// PushFullSnapshot — error from closed-port endpoint is expected and advisory.
 	_ = client.PushFullSnapshot(ctx, controlKS)
 
 	// Assert: reachable router state is correct.
