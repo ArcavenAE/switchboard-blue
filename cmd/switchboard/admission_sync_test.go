@@ -4360,9 +4360,11 @@ func TestAdmissionSync_PushFullSnapshot_PastExpiry_ExpireFails_CompensatingRevok
 		expireErr: fmt.Errorf("simulated expire failure (E-ADM-013 analogue)"),
 	}
 
-	// Call the production inner loop (pushSnapshotEntries) via the spy syncer.
-	// This is the same function PushFullSnapshot delegates to; the spy records
-	// the ordered Push* calls issued for each entry.
+	// Drive the canonical per-entry state machine (pushSnapshotEntries) via the spy
+	// syncer. This is the PRODUCTION path: pushSnapshotToEndpoint delegates to
+	// pushSnapshotEntries via endpointSyncer; here we use a spy syncer to intercept
+	// calls and verify the compensating-revoke guard without touching the network
+	// (F-P9-01 fix — previously called an orphaned copy, not the production path).
 	ctx := context.Background()
 	allEntries := controlKS.AllSVTNEntries()
 	_ = pushSnapshotEntries(ctx, spy, allEntries, nil)
@@ -4440,7 +4442,8 @@ func TestAdmissionSync_PushFullSnapshot_FutureExpiry_ExpireFails_NoCompensatingR
 		expireErr: fmt.Errorf("simulated expire failure (transient)"),
 	}
 
-	// Call the production inner loop via the spy syncer.
+	// Drive the canonical per-entry state machine (pushSnapshotEntries) via the spy
+	// syncer — same production path as the PastExpiry test above (F-P9-01 fix).
 	ctx := context.Background()
 	allEntries := controlKS.AllSVTNEntries()
 	_ = pushSnapshotEntries(ctx, spy, allEntries, nil)

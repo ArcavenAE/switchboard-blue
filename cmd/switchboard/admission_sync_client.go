@@ -384,10 +384,15 @@ func (c *admissionSyncClient) PushRemoveSVTN(
 	return c.pushWithRetry(ctx, CmdAdmissionRemoveSVTN, argsJSON)
 }
 
-// pushSnapshotEntries is the inner loop of PushFullSnapshot. It iterates allEntries
-// and issues the appropriate admission RPCs via s for each entry. Extracted to allow
-// tests to drive the loop with a spy syncer (admissionSyncClient.PushFullSnapshot
-// calls its own methods, not the interface, so interception requires this helper).
+// pushSnapshotEntries is the canonical per-entry admission snapshot state machine.
+// It iterates allEntries and issues the appropriate admission RPCs via s for each
+// entry. This is the SINGLE implementation of the per-entry logic; all callers
+// (production and tests) go through this function.
+//
+// Production path: pushSnapshotToEndpoint builds an endpointSyncer backed by
+// c.pushOneRPC for a specific addr and delegates here. Tests drive this function
+// directly with a spy admissionSyncer (selectiveMockSyncer) to verify the
+// compensating-revoke guard without touching the network.
 //
 // Per-entry logic (BC-2.05.009 v1.5 PC-7b / Ruling 14):
 //
@@ -498,122 +503,96 @@ func (c *admissionSyncClient) pushOneRPC(ctx context.Context, addr, command stri
 	return lastErr
 }
 
+// endpointSyncer adapts a single-endpoint pushOneRPC call into the admissionSyncer
+// interface. It is used by pushSnapshotToEndpoint to drive the canonical per-entry
+// state machine (pushSnapshotEntries) against one specific router addr without
+// duplicating any logic.
+//
+// All per-RPC JSON marshaling happens here, keeping pushSnapshotEntries interface-clean
+// (it receives abstract Push* calls, not raw JSON).
+//
+// F-P9-01 fix: this adapter is the bridge that makes pushSnapshotEntries the SINGLE
+// per-entry state machine used by both production (via this adapter) and guard tests
+// (via selectiveMockSyncer). There is no longer a duplicate state machine.
+type endpointSyncer struct {
+	c    *admissionSyncClient
+	addr string
+}
+
+func (s *endpointSyncer) PushRegisterKey(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, role admission.KeyRole) error {
+	args := map[string]any{
+		"svtn_id":        hex.EncodeToString(svtnID[:]),
+		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pubkey)),
+		"role":           role.String(),
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("endpointSyncer.PushRegisterKey: marshal args: %w", err)
+	}
+	return s.c.pushOneRPC(ctx, s.addr, CmdAdmissionRegister, argsJSON)
+}
+
+func (s *endpointSyncer) PushRevokeKey(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, role admission.KeyRole, confirm bool) error {
+	args := map[string]any{
+		"svtn_id":        hex.EncodeToString(svtnID[:]),
+		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pubkey)),
+		"role":           role.String(),
+		"confirm":        confirm,
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("endpointSyncer.PushRevokeKey: marshal args: %w", err)
+	}
+	return s.c.pushOneRPC(ctx, s.addr, CmdAdmissionRevoke, argsJSON)
+}
+
+func (s *endpointSyncer) PushSetKeyExpiry(ctx context.Context, svtnID [16]byte, pubkey ed25519.PublicKey, ttl time.Duration) error {
+	args := map[string]any{
+		"svtn_id":        hex.EncodeToString(svtnID[:]),
+		"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(pubkey)),
+		"after":          ttl.String(),
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("endpointSyncer.PushSetKeyExpiry: marshal args: %w", err)
+	}
+	return s.c.pushOneRPC(ctx, s.addr, CmdAdmissionExpire, argsJSON)
+}
+
+func (s *endpointSyncer) PushRemoveSVTN(ctx context.Context, svtnID [16]byte) error {
+	args := map[string]any{
+		"svtn_id": hex.EncodeToString(svtnID[:]),
+	}
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		return fmt.Errorf("endpointSyncer.PushRemoveSVTN: marshal args: %w", err)
+	}
+	return s.c.pushOneRPC(ctx, s.addr, CmdAdmissionRemoveSVTN, argsJSON)
+}
+
 // pushSnapshotToEndpoint runs the per-entry admission snapshot state machine for
-// a SINGLE endpoint addr. It is the per-endpoint equivalent of pushSnapshotEntries,
-// called by PushFullSnapshot once per configured endpoint (Ruling 15 option (a)).
+// a SINGLE endpoint addr. It delegates to the canonical pushSnapshotEntries via an
+// endpointSyncer — there is exactly ONE per-entry state machine in this codebase
+// (F-P9-01 fix; previously this function contained a duplicate).
 //
-// Per-entry logic is identical to pushSnapshotEntries:
-//   - REVOKED entry (Ruling 13 / PC-7c): pushOneRPC(revoke) ONLY. MUST NOT register.
-//   - ACTIVE entry: (a) pushOneRPC(register); on failure → continue (17f(i)).
-//     (b) If non-zero expiry → pushOneRPC(expire); on failure for a PAST-expiry entry →
-//     best-effort pushOneRPC(compensating revoke) (17f(ii)). For FUTURE-expiry expire-fail →
-//     no compensating revoke (17f(iii) / PC-5).
-//
-// Because each endpoint is processed independently, a compensating revoke fires ONLY for
-// THIS endpoint — it does not affect other endpoints (Ruling 15 correctness matrix).
-// This structurally eliminates the fan-out-revoke-to-all problem (F-P8-01).
+// Because each endpoint is processed independently, a compensating revoke fires ONLY
+// for THIS endpoint — it does not affect other endpoints (Ruling 15 correctness
+// matrix). This structurally eliminates the fan-out-revoke-to-all problem (F-P8-01).
 //
 // w is the log writer for advisory WARNs (nil falls back to os.Stderr, F-3 pattern).
 func (c *admissionSyncClient) pushSnapshotToEndpoint(ctx context.Context, addr string, allEntries map[[16]byte][]admission.AdmittedKey, w io.Writer) error {
-	var lastErr error
-	for svtnID, entries := range allEntries {
-		for _, e := range entries {
-			if e.IsRevoked() {
-				// Ruling 13 / PC-7c: revoked entry — revoke-only; MUST NOT register.
-				args := map[string]any{
-					"svtn_id":        hex.EncodeToString(svtnID[:]),
-					"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
-					"role":           e.Role.String(),
-					"confirm":        true,
-				}
-				argsJSON, err := json.Marshal(args)
-				if err != nil {
-					lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal revoke args: %w", err)
-					continue
-				}
-				if err := c.pushOneRPC(ctx, addr, CmdAdmissionRevoke, argsJSON); err != nil {
-					lastErr = err
-				}
-				continue
-			}
-
-			// ACTIVE entry: (a) register.
-			regArgs := map[string]any{
-				"svtn_id":        hex.EncodeToString(svtnID[:]),
-				"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
-				"role":           e.Role.String(),
-			}
-			regJSON, err := json.Marshal(regArgs)
-			if err != nil {
-				lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal register args: %w", err)
-				continue
-			}
-			if err := c.pushOneRPC(ctx, addr, CmdAdmissionRegister, regJSON); err != nil {
-				// 17f(i): register failed — the router has no entry; skip expire.
-				lastErr = err
-				continue
-			}
-
-			// (b) expire if non-zero expiry.
-			if !e.KeyExpiry().IsZero() {
-				ttl := time.Until(e.KeyExpiry())
-				if ttl == 0 {
-					ttl = -1 * time.Millisecond
-				}
-				expArgs := map[string]any{
-					"svtn_id":        hex.EncodeToString(svtnID[:]),
-					"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
-					"after":          ttl.String(),
-				}
-				expJSON, err := json.Marshal(expArgs)
-				if err != nil {
-					lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal expire args: %w", err)
-					continue
-				}
-				if err := c.pushOneRPC(ctx, addr, CmdAdmissionExpire, expJSON); err != nil {
-					lastErr = err
-					// 17f(ii): compensating revoke for PAST-expiry only. A past-expiry entry
-					// whose expire-push failed is now registered as active-and-non-expiring
-					// on THIS endpoint — Invariant-6 violation. Compensating revoke is
-					// endpoint-scoped: affects only addr, not any other endpoint.
-					// 17f(iii): FUTURE-expiry expire-fail → NO compensating revoke (PC-5).
-					if e.KeyExpiry().Before(time.Now().UTC()) {
-						revArgs := map[string]any{
-							"svtn_id":        hex.EncodeToString(svtnID[:]),
-							"pubkey_openssh": base64.RawURLEncoding.EncodeToString([]byte(e.PublicKey)),
-							"role":           e.Role.String(),
-							"confirm":        true,
-						}
-						revJSON, err := json.Marshal(revArgs)
-						if err != nil {
-							lastErr = fmt.Errorf("pushSnapshotToEndpoint: marshal compensating revoke args: %w", err)
-							continue
-						}
-						if rErr := c.pushOneRPC(ctx, addr, CmdAdmissionRevoke, revJSON); rErr != nil {
-							ww := w
-							if ww == nil {
-								ww = os.Stderr
-							}
-							_, _ = fmt.Fprintf(ww,
-								"switchboard control: WARN: compensating revoke failed after past-expiry expire-fail: endpoint=%s svtn_id=%s err=%v\n",
-								addr, hex.EncodeToString(svtnID[:]), rErr)
-						}
-					}
-				}
-			}
-		}
-	}
-	return lastErr
+	es := &endpointSyncer{c: c, addr: addr}
+	return pushSnapshotEntries(ctx, es, allEntries, w)
 }
 
 // PushFullSnapshot iterates all admitted key entries across all SVTNs in ks
 // and issues the appropriate internal.admission.* RPCs to each configured router
 // endpoint using per-endpoint sequencing (Ruling 15 option (a) / F-P8-01 fix).
 //
-// Each endpoint is processed INDEPENDENTLY by pushSnapshotToEndpoint. One
-// endpoint's failure does NOT affect any other endpoint's state machine —
-// compensating revokes are endpoint-scoped. This eliminates the Invariant-6
-// violation that arose from the old pushSnapshotEntries fan-out path.
+// Each endpoint is processed INDEPENDENTLY by pushSnapshotToEndpoint, which
+// delegates to the canonical pushSnapshotEntries via an endpointSyncer adapter.
+// One endpoint's failure does NOT affect any other endpoint's state machine —
+// compensating revokes are endpoint-scoped (Invariant-6 durability / Ruling 14).
 //
 //   - REVOKED entry (Ruling 13 / BC-2.05.009 v1.4 PC-7c): issue revoke ONLY.
 //   - ACTIVE entry: register → (on success) expire if non-zero expiry.
