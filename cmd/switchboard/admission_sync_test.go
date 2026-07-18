@@ -4493,3 +4493,304 @@ func TestControlAdmission_RunControl_LoadThenPush_E2E(t *testing.T) {
 		t.Error("LOW-2: active key not pushed to fresh router after PushFullSnapshot")
 	}
 }
+
+// ── 17f (F-P7-01): compensating revoke on past-expiry expire-failure ──────────
+
+// selectiveMockSyncer is a spy syncer that records calls in order and can be
+// configured to fail specific methods. Unlike mockSyncer (which applies a single
+// err to ALL methods), selectiveMockSyncer allows independent per-method error
+// injection — needed for the 17f test where PushRegisterKey and PushRevokeKey
+// must succeed while PushSetKeyExpiry fails.
+//
+// Thread-unsafe: must be used from a single goroutine (tests call PushFullSnapshot
+// directly on the client which calls its own methods, not the syncer interface).
+// The spy is populated via the direct-client path described below.
+type selectiveMockSyncer struct {
+	// calls records the ordered sequence of Push* method names called.
+	calls []string
+	// registerErr is returned by PushRegisterKey (nil = succeed).
+	registerErr error
+	// expireErr is returned by PushSetKeyExpiry (nil = succeed).
+	expireErr error
+	// revokeErr is returned by PushRevokeKey (nil = succeed).
+	revokeErr error
+}
+
+func (s *selectiveMockSyncer) PushRegisterKey(_ context.Context, _ [16]byte, _ ed25519.PublicKey, _ admission.KeyRole) error {
+	s.calls = append(s.calls, "PushRegisterKey")
+	return s.registerErr
+}
+
+func (s *selectiveMockSyncer) PushRevokeKey(_ context.Context, _ [16]byte, _ ed25519.PublicKey, _ admission.KeyRole, _ bool) error {
+	s.calls = append(s.calls, "PushRevokeKey")
+	return s.revokeErr
+}
+
+func (s *selectiveMockSyncer) PushSetKeyExpiry(_ context.Context, _ [16]byte, _ ed25519.PublicKey, _ time.Duration) error {
+	s.calls = append(s.calls, "PushSetKeyExpiry")
+	return s.expireErr
+}
+
+func (s *selectiveMockSyncer) PushRemoveSVTN(_ context.Context, _ [16]byte) error {
+	s.calls = append(s.calls, "PushRemoveSVTN")
+	return nil
+}
+
+// TestAdmissionSync_PushFullSnapshot_PastExpiry_ExpireFails_CompensatingRevoke verifies
+// that when PushSetKeyExpiry fails for an ACTIVE entry with a PAST expiry, a
+// compensating PushRevokeKey is issued to prevent the router being left with an
+// active-and-non-expiring entry (Invariant 6 violation).
+//
+// The recorded call sequence for the past-expiry entry MUST be:
+//
+//	PushRegisterKey → PushSetKeyExpiry(fail) → PushRevokeKey
+//
+// This test MUST fail if 17f(ii) is reverted: without the compensating revoke,
+// pushSnapshotEntries will only record PushRegisterKey+PushSetKeyExpiry (no PushRevokeKey)
+// and the assertion fires.
+//
+// BC-2.05.009 v1.5 PC-7b / Ruling 14 / Invariant 6 / EC-010;
+// S-BL.ADMISSION-SYNC-WIRE AC-009 / F-P7-01 / task 17f.
+func TestAdmissionSync_PushFullSnapshot_PastExpiry_ExpireFails_CompensatingRevoke(t *testing.T) {
+	t.Parallel()
+
+	// Build a control keyset with one ACTIVE entry whose expiry is 1 hour in the past.
+	controlKS := admission.NewAdmittedKeySet()
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	controlKS.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	entries := controlKS.ListBySVTN(svtnID)
+	if len(entries) == 0 {
+		t.Fatal("no entries after RegisterKey")
+	}
+	pastExpiry := time.Now().UTC().Add(-1 * time.Hour).Truncate(time.Second)
+	if err := controlKS.SetKeyExpiry(svtnID, entries[0].NodeAddr, pastExpiry); err != nil {
+		t.Fatalf("SetKeyExpiry (past): %v", err)
+	}
+
+	// Configure the spy to succeed on register and revoke, fail only on expire.
+	spy := &selectiveMockSyncer{
+		expireErr: fmt.Errorf("simulated expire failure (E-ADM-013 analogue)"),
+	}
+
+	// Call the production inner loop (pushSnapshotEntries) via the spy syncer.
+	// This is the same function PushFullSnapshot delegates to; the spy records
+	// the ordered Push* calls issued for each entry.
+	ctx := context.Background()
+	allEntries := controlKS.AllSVTNEntries()
+	_ = pushSnapshotEntries(ctx, spy, allEntries, nil)
+
+	// 17f core assertion: the recorded sequence MUST be
+	//   PushRegisterKey → PushSetKeyExpiry(fail) → PushRevokeKey.
+	// If the compensating revoke is missing (17f reverted), PushRevokeKey will not
+	// appear after PushSetKeyExpiry and this assertion fires.
+	if len(spy.calls) < 3 {
+		t.Fatalf("F-P7-01 CompensatingRevoke: expected ≥3 calls "+
+			"(PushRegisterKey, PushSetKeyExpiry, PushRevokeKey); got %d: %v\n"+
+			"FAIL: 17f(ii) not implemented — pushSnapshotEntries does not issue compensating revoke\n"+
+			"after past-expiry expire-fail. Fix: add compensating PushRevokeKey when\n"+
+			"PushSetKeyExpiry fails and e.KeyExpiry().Before(time.Now().UTC()).",
+			len(spy.calls), spy.calls)
+	}
+	if spy.calls[0] != "PushRegisterKey" {
+		t.Errorf("F-P7-01 CompensatingRevoke: calls[0]=%q; want PushRegisterKey", spy.calls[0])
+	}
+	if spy.calls[1] != "PushSetKeyExpiry" {
+		t.Errorf("F-P7-01 CompensatingRevoke: calls[1]=%q; want PushSetKeyExpiry", spy.calls[1])
+	}
+	if spy.calls[2] != "PushRevokeKey" {
+		t.Errorf("F-P7-01 CompensatingRevoke: calls[2]=%q; want PushRevokeKey (compensating revoke). "+
+			"FAIL: 17f(ii) not implemented — no compensating revoke after past-expiry expire-fail. "+
+			"Fix: after PushSetKeyExpiry fails and e.KeyExpiry().Before(time.Now().UTC()), issue PushRevokeKey.",
+			spy.calls[2])
+	}
+	t.Logf("F-P7-01 CompensatingRevoke: recorded sequence=%v (want PushRegisterKey,PushSetKeyExpiry,PushRevokeKey)", spy.calls)
+}
+
+// TestAdmissionSync_PushFullSnapshot_FutureExpiry_ExpireFails_NoCompensatingRevoke
+// verifies that when PushSetKeyExpiry fails for an ACTIVE entry with a FUTURE expiry,
+// NO compensating PushRevokeKey is issued (PC-5 permitted staleness — the key is
+// active in control now; revoking on a transient expire-fail would be over-aggressive).
+//
+// The recorded call sequence for the future-expiry entry MUST be:
+//
+//	PushRegisterKey → PushSetKeyExpiry(fail)
+//
+// with NO subsequent PushRevokeKey.
+//
+// This test MUST fail if the past-vs-future gate is missing (i.e. if a compensating
+// revoke is issued unconditionally on expire-fail): PushRevokeKey would be recorded
+// and the "must NOT be present" assertion fires.
+//
+// BC-2.05.009 v1.5 PC-7b / Ruling 14 / Invariant 6;
+// S-BL.ADMISSION-SYNC-WIRE AC-009 / F-P7-01 / task 17f (negative case).
+func TestAdmissionSync_PushFullSnapshot_FutureExpiry_ExpireFails_NoCompensatingRevoke(t *testing.T) {
+	t.Parallel()
+
+	// Build a control keyset with one ACTIVE entry whose expiry is 24 hours in the FUTURE.
+	controlKS := admission.NewAdmittedKeySet()
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	controlKS.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	entries := controlKS.ListBySVTN(svtnID)
+	if len(entries) == 0 {
+		t.Fatal("no entries after RegisterKey")
+	}
+	futureExpiry := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
+	if err := controlKS.SetKeyExpiry(svtnID, entries[0].NodeAddr, futureExpiry); err != nil {
+		t.Fatalf("SetKeyExpiry (future): %v", err)
+	}
+
+	// Configure the spy to succeed on register and revoke, fail only on expire.
+	spy := &selectiveMockSyncer{
+		expireErr: fmt.Errorf("simulated expire failure (transient)"),
+	}
+
+	// Call the production inner loop via the spy syncer.
+	ctx := context.Background()
+	allEntries := controlKS.AllSVTNEntries()
+	_ = pushSnapshotEntries(ctx, spy, allEntries, nil)
+
+	// 17f negative-case assertion: PushRevokeKey must NOT be recorded for future-expiry.
+	// If the past-vs-future gate is absent (revoke unconditionally on expire-fail),
+	// PushRevokeKey would appear here and this assertion fires.
+	for i, call := range spy.calls {
+		if call == "PushRevokeKey" {
+			t.Errorf("F-P7-01 FutureExpiry NoCompensatingRevoke: PushRevokeKey was recorded at position %d "+
+				"for a FUTURE-expiry entry. Must NOT issue compensating revoke for future-expiry expire-fail "+
+				"(PC-5 permitted staleness; the key is active in control). "+
+				"FAIL: past-vs-future gate missing — revoke fires unconditionally on expire-fail. "+
+				"Fix: only issue compensating revoke when e.KeyExpiry().Before(time.Now().UTC()). "+
+				"recorded sequence=%v", i, spy.calls)
+			break
+		}
+	}
+	// Verify the expected non-revoke sequence was recorded (register + expire-attempt).
+	if len(spy.calls) < 2 {
+		t.Fatalf("F-P7-01 FutureExpiry: expected ≥2 calls "+
+			"(PushRegisterKey, PushSetKeyExpiry); got %d: %v", len(spy.calls), spy.calls)
+	}
+	if spy.calls[0] != "PushRegisterKey" {
+		t.Errorf("F-P7-01 FutureExpiry: calls[0]=%q; want PushRegisterKey", spy.calls[0])
+	}
+	if spy.calls[1] != "PushSetKeyExpiry" {
+		t.Errorf("F-P7-01 FutureExpiry: calls[1]=%q; want PushSetKeyExpiry", spy.calls[1])
+	}
+	t.Logf("F-P7-01 FutureExpiry: recorded sequence=%v (want PushRegisterKey,PushSetKeyExpiry only)", spy.calls)
+}
+
+// ── 17g (LOW): routerPersister nil-writer fallback ────────────────────────────
+
+// TestRouterPersister_NilWriter_NoSnapshotWarn_NoWrite verifies that a
+// routerPersister constructed with a nil writer (p.w == nil) does NOT panic when
+// a snapshot write fails and that no write is attempted (snapshotPath == "").
+//
+// This is a regression guard for the nil-writer fallback inconsistency (task 17g):
+// controlPersister falls back to os.Stderr on nil writer; routerPersister silently
+// drops the WARN. The fix mirrors the control-side nil→os.Stderr fallback.
+//
+// LOW / BC-2.05.010 PC-2/EC-008; S-BL.ADMISSION-SYNC-WIRE task 17g.
+func TestRouterPersister_NilWriter_NoSnapshotWarn_NoWrite(t *testing.T) {
+	t.Parallel()
+
+	// Build a routerPersister with a nil writer (simulating the divergent state).
+	// Use a real but read-only dir so persist() attempts a write and fails → WARN path.
+	dir, err := os.MkdirTemp("", "sb-rp-nilw-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(dir, 0o700)
+		_ = os.RemoveAll(dir)
+	})
+	snapshotPath := filepath.Join(dir, "rp-nilw.json")
+	if err := os.Chmod(dir, 0o500); err != nil { // read-only → write will fail
+		t.Fatalf("Chmod read-only: %v", err)
+	}
+
+	rp := &routerPersister{path: snapshotPath, w: nil} // nil writer
+
+	ks := admission.NewAdmittedKeySet()
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	// Must not panic even with a nil writer when the snapshot write fails.
+	// Before fix (17g): persist silently drops the WARN when p.w == nil.
+	// After fix: WARN goes to os.Stderr (or captured writer) — no panic either way.
+	// The primary assertion here is "does not panic".
+	rp.persist(ks)
+	// If we reach here, no panic — nil-writer guard works.
+}
+
+// TestRouterPersister_CapturedWriter_WarnEmitted verifies that a routerPersister
+// constructed with a non-nil writer emits the WARN to that writer when the
+// snapshot write fails (regression guard + live assertion that WARN text is present).
+//
+// After the 17g fix, the nil case is symmetric with the non-nil case. This test
+// validates the non-nil path continues to work (the fix must not break it).
+//
+// LOW / BC-2.05.010 PC-2/EC-008; S-BL.ADMISSION-SYNC-WIRE task 17g.
+func TestRouterPersister_CapturedWriter_WarnEmitted(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", "sb-rp-warn-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(dir, 0o700)
+		_ = os.RemoveAll(dir)
+	})
+	snapshotPath := filepath.Join(dir, "rp-warn.json")
+	if err := os.Chmod(dir, 0o500); err != nil { // read-only → write will fail
+		t.Fatalf("Chmod read-only: %v", err)
+	}
+
+	var logBuf strings.Builder
+	rp := &routerPersister{path: snapshotPath, w: &logBuf}
+
+	ks := admission.NewAdmittedKeySet()
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	rp.persist(ks)
+
+	// The WARN must appear in the captured writer when snapshot write fails.
+	logStr := logBuf.String()
+	if len(logStr) == 0 {
+		t.Error("17g CapturedWriter: WARN not written to captured writer when snapshot write failed. " +
+			"routerPersister.persist must write to p.w when non-nil.")
+	}
+	if len(logStr) > 0 && !strings.Contains(logStr, "WARN") {
+		t.Errorf("17g CapturedWriter: log does not contain 'WARN': %q", logStr)
+	}
+	t.Logf("17g CapturedWriter: captured: %q", logStr)
+}

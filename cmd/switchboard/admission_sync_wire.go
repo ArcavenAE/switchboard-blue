@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -64,10 +65,14 @@ func (p *routerPersister) persist(ks *admission.AdmittedKeySet) {
 	defer p.mu.Unlock()
 	if err := writeSnapshotAtomic(p.path, ks); err != nil {
 		// Advisory: WARN only (BC-2.05.010 PC-2/EC-008 / F-3 fix).
-		if p.w != nil {
-			_, _ = fmt.Fprintf(p.w, "switchboard router: WARN: admission snapshot write failed: path=%s err=%v\n",
-				p.path, err)
+		// 17g (LOW): fall back to os.Stderr when p.w == nil — mirrors
+		// controlPersister behaviour (LOW-1 fix) for consistency.
+		w := p.w
+		if w == nil {
+			w = os.Stderr
 		}
+		_, _ = fmt.Fprintf(w, "switchboard router: WARN: admission snapshot write failed: path=%s err=%v\n",
+			p.path, err)
 	}
 }
 
