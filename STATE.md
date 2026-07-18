@@ -1,7 +1,7 @@
 ---
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-pe-connector-delivery-authored-pr-next
+phase_step: steady-state-admission-sync-wire-closed-node-identify-wire-unblocked
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -29,15 +29,22 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: "PASS 0.895 re-eval 2026-07-12 @ f73676d (original PASS_AT_THRESHOLD 0.85 @ 7fe3e29 2026-07-02, IP-C1-04)"
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 1f25677
+develop_head: 92a2c65
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.DISCOVERY-WIRE Tasks 1-5 (AC-001..016) DELIVERED — squash-merged to develop @ d249f88 (2026-07-15, PR #123). Story-level remainder: AC-017/AC-018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE (blocked by S-BL.ADMISSION-SYNC-WIRE + S-BL.NODE-ADMISSION-PROVISIONING, rulings v1.11). Open: sw-loopback concurrent-session coordination + stash@{0} disposition (user); worktree cleanup deferred. Parked: S-BL.LOOPBACK-FULLSTACK v1.1."
+awaiting: "S-BL.ADMISSION-SYNC-WIRE MERGED → develop 92a2c65 (PR #126, 2026-07-18). S-BL.NODE-IDENTIFY-WIRE UNBLOCKED from admission-sync leg (second blocker S-BL.NODE-ADMISSION-PROVISIONING still pending). Discovery-Wire AC-017/018/Task 6 gated on NODE-IDENTIFY-WIRE. Open: sw-loopback concurrent-session coordination + stash@{0} disposition (user). Parked: S-BL.LOOPBACK-FULLSTACK v1.1."
+current_step: "S-BL.ADMISSION-SYNC-WIRE CLOSED 2026-07-18 — PR #126 @ 92a2c65 merged develop; step-4.5 converged 3/3 NITPICK_ONLY (passes 10/11/12); Rulings 12-15; BC-2.05.009 v1.0→v1.6; 13 ACs 12 pts; NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. D-chain cite D-446 latest greenfield. trajectory →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-15T07:08:44Z
-last_update: 2026-07-14
+timestamp: 2026-07-18T20:44:11Z
+last_update: 2026-07-18
 ---
+
+<!--
+  STATE.md SIZE BUDGET (per D-421(c)):
+  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 161 = 339 (D-446(c) dual-margin form). 161 lines (wc-l).
+  Hard cap: 500 lines.
+-->
 
 # Switchboard Factory State
 
@@ -48,24 +55,33 @@ last_update: 2026-07-14
 | Phase 1 — Spec Crystallization | COMPLETE | approve-with-drift (2026-06-24) |
 | Phase 2 — Story Decomposition | COMPLETE | approve-proceed-to-wave-1 (2026-06-24) |
 | Phase 3 — TDD Implementation | COMPLETE | W6 CONVERGED 3/3 (2026-07-02); all waves merged |
-| Phase 4 — Holdout Evaluation | COMPLETE | PASS 0.895 re-eval 2026-07-12 @ f73676d (original PASS_AT_THRESHOLD 0.85, 2026-07-02) |
-| Phase 7 — Convergence | **CONVERGED** 2026-07-06 (human-approved with remediation) — fresh-context audit CONVERGENCE-CLEAN (0 critical, 11 findings ALL remediated: docs PR #107 2e0f926, ARCH b088e54, stubs ef16ed5, sweep 677380f); census zero cycle-blocking, all process-gaps dispositioned; 63/77 VPs proven + 14 justified-deferred with story anchors (S-BL.TESTENV covers 10, S-BL.BENCH 2, S-BL.DISCOVERY-WIRE 2). **CYCLE-1 CLOSED.** | evidence: cycles/cycle-1/phase-7/ |
-| Phase 6 — Formal Hardening | **COMPLETE** 2026-07-06 — gate satisfied: 63/77 VPs PROVEN (locks + cited evidence), 14 justified-deferred (6 infra-partial + 8 blocked: testenv ×6, S-BL.BENCH ×2 — per-VP justifications in changelogs); fuzzers clean (5 targets, ~40.9M combined execs (machine-summed 2026-07-12, IP-C1-05; prior 53M+ unsourced), 0 crashes); security scan clean (CWE-triaged); mutation sampling 11/15 + 2 gaps closed + 1 proven-dead-code. Bursts: #105 f09fe73, #106 0516f3a. | evidence: cycles/cycle-1/phase-6/ |
-| Phase 5 — Adversarial Refinement | **CONVERGED** — BC-5.39.001 SATISFIED | P1→P4(3/3 streak)→P5-P31(HAS_FINDINGS→REM cycles)→P32(clean 0→1/3)→P33(clean 1→2/3)→P34(reset 2→0/3)→P35(holds 0/3)→P36(reset 0/3)→P37(clean 0→1/3)→P38(clean 1→2/3)→**P39(clean 2→3/3 CONVERGED)** — Steady-state PE-CONNECTOR: **32 passes CONVERGED** (3/3 streak P30/P31/P32); 39 findings all remediated; **MERGED PR #115 @ 8eb54a5** |
+| Phase 4 — Holdout Evaluation | COMPLETE | PASS 0.895 re-eval 2026-07-12 @ f73676d |
+| Phase 5 — Adversarial Refinement | **CONVERGED** BC-5.39.001 — streak 3/3 (P37/P38/P39); 39 findings remediated; MERGED PR #115 @ 8eb54a5 | →21→7→4→3 |
+| Phase 6 — Formal Hardening | COMPLETE 2026-07-06 — 63/77 VPs PROVEN; fuzzers clean; security scan clean | evidence: cycles/cycle-1/phase-6/ |
+| Phase 7 — Convergence | **CONVERGED** 2026-07-06 (human-approved); fresh-context audit CONVERGENCE-CLEAN; CYCLE-1 CLOSED | evidence: cycles/cycle-1/phase-7/ |
+| pass-12 adversary (S-BL.ADMISSION-SYNC-WIRE Step-4.5) | CONVERGED — 12 passes total; passes 1-9 HAS_FINDINGS; passes 10/11/12 NITPICK_ONLY (3/3 clean streak) | →3→3→3→3 |
+| fix burst (S-BL.ADMISSION-SYNC-WIRE Step-4.5) | Rulings 12–15; BC-2.05.009 v1.0→v1.6; code HEAD ab043c5→92a2c65 (squash) | 4 fix bursts |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
+## Convergence Status
+
+Trajectory →21→7→4→3
+
+pass count: 39 (Phase 5 aggregate); per-story Step-4.5 passes continue in steady-state
+
+S-BL.ADMISSION-SYNC-WIRE per-story convergence: 12 passes; final streak 3/3 NITPICK_ONLY; CONVERGED 2026-07-18
+
 ## Current Phase Steps
 
-Older rows archived to `cycles/cycle-1/burst-log.md` (compact-state routing). Showing last 5 rows.
+Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-13 | **S-BL.CLI-SURFACE-COMPLETION DELIVERED — PR #122 merged @ 1f25677 (2026-07-13); both adversarial arcs converged (spec 3/3@9, impl 3/3@7); 16 ACs; worktree cleanup pending (orchestrator).** | completed | PR #122 MERGED. develop @ 1f25677. Awaiting worktree cleanup / next story selection. |
-| 2026-07-12 | **Board close — VP-042 STOP (PAT-03 instance 2, testenv.NewLoopback compile-shim) → lower-bound bench migrated to canonical API, MERGED PR #121 @ 4c276d9; HS-006 holdout re-eval DELIVERED (0.895 PASS, +0.045 vs 2026-07-02, see HS-006-evaluation-2026-07-12.md); POL-005 adversary-dispatch-integrity registered (policies.yaml v1.4, local mitigation for WAVE-GATE-DISPATCH-INTEGRITY / upstream #448); ARCH-08 v2.13 PROSPECTIVE import-set registration for S-BL.LOOPBACK-FULLSTACK; S-BL.LOOPBACK-FULLSTACK authored (draft v1.0, P2, 8pts, AC-001 arq.OnAck sign-off gate) per architect placement note + human disposition "author now, deliver later"; session-review cycle-1 dispositions processed (11 approved / 1 deferred); STORY-INDEX (then-current v4.80→v4.82) (S-BL.LOOPBACK-FULLSTACK registration + backlog cross-counter reconciliation, PAT-05)** | completed | Board CLOSED for 2026-07-12. develop @ 4c276d9. Awaiting next story selection. |
-| 2026-07-12 | **S-7.04-FU-DRAIN-WIRE DELIVERED — PR #120 squash merged @ f73676d (2026-07-12T15:39:47Z, user-authorized merge after a harness classifier block); remote + local feature branch deleted; worktree removed cleanly (porcelain-clean + diff-vs-develop-empty guards passed); 9-step PR log clean — security review disclosed one MEDIUM (CWE-306 = adjudicated terminal-consumer ctl carve-out BC-2.01.004 Inv-2, forward obligation recorded on S-BL.RESYNC-FRAME index row), pr-reviewer APPROVE 1 cycle, CI all green; STORY-INDEX (then-current v4.80; row 140 delivered, RESYNC forward obligation); sweep 9 upstream filings: drbothen/vsdd-factory #620 (HIGH, execute-against-baseline gap = F-DW-IMPL-001), #621 (MED, concurrency-remediation join-obligation gap), #622 (LOW, citation coordinate-baseline gap = F-DW-DV-001), comment on #616, #501 confirmed already-open; sprint-state v2.55→v2.56** | completed | PR #120 MERGED. develop @ f73676d. Story points 5 credited. Awaiting next story selection. |
-| 2026-07-11 | **S-7.04-FU-DRAIN-WIRE elaborated — placement note v1.0 (Q1-Q7: ctl-0x03 reuse, 4-byte control_type payload + 0x02 RESYNC reservation, per-node sync.Map send channels, nil ForwardFunc replacement mandated, VP-037 via TestE2E_RouterDrain_WireRoundTrip, EC-003 via RegisterObserver + drain.Signal recover() gap; 9-file FCL; ~6 net-new tests; 2 PROVISIONAL: ACK mechanism Q3.P1, test-file consolidation Q6; FO-DRAIN-WIRE-001/002 emitted) + story v1.0 (5 ACs, 9 FCL rows, 13 tasks) + STORY-INDEX (then-current v4.68); sprint-state v2.40→v2.41** | completed | S-7.04-FU-DRAIN-WIRE ready-for-spec-adversarial. Awaiting spec-adversarial pass 1 (streak 0/3). |
-
+| 2026-07-15 | **S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED — PR #123 merged @ d249f88; step-4.5 impl-diff converged 3/3 @ pass 6 (4 fix-bursts); AC-017/018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE.** | completed | PR #123 MERGED. develop @ d249f88. |
+| 2026-07-13 | **S-BL.CLI-SURFACE-COMPLETION DELIVERED — PR #122 merged @ 1f25677; both adversarial arcs converged (spec 3/3@9, impl 3/3@7); 16 ACs.** | completed | PR #122 MERGED. develop @ 1f25677. |
+| 2026-07-12 | **Board close — VP-042 STOP (PAT-03 instance 2); lower-bound bench migrated PR #121 @ 4c276d9; HS-006 holdout re-eval 0.895 PASS; POL-005 registered; S-BL.LOOPBACK-FULLSTACK authored.** | completed | Board CLOSED 2026-07-12. develop @ 4c276d9. |
+| 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts; demo evidence d9a4f46; worktree removed.** | completed | PR #126 MERGED. develop @ 92a2c65. S-BL.NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
 
 ## Wave 6 Story Status
 
@@ -86,62 +102,28 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 
 | ID | Severity | Description | Owner | Status |
 |----|----------|-------------|-------|--------|
-| DRIFT-SIGHUP-MODE-ASYMMETRY | LOW | kill -HUP reloads router but terminates access/console/control modes (default Go SIGHUP behavior); only the router case handles SIGHUP explicitly — other daemon modes receive OS default SIGHUP action (process termination). Anchor: S-BL.CLI-SURFACE-COMPLETION. | architect/implementer | open |
-| DRIFT-SIGHUP-INERT-RELOAD-UX | LOW | Valid SIGHUP config reload that changes only non-upstream fields (drain_timeout, keepalive_interval, etc.) is silently inert — operator receives no feedback that reload processed but no mode change occurred. Anchor: S-BL.CLI-SURFACE-COMPLETION. | product-owner | open |
-| W3-DEFER-1..6 | MED/OBS | Worktree tuple codification; M-1 relay busy-spin; fired-source LRU eviction; M-2 unbounded E-ADM-016 log; EC-005 import-boundary lint; real-connector PTY-EOF integration. Detail: `cycles/cycle-1/closed-drift.md`. | various | deferred |
-| S402-F007 | LOW | S-4.02: ARCH-03 N=3 vs BC-2.02.004 N=5 — reconcile ARCH-03. | architect | open |
-| S403-O4 / S403-H1-DEFER / DRIFT-S4.03-001 | LOW/MED | S-4.03 DegradationEvent per-frame (remains, anchor: caller of TLPKTDROP); S403-H1-DEFER PC-3 retransmit SHIPPED in S-BL.ARQ-TX (PR #98, b75a2f2 — internal/arqsend Retransmitter: gap-walk → PayloadForInFlight → Assemble w/ new ChanSeq per PC-5 → Dispatch; no-orphan-state on dispatch error; composed round-trip routes through netingress+routing); ADR-005 wire-format primitive SHIPPED in S-BL.OA (PR #96, e520e04); ADR-005 RESYNC protocol still anchored S-BL.RESYNC-FRAME. Remaining in this row: DegradationEvent per-frame observation only. | product-owner/architect | anchored (narrowed ×2) |
-| S404-OBS-F / S404-LOW-1 | OBS/LOW | S-4.04 E-FWD-001 rate-limit LATENT; 3 LOW + NITPICK (SEC-001 CRC32 accepted). Adjudicated at S-BL.ARQ-TX (PR #98): NOT triggered — E-FWD-001 is receive-side (split-horizon-blocked log in routing); arqsend is a send-side seam and its integration tests route to valid dst (no path exhaustion exercised). Re-anchored: live daemon egress/send-loop story (sustained-retransmit load is the re-confirmation vehicle). Full analysis: S-BL.ARQ-TX DELIVERY frontmatter `drift_dispositioned`. | architect/implementer | re-anchored: live-egress story |
-| OBS-VP-BENCH | OBS | NARROWED 2026-07-06 — S-BL.BENCH merged PR #109 (cd67394): VP-041 PROVEN (locked v1.3, M1 evidence 1.080ms mean p99, 46% headroom); VP-042 adopted with lower-bound loopback evidence, lock gated on S-BL.TESTENV integration. VP-042 testenv-integrated measurement attempted 2026-07-12: STOP — testenv.NewLoopback is a compile-shim (discards LoopbackConfig; no halfchannel/arq/multipath; PAT-03 instance 2). Lower-bound bench migrated to canonical API, MERGED PR #121 @ 4c276d9. Residual re-anchored: S-BL.LOOPBACK-FULLSTACK (draft v1.0, P2, 8pts, AC-001 OnAck sign-off gate; ARCH-08 v2.13 PROSPECTIVE registration; placement note in decisions/). Lock flip deferred to post-story evidence run. | orchestrator | re-anchored → S-BL.LOOPBACK-FULLSTACK |
-| F-009 | LOW | ARCH-INDEX input-hash tooling field-name mismatch. | architect/devops | deferred maintenance |
-| E-CFG-002 / E-CFG-006 | MED | Pre-existing config-key collision (joined tracking). | product-owner | deferred maintenance |
-| PROCESS-GAP-W5A | OBS | [process-gap] Two false-greens in Wave 5 (S-W5.01 orphaned listeners, S-6.03 homeDirFunc race); candidate codified upstream: drbothen/vsdd-factory#513 (evidence-paste requirement on green-claims + -race -count=N for race-sensitive stories). Local practice already follows it. | orchestrator | upstream filed (#513) |
-| DRIFT-SW501-NITPICK | LOW | S-W5.01 Pass-3 nitpicks (stale RED-GATE comments, dead `_ = pub`). | implementer | Wave-6 hygiene story |
-| PROCESS-GAP-P21..P25 | OBS | [process-gap] Sibling-sweep gap crystallized; vsdd-factory #361–#364 filed. | orchestrator/story-writer | open — issues filed |
-| S502-DEFER-4..6 | LOW | S-5.02 ARCH-11/dep-graph VP totals; §Arch Compliance asymmetric; token-budget footnote. | architect/story-writer | defer post-conv sweep |
-| SW502-DEFER-1..8 | LOW | S-W5.02 CR-002/005-009 + SEC-001/002. Detail: `cycles/cycle-1/closed-drift.md`. | implementer/test-writer | deferred wave-6 / phase-5 |
-| PROCESS-GAP-W5-SIBLINGSWEEP | LOW | [process-gap] Codify orchestrator-level upstream-rooted sibling-sweep at BC/VP bumps. | orchestrator | policy-registry-update |
-| PROCESS-GAP-POL-001-INDEX | OBS | [process-gap] POL-001 scope unclear for INDEX artifacts. vsdd-factory#407 filed. | orchestrator | codify |
-| PROCESS-GAP-FORCE-PUSH | HIGH | [process-gap] pr-manager reached for rebase+force-push over gh pr update-branch. vsdd-factory#408 + switchboard-blue#57 filed. | orchestrator/pr-manager | playbook fix upstream |
-| PROCESS-GAP-DEMO-TAPE-PATHS | OBS | [process-gap] demo-recorder emits `.tape` files with hardcoded absolute worktree paths; local fix applied (25 files, PR #59/cdb2b66); upstream drbothen/vsdd-factory#418 filed for template fix. | orchestrator/demo-recorder | upstream fix pending |
-| WAVE-GATE-DISPATCH-INTEGRITY | HIGH | [process-gap] Perimeter-2 (wave-gate) adversary dispatch lacks HEAD-SHA verification tuple; adversary caught mismatch opportunistically; silent-false-green risk if less-thorough pass proceeds. FILED upstream 2026-07-02 as drbothen/vsdd-factory#448 (Batch 28) — row previously stale ("drafted"). Local mitigation DELIVERED: POL-005 adversary-dispatch-integrity registered 2026-07-12 (policies.yaml v1.4); upstream #448 still open. | orchestrator | mitigated-local, watch upstream #448 |
-| DRIFT-POL003-NAMING | LOW | POL-003 Exception A annotation reference wording drift: BC-2.07.001 v1.13 cites `drbothen/vsdd-factory#429 draft policy`; BC-2.08.001 v1.3/v1.5 cite `POL-003 Exception A`. Converge on `POL-003 Exception A` for future rows. Deferred — not blocking wave-gate. | spec-steward | open |
-| DRIFT-BC207-V113-BODY-CHANGELOG-MISMATCH | LOW | BC-2.07.001 v1.13 changelog description states `Stories row cite S-6.05 v1.5 → v1.7` but body Traceability Stories row (line 206) reads `S-6.05 v1.8`. Body updated to v1.8 without accompanying changelog row. Deferred — not blocking. | spec-steward | open |
-| DRIFT-POL003-VP-FRONTMATTER-VERSION-PIN | LOW | [process-gap] VP frontmatter `source_bc:` shape asymmetry across VPs weakens POL-003 machine-checkability. VP-048 uses version suffix; VP-050 omits it. Deferral: filed as candidate refinement to drbothen/vsdd-factory POL-003 tooling. Not blocking BC-5.39.001 closure. | orchestrator / spec-steward | open — drbothen/vsdd-factory POL-003 tooling backlog |
-| F-DW-IMPL-001 | HIGH | [process-gap] execute-against-baseline premise-tracing gap — twelve text-based spec-adversarial passes converged on internal consistency without tracing `ingressCtx`'s parent against ground truth, an engine methodology gap rather than a switchboard defect (S-7.04-FU-DRAIN-WIRE reopen). Deferred upstream; authoritative record drbothen/vsdd-factory#620. No product-repo story warranted — revisit on plugin version adoption. | orchestrator | S-7.02 justified deferral — filed #620 |
-| F-DW-DV-001 | LOW | [process-gap] citation coordinate-baseline convention gap — spec documents carried line-number citations with no stated coordinate convention (S-7.04-FU-DRAIN-WIRE delta-verification pass). Locally remediated by a convention blockquote (placement note/story v1.11). Deferred upstream for the engine-level fix; authoritative record drbothen/vsdd-factory#622. Revisit on plugin template update. | orchestrator | S-7.02 justified deferral — filed #622, locally remediated |
-| DRIFT-DOCS-LOG-LEVEL | LOW | docs/* reference log_level/--log-level but config.Config rejects the field (E-CFG-005) — found by HS-006 re-eval gap 4. Candidate small docs PR. | technical-writer | open |
-| DRIFT-CS-TEMPLATE-COMPLIANCE | LOW | S-BL.CLI-SURFACE-COMPLETION.md validate-template-compliance drift (missing `points` key vs `estimated_points`, six missing template sections) — pre-existing, fires on every edit; candidate for `/vsdd-factory:conform-to-template` pass. | story-writer | open |
-| DRIFT-CAP029-PRD-FR-BACKFILL | LOW | CAP-029 ("On-demand reachability and round-trip-latency probe via sbctl") was minted in capabilities.md v1.1 anchored directly to BC-2.06.004 with no PRD FR grounding — FR41–FR53 surveyed (quality-observability + network-management range), none fits an ad-hoc one-shot probe with no metrics accumulation. Needs a PRD FR authored (and `_bmad-output/planning-artifacts/prd.md` upstream backfill) to restore normal CAP-anchor-to-FR traceability. Anchor: S-BL.CLI-SURFACE-COMPLETION FO(a). | product-owner | open |
-| DRIFT-L2-DOMAIN-SPEC-INPUTS-KEY | LOW | All 11 files under `.factory/specs/domain-spec/` are missing the `inputs:` frontmatter key required by `L2-domain-spec-section-template.md` (carry only `inputDocuments:`); pre-existing since 2026-06-23 creation, fires `validate-template-compliance` on every edit (non-blocking). Surfaced editing capabilities.md for CAP-029 (S-BL.CLI-SURFACE-COMPLETION FO(a)). Candidate for a `/vsdd-factory:conform-to-template` sweep across the directory. | spec-steward | open |
-| DRIFT-VP-INDEX-BC-COUNT | LOW | VP-INDEX.md BC Coverage Check section states "45 BCs total" while BC-INDEX.md (v3.4+) counts 47; pre-existing staleness surfaced during VP-078/VP-079 registration (S-BL.CLI-SURFACE-COMPLETION FO(d)). | spec-steward | open |
-| DRIFT-ARCH03-TEMPLATE-COMPLIANCE | LOW | ARCH-03 (and likely the wider architecture-section family — ARCH-INDEX's own `input-hash` field already self-flags the identical pattern: `"TODO: compute-input-hash requires inputs: field; ARCH-INDEX uses inputDocuments:"`) carries `inputDocuments:` but not the schema-mandated `inputs:` frontmatter key, plus other missing section-frontmatter keys per `validate-template-compliance`; pre-schema file class, fires on every edit (non-blocking). Surfaced during S-BL.DISCOVERY-WIRE Rulings 2/3 ARCH-03 amendments (v1.7→v1.8). Same defect class as DRIFT-L2-DOMAIN-SPEC-INPUTS-KEY but a different artifact family (architecture vs. domain-spec) — not consolidated into that row. Candidate for a `/vsdd-factory:conform-to-template` sweep across `specs/architecture/`. | architect/spec-steward | open |
+| DRIFT-SIGHUP-MODE-ASYMMETRY | LOW | kill -HUP reloads router but terminates other modes. Anchor: S-BL.CLI-SURFACE-COMPLETION. | architect | open |
+| DRIFT-SIGHUP-INERT-RELOAD-UX | LOW | Valid SIGHUP reload with no upstream changes is silently inert. Anchor: S-BL.CLI-SURFACE-COMPLETION. | product-owner | open |
+| W3-DEFER-1..6 | MED/OBS | Worktree tuple; M-1 relay busy-spin; fired-source LRU; M-2 unbounded log; EC-005; PTY-EOF. Detail: `cycles/cycle-1/closed-drift.md`. | various | deferred |
+| OBS-VP-BENCH | OBS | VP-042 re-anchored → S-BL.LOOPBACK-FULLSTACK (draft v1.1, AC-001 OnAck gate). | orchestrator | re-anchored |
+| WAVE-GATE-DISPATCH-INTEGRITY | HIGH | HEAD-SHA tuple absent from adversary dispatch. POL-005 local mitigation. Upstream: drbothen/vsdd-factory#448. | orchestrator | mitigated-local |
+| F-DW-IMPL-001 | HIGH | execute-against-baseline premise-tracing gap. Upstream: drbothen/vsdd-factory#620. | orchestrator | filed upstream |
+| DRIFT-DOCS-LOG-LEVEL | LOW | docs/* cite log_level but config.Config rejects it (E-CFG-005). | technical-writer | open |
+| O-1 (NODE-IDENTIFY-WIRE FWD) | MED | AdmitNode does NOT check expiry — only ReAuthenticate does. Past-expiry key whose push SUCCEEDS remains admissible at initial handshake. NODE-IDENTIFY-WIRE MUST decide expiry enforcement at initial handshake. **Hard input to NODE-IDENTIFY-WIRE.** | architect | forward-obligation |
 
-Resolved items (Waves 1–5 + Tranche A + Pass 3 F1 + Passes 34-36 + compact-state extraction 2026-07-08 + DRIFT-ECFG-TAXONOMY-006-001 2026-07-12): `cycles/cycle-1/closed-drift.md` and `cycles/cycle-1/blocking-issues-resolved.md`.
+Additional drift items: `cycles/cycle-1/closed-drift.md`.
 
 ## Decisions Log
 
 | Decision | Outcome | Date |
 |----------|---------|------|
-| **Cycle-1 convergence (Phase 7)** | CONVERGED — human gate approved-with-remediation; 11 audit findings remediated same-day; pipeline → STEADY_STATE | 2026-07-06 |
-| Architecture (HMAC/FEC/LWW/HKDF) | ADR-001..004; ARCH-02/03/04 | 2026-06-23 |
-| Waves 3–5 + Phase 4 gate | All APPROVED/CONVERGED; HS-006 PASS_AT_THRESHOLD 0.85 | 2026-06-27–07-02 |
-| Wave 6 all tranches + wave-gate | 7 stories merged (PRs #40–#43,#55–#56,#60–#61); W-6 CONVERGED 3/3 | 2026-07-01–07-02 |
-| Phase 5 Pass 3 REMEDIATION COMPLETE | PR #62 c76a8d5; taxonomy v4.4; 7 DRIFTs closed | 2026-07-02 |
-| Phase 5 Pass 4 COMPLETE (BC-5.39.001) | PR #63 cbd0272; 9 findings; streak 3/3 (passes 17/18/19) | 2026-07-03 |
-| Phase 5 Passes 5-13 (HAS_FINDINGS+REM cycles) | See `cycles/cycle-1/burst-log.md` for full pass detail | 2026-07-03 |
-| Phase 5 Passes 14-31 (HAS_FINDINGS+REM cycles, P21 clean 1/3, P22-P31 streak resets) | See `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/session-checkpoints.md` | 2026-07-03–07-04 |
-| Phase 5 Pass 32 BOTH LANES CLEAN (streak 0→1/3) | First two-lane clean since Wave-5. Adv-A 10-pass streak broken. | 2026-07-04 |
-| Phase 5 Pass 33 BOTH LANES CLEAN (streak 1→2/3) | Adv-B: 1 OBS proactively remediated (ARCH-11 v1.23 governance-only). | 2026-07-04 |
-| Phase 5 Pass 34 HAS_FINDINGS + Burst 82 REMEDIATED | Taxonomy-orphan class (E-RPC-002/003); streak RESET 2→0/3. | 2026-07-04 |
-| Phase 5 Pass 35 HAS_FINDINGS + Burst 85 REMEDIATED | Governance-premise-stale (Ruling-14 §10); streak HOLDS 0/3. | 2026-07-04 |
-| Phase 5 Pass 36 HAS_FINDINGS + Bursts 87+88 REMEDIATED | Phantom E-RPC-004 + authorship-premise siblings; streak RESET 0/3. | 2026-07-04 |
-| Phase 5 Pass 37 BOTH LANES CLEAN (streak 0→1/3) | P37 clean restart after Pass 36 reset. | 2026-07-04 |
-| Phase 5 Pass 38 BOTH LANES CLEAN (streak 1→2/3) | Two consecutive clean passes. | 2026-07-04 |
-| **Phase 5 Pass 39 BOTH LANES CLEAN → BC-5.39.001 CONVERGED** | **streak 2→3/3. Phase 5 COMPLETE. Awaiting Phase 6 dispatch.** | **2026-07-04** |
-| **HS-006 holdout re-evaluation** | PASS 0.895 (delta +0.045; step 9 PE-graduation blocker resolved, step 10 router-drain lifecycle upgraded, wire drain-migrate residual re-anchored to S-6.02 external-SVTN-bootstrap gate) | 2026-07-12 |
-| **POL-005 adversary-dispatch-integrity registered** | Local mitigation for WAVE-GATE-DISPATCH-INTEGRITY (policies.yaml v1.4); upstream drbothen/vsdd-factory#448 still open | 2026-07-12 |
-| **S-BL.CLI-SURFACE-COMPLETION DELIVERED** | PR #122 squash-merged @ 1f25677; both adversarial arcs converged (spec 3/3@pass 9, impl 3/3@pass 7); 6 review findings all resolved | 2026-07-13 |
+| Cycle-1 convergence (Phase 7) | CONVERGED — pipeline → STEADY_STATE | 2026-07-06 |
+| Phase 5 Passes 1-39 → BC-5.39.001 | Detail: `cycles/cycle-1/burst-log.md` | 2026-07-03–07-04 |
+| HS-006 re-evaluation | PASS 0.895 (delta +0.045) | 2026-07-12 |
+| POL-005 adversary-dispatch-integrity | Local mitigation for WAVE-GATE-DISPATCH-INTEGRITY; upstream #448 open | 2026-07-12 |
+| S-BL.CLI-SURFACE-COMPLETION DELIVERED | PR #122 @ 1f25677; spec 3/3@pass 9, impl 3/3@pass 7 | 2026-07-13 |
+| S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED | PR #123 @ d249f88; step-4.5 3/3@pass 6 | 2026-07-15 |
+| **S-BL.ADMISSION-SYNC-WIRE DELIVERED** | PR #126 @ 92a2c65; step-4.5 3/3 NITPICK_ONLY; 13 ACs, 12 pts; Rulings 12–15; BC-2.05.009 v1.6; NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED | 2026-07-18 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -158,27 +140,22 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.CLI-SURFACE-COMPLETION DELIVERED 2026-07-13 — PR #122 squash-merged to `develop` @ `1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a` (2026-07-13T19:23:54Z, mergedBy arcavenai); CI 6/6 SUCCESS at head `95a9d6ae554008e8cdb5ba809ce9f56615a7ba56`; remote feature branch deleted; worktree cleanup pending (orchestrator). Both adversarial arcs converged: spec-adversarial 3/3 @ pass 9 (9 passes, 10 findings all remediated), step-4.5 implementation-diff 3/3 @ pass 7 (7 passes, 6 findings all remediated same-pass). pr-review ran 2 rounds — round 1 found 2 blockers (PR-description Blast Radius, a CI-only `-race` flake widened by AC-013's register-before-serve) + 1 security LOW (CWE-20/150, missing `validateSVTNName` sibling-parity in `admin.svtn.status`); round 2 confirmed all three genuinely resolved and APPROVEd. Merge gate: COMMENTED-review disposition APPROVE + CI green, per `drbothen/vsdd-factory#626` single-identity convention. `pr-review.md` relocated from a stray worktree-relative path to the canonical `.factory/code-delivery/S-BL.CLI-SURFACE-COMPLETION/pr-review.md`. Full delivery record: `cycles/cycle-1/S-BL.CLI-SURFACE-COMPLETION/implementation/red-gate-log.md` and the `delivery` block in `cycles/cycle-1/S-BL.CLI-SURFACE-COMPLETION/adversary-convergence-state.json`.
+**Position:** S-BL.ADMISSION-SYNC-WIRE DELIVERED 2026-07-18 — PR #126 squash-merged to `develop` @ `92a2c65` (mergedBy arcavenai); CI green; remote + local feature branch deleted; worktree removed. Step-4.5 per-story adversarial arc: 12 passes total (passes 1-9 HAS_FINDINGS — each a deeper layer of Invariant-6 admission-durability; passes 10/11/12 NITPICK_ONLY 3/3 clean streak). Architect Rulings 12–15 (loopback-guard scope, revoked skip-register, past-expiry compensating-revoke, multi-endpoint per-endpoint sequencing). BC-2.05.009 v1.0→v1.6. Demo evidence: `.factory/demo-evidence/S-BL.ADMISSION-SYNC-WIRE/` (13 .tape + evidence-report.md + race-test-transcript.txt, commit d9a4f46, POL-004 compliant). Engine defects: drbothen/vsdd-factory#685 (implementer fix-phase self-attestation), anthropics/claude-code#78915 (spurious Request-interrupted). Known flake excluded: `internal/admission/TestLookup_ConcurrentRegisterRace` (switchboard-blue#124).
 
-Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement attempt STOPPED (PAT-03 instance 2 — `testenv.NewLoopback` is a compile-shim, discards `LoopbackConfig`, drives no ticks, imports no halfchannel/arq/multipath); lower-bound bench migrated to the canonical API and MERGED as PR #121 @ `4c276d9`. Residual re-anchored to a new story, `S-BL.LOOPBACK-FULLSTACK` (draft v1.0, P2, 8 points, AC-001 hard-gates implementation on an `arq.OnAck` call-contract sign-off; ARCH-08 v2.13 carries a PROSPECTIVE import-set registration for its eventual merge; architect placement note lives in `decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md`). HS-006 holdout scenario re-evaluated fresh at `f73676d`: 0.895 PASS (up from 0.85 PASS_AT_THRESHOLD on 2026-07-02), see `holdout-scenarios/evaluations/HS-006-evaluation-2026-07-12.md`. POL-005 (adversary-dispatch-integrity) registered in `policies.yaml` v1.4 as the local mitigation for the WAVE-GATE-DISPATCH-INTEGRITY drift row; upstream drbothen/vsdd-factory#448 remains open. Session-review cycle-1 dispositions processed (11 approved / 1 deferred).
+**Forward obligation O-1 for NODE-IDENTIFY-WIRE:** `admission.AdmitNode` does NOT check expiry — only `ReAuthenticate` does. A past-expiry key whose internal.admission.expire push SUCCEEDS is still admissible at initial handshake. NODE-IDENTIFY-WIRE MUST decide whether `AdmitNode` enforces expiry at initial handshake. Hard input: record in NODE-IDENTIFY-WIRE story file when authored.
 
-**Upstream sweep (2026-07-12 prior burst, S-7.04-FU-DRAIN-WIRE):** drbothen/vsdd-factory #620 (HIGH — execute-against-baseline premise-tracing gap), #621 (MED — remediation join-obligation enumeration gap), #622 (LOW — citation coordinate-baseline gap), #623 (compute-input-hash `--update` silent no-op when the target field is absent or empty), 2 comments on #616 (validator noise + the timestamp-hook per-write granularity behavior), #501 confirmed already-open (demo knob). Full route table lives with the upstream-filing tracker.
+**S-BL.ADMISSION-SYNC-WIRE unblocks S-BL.NODE-IDENTIFY-WIRE** (admission-sync leg). Second blocker: S-BL.NODE-ADMISSION-PROVISIONING (leaf, draft v1.0, 8 ACs, 5 pts, ready for dispatch).
 
-**S-7.02 process-gap dispositions:** recorded in this file's Open Drift Items table (F-DW-IMPL-001 → #620, F-DW-DV-001 → #622) and in `cycles/cycle-1/lessons.md` entries 19-21, all [codified].
+**Next-story options:** S-BL.NODE-ADMISSION-PROVISIONING (next unblocked leaf, P1 for identity cluster) | S-BL.LOOPBACK-FULLSTACK (P2, unscheduled) | S-BL.RESYNC-FRAME (BLOCKED-BY-DECISION: auth-threading required first).
 
-**Next-story options (backlog, unordered):**
-- S-BL.DISCOVERY-WIRE — P1, backlog (v1.1); real-socket wire delivery deferred from S-7.02. **Next major per standing approval.**
-- S-BL.LOOPBACK-FULLSTACK — P2, draft v1.0, unscheduled; AC-001 requires an `arq.OnAck` call-contract sign-off from the architect BEFORE implementation dispatch.
-- S-BL.ADMIN-RECOVER-WIRE — P2 draft (Wave 7+).
-- S-BL.RESYNC-FRAME — **BLOCKED-BY-DECISION**: carries the forward obligation from the PR #120 CWE-306 security disclosure. Auth threading into the ctl dispatch path, or a re-adjudication of the BC-2.01.004 Inv-2 / BC-2.01.008 trust boundary, is required BEFORE implementation — this is spec-phase work first, not a Red Gate dispatch.
-- S-BL.POLICY-SCHEMA-VALIDATOR — backlog, unscheduled.
-- S-BL.ADMINWIRE-EXTRACTION — backlog, unscheduled.
+**Held:** stash@{0} (WIP lookup_convention_test.go) + stash@{1} (develop WIP) — do NOT drop without inspection. Wire drain-and-migrate unverifiable until external SVTN bootstrap ships.
 
-**Held/triage items (not blocking, needs next-session attention):**
-- GitHub issue switchboard-blue#57 (merge-serialization hazard) — deferred while delivery stays serial (single story in flight at a time).
-- TWO pre-existing stashes in the product checkout — **do NOT drop, inspect next session**: `stash@{0}` (11 days old, WIP on `lookup_convention_test.go`, branch `feat/S-BL.LOOKUP-admitted-keyset-lookup-convention`); `stash@{1}` (13 days old, `develop` WIP touching `.gitignore` + `CLAUDE.md` + 4 other files).
-- Hygiene backlog: STORY-INDEX malformed row ~:286 (pre-existing, table-cell-count noise); repo-wide template-compliance drift; ARCH-08 legacy oldest-first changelog table; **rc.22 STATE.md structural schema migration DEFERRED 2026-07-12** (SIZE BUDGET banner, dual-margin form, trajectory-tail `→N→N→N→N`, Phase Progress adversary-pass/fix-burst rows, `## Convergence Status` + `## Concurrent Cycles` sections, `Last Updated` field — assessed and explicitly not attempted this burst per commit `43b7e1f3`'s residual note; honest conformance needs a dedicated audit of `cycles/cycle-1/burst-log.md` to source real pass/fix-burst data rather than inventing placeholder content; conforming fixture shapes located at `tests/fixtures/validate-state-structure/{pass-all-valid,pass-phase-progress-complete}/factory/STATE.md` in the vsdd-factory plugin cache).
-- Wire drain-and-migrate (BC-2.09.002 node-migration clause) remains unverifiable black-box until external SVTN bootstrap ships (S-6.02, rc.1 gate) — this is now the load-bearing blocker keeping HS-006 below 0.90; `sbctl router drain`/`sbctl router reload` shipped in PR #122 but remain unverified against a real external-SVTN bootstrap.
-- DRIFT-DOCS-LOG-LEVEL (LOW, added board-close burst from HS-006 re-eval gaps) — candidate small docs fix, not blocking.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) select next story — S-BL.NODE-ADMISSION-PROVISIONING is the next unblocked leaf.
 
-**Resume protocol for next session:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) `S-BL.CLI-SURFACE-COMPLETION` worktree cleanup (orchestrator); (4) select next story — S-BL.DISCOVERY-WIRE is next major per standing approval (S-BL.RESYNC-FRAME needs a spec-phase decision before it can be dispatched — do not Red-Gate it directly; S-BL.LOOPBACK-FULLSTACK needs the architect AC-001 sign-off before Red-Gate).
+## Concurrent Cycles
+
+| Cycle | Status |
+|-------|--------|
+| cycle-1 (v1.0.0-greenfield) | ACTIVE — steady-state story delivery |
+
+Last Updated: 2026-07-18 →21→7→4→3

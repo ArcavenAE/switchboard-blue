@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: ""
+input-hash: "b04a094"
 traces_to: STATE.md
 ---
 
@@ -141,3 +141,18 @@ Open carry-forwards:
 - **WAVE-3-DEP-001 (OPEN, Wave 3 critical path):** verifyFrameHMAC is //nolint:unused on develop; Wave-2 router has zero frame-forgery defense until wired into RouteFrame.
 
 See `cycles/cycle-1/wave-2/` for detailed gate reports.
+
+---
+
+## S-BL.ADMISSION-SYNC-WIRE Closed — 2026-07-18
+
+- PR #126 squash-merged to `develop` @ `92a2c65` (2026-07-18); base: `develop` (gitflow). Remote + local feature branch deleted; worktree removed.
+- Story v1.7: 13 ACs, 12 pts. BC-2.05.009 v1.0→v1.6. Architect Rulings 12–15.
+- **Convergence:** Step-4.5 per-story adversarial arc — 12 passes total. Passes 1–9 HAS_FINDINGS (progressively deeper Invariant-6 admission-durability layers: revocation durability → revoked two-RPC partial-fail → past-expiry two-RPC partial-fail → multi-endpoint partial-fail → orphaned-guard). Passes 10/11/12 NITPICK_ONLY (3/3 clean streak). BC-5.39.001 satisfied.
+- **Architect Rulings during convergence:** Ruling 12 (loopback-guard scope), Ruling 13 (revoked skip-register), Ruling 14 (past-expiry compensating-revoke), Ruling 15 (multi-endpoint per-endpoint sequencing). Rulings doc v1.7.
+- **Demo evidence:** `.factory/demo-evidence/S-BL.ADMISSION-SYNC-WIRE/` — 13 .tape + evidence-report.md + race-test-transcript.txt (commit d9a4f46; POL-004: no binaries).
+- **Gates green at delivery:** build, vet, test (cmd/switchboard + internal/config + internal/svtnmgmt + internal/admission), -race, golangci-lint 0.
+- **Known flake excluded:** `internal/admission/TestLookup_ConcurrentRegisterRace` (switchboard-blue#124).
+- **Unblocks:** S-BL.NODE-IDENTIFY-WIRE (admission-sync leg). Second blocker: S-BL.NODE-ADMISSION-PROVISIONING (still pending).
+- **Forward obligation O-1 (for NODE-IDENTIFY-WIRE):** `admission.AdmitNode` does NOT check expiry — only `ReAuthenticate` does. A past-expiry key whose `internal.admission.expire` push SUCCEEDS remains admissible at initial handshake. NODE-IDENTIFY-WIRE MUST decide whether `AdmitNode` enforces expiry at the initial handshake.
+- **Engine defects filed this session:** drbothen/vsdd-factory#685 (implementer fix-phase self-attestation gap — vacuous/hollow-test pattern recurred 5×), anthropics/claude-code#78915 (spurious Request-interrupted on foreground Task dispatch, 3 occurrences).
