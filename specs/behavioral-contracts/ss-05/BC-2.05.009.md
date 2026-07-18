@@ -2,7 +2,7 @@
 artifact_id: BC-2.05.009
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-07-15T00:00:00Z
@@ -128,11 +128,31 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 
 ### Full-snapshot push postconditions
 
-7. **Startup full-snapshot:** On control startup, after `SVTNManager` is initialized,
-   `PushFullSnapshot(ctx)` iterates all `(svtn, pubkey, role)` triples in the current
-   `AdmittedKeySet` (via `ListBySVTN` across all SVTNs) and issues
-   `internal.admission.register` (plus `internal.admission.expire` for entries with a
-   non-zero expiry) to each configured router endpoint.
+7. **Startup full-snapshot — COMPLETE authoritative state (v1.3):** On control startup,
+   after `SVTNManager` is initialized, `PushFullSnapshot(ctx)` iterates all entries in
+   the current `AdmittedKeySet` (via `ListBySVTN` across all SVTNs) and pushes each
+   entry's **complete authoritative state** to each configured router endpoint. For every
+   entry, the push sequence is:
+
+   a. Issue `internal.admission.register` with `{svtn_id, pubkey_openssh, role}`.
+   b. If the entry has a non-zero expiry timestamp, issue `internal.admission.expire` with
+      the **original expiry timestamp** (whether in the past or future). The router's
+      resulting state will reflect the original expiry; entries whose expiry is already in
+      the past will end up expired/inactive on the router — they are NOT re-registered as
+      active-and-non-expiring. The register+expire pair must be issued regardless of
+      whether the expiry timestamp is past or future, so the router's state precisely
+      mirrors control's.
+   c. **NEW:** If the entry is REVOKED in control's `AdmittedKeySet`, issue
+      `internal.admission.revoke` with `{svtn_id, pubkey_openssh, role, confirm}` AFTER
+      the `internal.admission.register` in step (a). This ensures the router's resulting
+      state has the key marked revoked, matching control's authoritative state.
+
+   **Semantic-equivalence end-state postcondition:** After `PushFullSnapshot` completes
+   (best-effort across all endpoints), the router's `AdmittedKeySet` is SEMANTICALLY
+   EQUIVALENT to control's current `AdmittedKeySet`: same keys, same roles, same revoked
+   status, same expiries. The router MUST NOT be left with any key in a LESS-RESTRICTIVE
+   state than control holds — no un-revoking a revoked key, no un-expiring an expired key,
+   no silently re-registering a revoked key as active.
 
    **EC-007 resync guarantee — conditional on `control_admission_state_file` (Ruling 11):**
    The EC-007 resync guarantee holds ONLY when `control_admission_state_file` is configured
@@ -140,7 +160,8 @@ on the router side (challenge-response handshake is required to flip `admitted=t
    written on each prior mutation (write-on-mutation path, Ruling 11). The mechanism is:
    on startup, control loads its persisted keyset from `control_admission_state_file` via
    `loadSnapshotFromFile` BEFORE constructing the sync client and calling
-   `PushFullSnapshot` — so the full-snapshot push carries the recovered keys.
+   `PushFullSnapshot` — so the full-snapshot push carries the recovered keys including
+   their revoked status and expiry timestamps.
    When `control_admission_state_file` is absent or empty, control constructs a fresh
    empty `AdmittedKeySet` and `PushFullSnapshot` immediately hits the empty-keyset
    early-return — no keys are pushed and EC-007 is inert for that startup. Operators
@@ -187,6 +208,17 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 5. **SIGHUP reload integration:** When control receives SIGHUP and reloads config, the
    `admissionSyncClient` endpoint list is updated from the new config. In-flight pushes
    are not interrupted; the new list is used for the next push event.
+6. **Full-snapshot must not leave a router in a less-restrictive state (security-correctness
+   invariant):** `PushFullSnapshot` MUST NOT produce a router state that is less restrictive
+   than control's authoritative state. Specifically:
+   - A key that is REVOKED in control MUST be revoked on the router after the snapshot push;
+     it MUST NOT be left registered-as-active.
+   - A key that is EXPIRED (expiry timestamp in the past) in control MUST be expired/inactive
+     on the router after the snapshot push; it MUST NOT be left registered-as-non-expiring.
+   Violation of this invariant silently un-revokes or un-expires a key on every control
+   restart, defeating the durability guarantees of `admin.key.revoke` and
+   `admin.key.expire` — and becomes exploitable once challenge-response
+   (`S-BL.NODE-IDENTIFY-WIRE`) is wired.
 
 ## Trigger
 
@@ -210,8 +242,10 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 | EC-004 | Rapid burst of `admin.key.register` calls (N writes in quick succession) | Each write triggers a separate per-write push. N TCP connections opened. No batching in the near-term story. |
 | EC-005 | `admissionSyncer` is nil (router/console/access mode) | Push skipped silently. No error. Existing behavior for non-control modes is preserved. |
 | EC-006 | `internal.admission.register` sent to router for an SVTN the router has no record of | Router's `RegisterKey` creates the entry idempotently (per Ruling 1 — `RegisterKey` MUST be idempotent from the router's perspective for fresh-install races). |
-| EC-007 | Control restarts after prior push failures | `PushFullSnapshot(ctx)` on startup pushes the full current `AdmittedKeySet` to all configured routers, correcting any staleness accumulated during downtime. |
+| EC-007 | Control restarts after prior push failures | `PushFullSnapshot(ctx)` on startup pushes the COMPLETE authoritative `AdmittedKeySet` state — including revoked status and expiry timestamps — to all configured routers, converging router state to semantic equivalence with control. "Correcting any staleness" means full state convergence, not merely re-adding active keys. |
 | EC-008 | Router is temporarily restarting when push arrives | Push fails (connection refused); WARN logged. Router loads from its VLR-local snapshot (BC-2.05.010) on restart and receives a fresh full-snapshot push when control next starts or the next per-write push arrives. |
+| EC-009 | Control restarts; keyset contains a REVOKED key | `PushFullSnapshot` must issue `internal.admission.register` THEN `internal.admission.revoke` for the revoked entry. The router's resulting state has the key revoked — it is NOT silently re-registered as active. Without this, revocation durability is defeated on every control restart. |
+| EC-010 | Control restarts; keyset contains a key with a past-expiry timestamp | `PushFullSnapshot` issues `internal.admission.register` + `internal.admission.expire(originalExpiry)` regardless of whether the expiry is past or future. The router handles the past timestamp by marking the entry expired/inactive. The key is NOT re-registered as active-and-non-expiring. |
 
 ## Canonical Test Vectors
 
@@ -222,7 +256,9 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 | `admin.key.revoke` on control; push succeeds | Router marks key revoked | happy-path |
 | `admin.key.expire` on control; push succeeds | Router's keyset has non-zero expiry for the entry | happy-path |
 | `admin.svtn.destroy` on control; push succeeds | Router has no entries for that SVTN | happy-path |
-| Control startup with populated `AdmittedKeySet`; push to router | Router keyset matches control after `PushFullSnapshot` | startup-snapshot |
+| Control startup with populated `AdmittedKeySet` (all active keys); push to router | Router keyset matches control after `PushFullSnapshot` — same keys, same roles, same expiries | startup-snapshot |
+| Control startup; keyset has a REVOKED key; push to router | Router has the key with revoked=true after `PushFullSnapshot` — NOT registered as active | startup-revoked-key |
+| Control startup; keyset has a key with past expiry timestamp T; push to router | Router has the key with expiry=T (expired/inactive) — NOT registered as active-and-non-expiring | startup-past-expiry |
 | `admissionSyncer` is nil (router/console mode) | No push attempted; no error; existing handler behavior unchanged | nil-syncer |
 | Push to multiple endpoints; one fails, one succeeds | Both attempted; failure logged for the failing endpoint; no rollback | multi-endpoint |
 
@@ -234,6 +270,9 @@ on the router side (challenge-response handshake is required to flip `admitted=t
 | test-as-evidence | Push failure does not roll back control write; sbctl reports success | integration | S-BL.ADMISSION-SYNC-WIRE AC |
 | test-as-evidence | Nil `admissionSyncer` → no-op, no panic | unit | S-BL.ADMISSION-SYNC-WIRE AC |
 | test-as-evidence | `PushFullSnapshot` on control startup pushes all keyset entries to configured routers | integration | S-BL.ADMISSION-SYNC-WIRE AC |
+| test-as-evidence | `PushFullSnapshot` with a REVOKED key in control's keyset: router has key with revoked=true after push (EC-009) | integration | security-correctness — revocation durability |
+| test-as-evidence | `PushFullSnapshot` with a past-expiry key in control's keyset: router has key as expired/inactive, not active-and-non-expiring (EC-010) | integration | security-correctness — expiry durability |
+| test-as-evidence | `PushFullSnapshot` result: router AdmittedKeySet is semantically equivalent to control's (same keys, same roles, same revoked status, same expiries) — Invariant 6 | integration | semantic-equivalence end-state |
 | test-as-evidence | Router handler: `internal.admission.register` creates entry with `admitted=false` | unit | S-BL.ADMISSION-SYNC-WIRE AC |
 
 ## Traceability
@@ -267,6 +306,7 @@ S-BL.ADMISSION-SYNC-WIRE — all postconditions in this BC trace to acceptance c
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-17 | PC-7: full-snapshot push must propagate COMPLETE authoritative state including revoked status and expiry timestamps (not register-only). Router must converge to semantic equivalence with control (same keys, same roles, same revoked status, same expiries). Add Invariant 6 (security-correctness: PushFullSnapshot MUST NOT leave a router in a less-restrictive state than control holds — no un-revoking, no un-expiring). Add EC-009 (revoked key on restart: register then revoke, not register-as-active). Add EC-010 (past-expiry key on restart: register + expire(originalExpiry), not active-and-non-expiring). Update EC-007 wording: "correcting any staleness" means full state convergence including revocations. Add test vectors and VPs for revoked-key and past-expiry scenarios. Fixes F-1 (adversary pass 5): revoked key was silently resurrected as active on every control restart. |
 | 1.2 | 2026-07-17 | Amend PC-7 (startup full-snapshot): add qualifier that EC-007 resync guarantee holds ONLY when `control_admission_state_file` is configured (BC-2.09.003 PC-15); without it, `PushFullSnapshot` pushes an empty keyset and EC-007 is inert. Document control-side persist-write: synchronous `writeSnapshotAtomic` call on each committed `admin.key.*`/`admin.svtn.*` mutation, BEFORE `dispatchPush`, advisory on failure. Per Ruling 11 (F-P3-01). |
 | 1.1 | 2026-07-16 | Amend Invariant 4: exempt `svtn_id` from encoding-parity rule — on the `internal.admission.*` wire it is the 32-lowercase-hex-char encoding of the `[16]byte` SVTN UUID (not the human-readable name). Rulings v1.2 (commit 3d64ac2) / svtn_id hex-encoding fix. |
 | 1.0 | 2026-07-15 | Initial draft — admission-state-sync push RPC: four write paths, `internal.admission.*` commands, push failure advisory (WARN, no rollback), `admitted=false` on load, full-snapshot on control startup, nil-syncer no-op. Authored per S-BL.ADMISSION-SYNC-WIRE BC groundwork item A1. |
