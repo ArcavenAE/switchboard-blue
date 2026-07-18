@@ -1154,6 +1154,92 @@ func reloadControlEndpoints(configPath string, syncClient *admissionSyncClient) 
 	return nil
 }
 
+// runControlWithKey is the testable core of runControl. It accepts an injected
+// daemonPriv key instead of generating an ephemeral one, enabling tests to
+// pre-register the key in a router's OperatorKeySet so that PushFullSnapshot
+// can authenticate successfully and the router's state can be asserted directly
+// (F-P8-02 / S-BL.ADMISSION-SYNC-WIRE Ruling 15 / AC-013 LOW-2).
+//
+// runControl is a thin wrapper that generates a fresh ephemeral keypair and
+// delegates to runControlWithKey.
+//
+// Production behaviour is UNCHANGED: runControl still generates its own key.
+// runControlWithKey is unexported — test-internal seam only.
+func runControlWithKey(ctx context.Context, w io.Writer, cfg *config.Config, configPath string, sighupCh chan os.Signal, daemonPriv ed25519.PrivateKey) error {
+	daemonPub := daemonPriv.Public().(ed25519.PublicKey)
+	ks := admission.NewAdmittedKeySet()
+	m := svtnmgmt.NewSVTNManager(ks, daemonPub)
+
+	// Bootstrap mode: nil OperatorKeySet (no pre-configured operator keys).
+	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
+	ops := mgmt.NewOperatorKeySet(nil)
+
+	// AC-011 / Ruling 11: load control-side keyset snapshot BEFORE constructing
+	// the sync client and calling PushFullSnapshot (BC-2.05.009 PC-7 v1.2).
+	var controlSnapshotPath string
+	if cfg != nil {
+		controlSnapshotPath = cfg.ControlAdmissionStateFile
+	}
+	if controlSnapshotPath != "" {
+		if loadErr := loadSnapshotFromFile(controlSnapshotPath, ks, w); loadErr != nil {
+			return fmt.Errorf("runControlWithKey: load control admission snapshot: %w", loadErr)
+		}
+	}
+
+	// Construct admission sync client using the INJECTED daemonPriv (not ephemeral).
+	var endpoints []config.RouterManagementEndpoint
+	if cfg != nil {
+		endpoints = cfg.RouterManagementEndpoints
+	}
+	syncClient := newAdmissionSyncClient(endpoints, daemonPriv)
+
+	var pushWG sync.WaitGroup
+
+	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, buildAdminHandlersCore(m, ops, syncClient, &pushWG, controlSnapshotPath, w))
+	if mgmtErr != nil {
+		return fmt.Errorf("runControlWithKey: construct management server: %w", mgmtErr)
+	}
+
+	if w != nil {
+		_, _ = fmt.Fprintf(w, "switchboard control: control management listener bound to %s\n",
+			resolveManagementSocket(cfg, "control"))
+	}
+
+	if err := wireMetricsHandlers(mgmtSrv, nil); err != nil {
+		return fmt.Errorf("runControlWithKey: wire metrics handlers: %w", err)
+	}
+
+	// Phase (c): push full snapshot BEFORE serving (BC-2.05.009 Postcondition 7 / Decision 10).
+	if pushErr := syncClient.PushFullSnapshot(ctx, ks); pushErr != nil {
+		if w != nil {
+			_, _ = fmt.Fprintf(w, "switchboard control: WARN: PushFullSnapshot failed: %v\n", pushErr)
+		}
+	}
+
+	var mgmtWG sync.WaitGroup
+	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
+
+	for {
+		select {
+		case <-ctx.Done():
+			goto shutdownWithKey
+		case <-sighupCh:
+			if reloadErr := reloadControlEndpoints(configPath, syncClient); reloadErr != nil {
+				if w != nil {
+					_, _ = fmt.Fprintf(w, "control: SIGHUP reload failed: %s; continuing with previous endpoints\n", reloadErr)
+				}
+			}
+		}
+	}
+shutdownWithKey:
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutCancel()
+	_ = mgmtSrv.Shutdown(shutCtx)
+	mgmtWG.Wait()
+	pushWG.Wait()
+	return nil
+}
+
 // runControl is the control-mode daemon entry point (F-002 / S-6.06 AC-004).
 // It generates an ephemeral Ed25519 keypair, constructs a SVTNManager with an
 // empty AdmittedKeySet, starts the management server with BuildAdminHandlers,
@@ -1182,121 +1268,10 @@ func runControl(ctx context.Context, w io.Writer, cfg *config.Config, configPath
 	if err != nil {
 		return fmt.Errorf("runControl: generate daemon keypair: %w", err)
 	}
-
-	daemonPub := daemonPriv.Public().(ed25519.PublicKey)
-	ks := admission.NewAdmittedKeySet()
-	m := svtnmgmt.NewSVTNManager(ks, daemonPub)
-
-	// Bootstrap mode: nil OperatorKeySet (no pre-configured operator keys).
-	// The daemon's own key is the sole bootstrap authority (SVTNManager.IsBootstrapKey).
-	ops := mgmt.NewOperatorKeySet(nil)
-
-	// AC-011 / Ruling 11: load control-side keyset snapshot BEFORE constructing
-	// the sync client and calling PushFullSnapshot (BC-2.05.009 PC-7 v1.2 /
-	// BC-2.09.003 PC-15 v2.2). This makes EC-007 resync real: the recovered keyset
-	// is pushed to routers on startup. Corrupt file → fail-closed (E-KEY-002).
-	// Missing file → empty keyset (fresh install, no error).
-	var controlSnapshotPath string
-	if cfg != nil {
-		controlSnapshotPath = cfg.ControlAdmissionStateFile
-	}
-	if controlSnapshotPath != "" {
-		if loadErr := loadSnapshotFromFile(controlSnapshotPath, ks, w); loadErr != nil {
-			return fmt.Errorf("runControl: load control admission snapshot: %w", loadErr)
-		}
-	}
-
-	// Construct the admission sync client with the configured router management
-	// endpoints (S-BL.ADMISSION-SYNC-WIRE AC-009/010 / BC-2.05.009 Ruling 2).
-	// An empty endpoint list → push methods are no-ops (single-router deployment).
-	var endpoints []config.RouterManagementEndpoint
-	if cfg != nil {
-		endpoints = cfg.RouterManagementEndpoints
-	}
-	syncClient := newAdmissionSyncClient(endpoints, daemonPriv)
-
-	// pushWG tracks all background push goroutines dispatched by admin handlers
-	// (F-1 fix / ARCH-01 §Goroutine WaitGroup Contract). Drained at shutdown
-	// (see shutdown block below) so no goroutines are orphaned on exit.
-	var pushWG sync.WaitGroup
-
-	// Phase (a): construct server with admin handlers pre-registered (no goroutine).
-	// Pass the real syncClient AND pushWG AND controlSnapshotPath AND w so push
-	// failure WARNs and persist WARNs route through the same writer as other
-	// control-daemon log output (LOW-1 fix / F-3).
-	// Uses buildAdminHandlersCore (the unexported core) to inject the writer; the
-	// public BuildAdminHandlers falls back to os.Stderr and is for callers without
-	// a writer.
-	mgmtSrv, mgmtErr := newMgmtServer(cfg, "control", daemonPriv, buildAdminHandlersCore(m, ops, syncClient, &pushWG, controlSnapshotPath, w))
-	if mgmtErr != nil {
-		return fmt.Errorf("runControl: construct management server: %w", mgmtErr)
-	}
-
-	// F-4B / AC-012 PC-4 / Ruling 12: emit INFO log for the control management
-	// listener bind address. Mirrors the router bind log at runRouter:825.
-	// Emitted after newMgmtServer succeeds (bind has completed) and before
-	// serveMgmtServer (before any connections are accepted).
-	if w != nil {
-		_, _ = fmt.Fprintf(w, "switchboard control: control management listener bound to %s\n",
-			resolveManagementSocket(cfg, "control"))
-	}
-
-	// Phase (b): register metrics handlers before Serve starts (F-P2L1-001, F-P2L1-002).
-	// Control mode has no routing subsystem — pass nil router; the paths.list
-	// source is an empty registry, and BC-2.06.003 EC-001 "no active paths"
-	// applies (S-BL.PATH-TRACKER-WIRING).
-	if err := wireMetricsHandlers(mgmtSrv, nil); err != nil {
-		return fmt.Errorf("runControl: wire metrics handlers: %w", err)
-	}
-
-	// Phase (c): push full snapshot to all configured routers BEFORE serving
-	// (BC-2.05.009 Postcondition 7 / AC-009 / Decision 10 / O-1 fix). Push error
-	// is advisory — log and continue.
-	//
-	// MUST come before serveMgmtServer so the router is pre-populated with all
-	// current keyset entries before the control daemon begins accepting new
-	// admin.key.* RPCs that would issue incremental pushes. Decision 10 is
-	// explicit: "PushFullSnapshot is called before the management server begins
-	// serving" — i.e. before serveMgmtServer, not after.
-	if pushErr := syncClient.PushFullSnapshot(ctx, ks); pushErr != nil {
-		// Advisory: WARN only; do not fail startup (BC-2.05.009 PC-2 / F-3 fix).
-		if w != nil {
-			_, _ = fmt.Fprintf(w, "switchboard control: WARN: PushFullSnapshot failed: %v\n", pushErr)
-		}
-	}
-
-	// Phase (d): start the Serve goroutine.
-	var mgmtWG sync.WaitGroup
-	serveMgmtServer(ctx, &mgmtWG, mgmtSrv)
-
-	// Block until context is cancelled (SIGTERM/SIGINT) or a SIGHUP arrives.
-	// SIGHUP triggers a fail-closed endpoint reload; the daemon is NOT cancelled.
-	// Mirrors the router-mode SIGHUP select loop (S-7.04-FU-SIGHUP-RELOAD).
-	// BC-2.05.009 Invariant 5 / AC-010.
-	for {
-		select {
-		case <-ctx.Done():
-			// SIGTERM/SIGINT — proceed to graceful shutdown.
-			goto shutdown
-		case <-sighupCh:
-			// Fail-closed reload: load config, validate, update endpoints.
-			// If reload/validate fails, log WARN and keep the old endpoint list.
-			if reloadErr := reloadControlEndpoints(configPath, syncClient); reloadErr != nil {
-				if w != nil {
-					_, _ = fmt.Fprintf(w, "control: SIGHUP reload failed: %s; continuing with previous endpoints\n", reloadErr)
-				}
-			}
-		}
-	}
-shutdown:
-
-	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shutCancel()
-	_ = mgmtSrv.Shutdown(shutCtx)
-	mgmtWG.Wait()
-	// Drain in-flight background push goroutines (ARCH-01 §Goroutine WaitGroup Contract /
-	// F-1 fix). These are bounded by pushWithRetry's max attempts × max delay; the
-	// pushWG.Wait() call here prevents goroutine leaks on clean shutdown.
-	pushWG.Wait()
-	return nil
+	// Delegate to the testable core (runControlWithKey) with the ephemeral key.
+	// runControlWithKey is the unexported seam that allows tests to inject a
+	// pre-registered key so that PushFullSnapshot can authenticate against the
+	// router's OperatorKeySet and the router state can be directly asserted
+	// (F-P8-02 / Ruling 15 / AC-013 LOW-2).
+	return runControlWithKey(ctx, w, cfg, configPath, sighupCh, daemonPriv)
 }

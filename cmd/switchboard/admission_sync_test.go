@@ -4794,3 +4794,396 @@ func TestRouterPersister_CapturedWriter_WarnEmitted(t *testing.T) {
 	}
 	t.Logf("17g CapturedWriter: captured: %q", logStr)
 }
+
+// ── 17h (F-P8-01): per-endpoint sequencing in PushFullSnapshot ───────────────
+
+// TestAdmissionSync_PushFullSnapshot_MultiEndpoint_LastUnreachable_PastExpiry_ReachableEndpointNonAdmissible
+// verifies that when PushFullSnapshot targets two endpoints — one reachable and one
+// black-holed — a PAST-expiry ACTIVE entry ends up NON-ADMISSIBLE on the reachable
+// endpoint after the full snapshot push.
+//
+// ROOT CAUSE (F-P8-01): the old pushSnapshotEntries-via-pushWithRetry fan-out path
+// aggregates errors across all endpoints (last-error wins). When endpoint[0] succeeds
+// on register and fails on expire, the compensating revoke fires correctly there — but
+// when endpoint[1] (black-hole) then fails ALL attempts, the per-entry loop's `continue`
+// (17f(i)) causes the register on endpoint[0] to be silently skipped for the compensating-
+// revoke path. In practice: the "last endpoint" being unreachable resets per-entry state
+// such that the reachable endpoint's register+expire+compensating-revoke is never completed
+// sequentially — leaving endpoint[0] with the key active-and-non-expiring (Invariant 6 violation).
+//
+// FIX: per-endpoint sequencing (Ruling 15 option (a)). PushFullSnapshot must run the
+// FULL per-entry state machine independently for each endpoint. The unreachable endpoint's
+// failures must NOT affect the reachable endpoint's state machine.
+//
+// Setup:
+//   - endpoint[0] = real in-process router (startRouterMgmtServerTCP)
+//   - endpoint[1] = "192.0.2.1:9" (TEST-NET-3 black-hole, no TCP reset)
+//   - control keyset: 1 ACTIVE entry, expiry 1 hour in the PAST
+//
+// Assert: after PushFullSnapshot, the reachable router's keyset shows the key
+// NON-ADMISSIBLE (IsAdmitted false, and either: expired or revoked — i.e. IsRevoked OR
+// KeyExpiry is in the past OR key is absent). This MUST fail without 17h: the old
+// flatten path leaves the reachable router with the key active-and-non-expiring.
+//
+// NOT t.Parallel: creates real TCP listeners.
+// BC-2.05.009 v1.6 PC-7; Ruling 15 option (a); S-BL.ADMISSION-SYNC-WIRE AC-013 / F-P8-01.
+func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_LastUnreachable_PastExpiry_ReachableEndpointNonAdmissible(t *testing.T) {
+	// Build control-side keyset with one ACTIVE entry, expiry 1 hour in the PAST.
+	controlKS := admission.NewAdmittedKeySet()
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	controlKS.RegisterKey(svtnID, pub, admission.RoleAccess)
+
+	entries := controlKS.ListBySVTN(svtnID)
+	if len(entries) == 0 {
+		t.Fatal("no entries after RegisterKey")
+	}
+	pastExpiry := time.Now().UTC().Add(-1 * time.Hour)
+	if err := controlKS.SetKeyExpiry(svtnID, entries[0].NodeAddr, pastExpiry); err != nil {
+		t.Fatalf("SetKeyExpiry (past): %v", err)
+	}
+
+	// Generate control keypair — controlPub authorizes the client against the router.
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	// endpoint[0] = real reachable router.
+	routerKS := admission.NewAdmittedKeySet()
+	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
+
+	// endpoint[1] = TEST-NET-3 black-hole (RFC 5737: 192.0.2.0/24 is documentation-only,
+	// unreachable in any real network). Port 9 (discard) ensures SYN is dropped.
+	blackHoleAddr := "192.0.2.1:9"
+
+	client := newAdmissionSyncClient(
+		[]config.RouterManagementEndpoint{
+			{Addr: routerAddr},
+			{Addr: blackHoleAddr},
+		},
+		controlPriv,
+	)
+
+	// Use a short timeout to bound the black-hole retry budget (5 attempts × 5s dial timeout
+	// each = ~25s max; the context timeout keeps the test bounded even if black-hole retries
+	// are slower than expected in the test environment).
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	// Run PushFullSnapshot. An error (from the black-hole endpoint) is expected and advisory.
+	_ = client.PushFullSnapshot(ctx, controlKS)
+
+	// F-P8-01 core assertion: the REACHABLE router must show the past-expiry key as
+	// NON-ADMISSIBLE. Accept any of: entry is absent, entry is revoked, or entry has a
+	// past expiry. The FAIL case is: entry is present, not revoked, and has no/future expiry.
+	reachableEntries := routerKS.AllSVTNEntries()
+	svtnEntries := reachableEntries[svtnID]
+
+	var foundEntry *admission.AdmittedKey
+	for i := range svtnEntries {
+		if string(svtnEntries[i].PublicKey) == string(pub) {
+			e := svtnEntries[i]
+			foundEntry = &e
+			break
+		}
+	}
+
+	if foundEntry == nil {
+		// Key absent from router — non-admissible, no-op. This is a valid outcome
+		// (compensating revoke succeeded or entry was never registered).
+		t.Logf("F-P8-01 LastUnreachable: key absent from reachable router keyset — non-admissible (OK)")
+		return
+	}
+
+	// Key present on router — check it is non-admissible.
+	// Non-admissible means: revoked OR past-expiry (IsAdmitted checks admitted flag,
+	// but for this test we check the structural state: revoked or expiry-in-past).
+	if foundEntry.IsRevoked() {
+		t.Logf("F-P8-01 LastUnreachable: key is REVOKED on reachable router — non-admissible (OK)")
+		return
+	}
+	expiry := foundEntry.KeyExpiry()
+	if !expiry.IsZero() && expiry.Before(time.Now().UTC()) {
+		t.Logf("F-P8-01 LastUnreachable: key has past expiry=%v on reachable router — non-admissible (OK)", expiry)
+		return
+	}
+
+	// Key is present, not revoked, and has no expiry (or future expiry) — this is the
+	// INVARIANT-6 VIOLATION. This assertion MUST fire if 17h is not implemented.
+	t.Errorf("F-P8-01 LastUnreachable FAIL: reachable router has past-expiry key that is ACTIVE-AND-NON-EXPIRING. "+
+		"IsRevoked=%v KeyExpiry=%v. "+
+		"This is an Invariant-6 violation. Fix: implement per-endpoint sequencing in PushFullSnapshot "+
+		"(Ruling 15 option (a)) so the compensating revoke is issued per-endpoint independently, "+
+		"not over the flatten path that loses per-entry state across endpoints.",
+		foundEntry.IsRevoked(), expiry)
+}
+
+// TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_ReachableEndpointCorrect
+// verifies that when the FIRST endpoint is black-holed and the SECOND is reachable,
+// the reachable endpoint is fully and correctly processed: active key present/admissible-eligible,
+// revoked key absent (Ruling 13 skip-register).
+//
+// This proves per-endpoint independence regardless of order: the first endpoint's
+// failures must not prevent the second endpoint from being fully processed.
+//
+// Setup:
+//   - endpoint[0] = "192.0.2.1:9" (black-hole)
+//   - endpoint[1] = real in-process router (startRouterMgmtServerTCP)
+//   - control keyset: 1 active key + 1 revoked key (same SVTN)
+//
+// Assert:
+//   - active key IS present on the reachable router (was registered)
+//   - revoked key is ABSENT on the reachable router (Ruling 13 — revoke-only, no register)
+//
+// NOT t.Parallel: creates real TCP listeners.
+// BC-2.05.009 v1.6 PC-7; Ruling 15 option (a); S-BL.ADMISSION-SYNC-WIRE AC-013 / F-P8-01.
+func TestAdmissionSync_PushFullSnapshot_MultiEndpoint_FirstUnreachable_ReachableEndpointCorrect(t *testing.T) {
+	// Build control-side keyset: 1 active + 1 revoked.
+	controlKS := admission.NewAdmittedKeySet()
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	activePub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate active key: %v", err)
+	}
+	revokedPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate revoked key: %v", err)
+	}
+
+	controlKS.RegisterKey(svtnID, activePub, admission.RoleAccess)
+	controlKS.RegisterKey(svtnID, revokedPub, admission.RoleAccess)
+
+	// Revoke the second key.
+	revokedEntries := controlKS.ListBySVTN(svtnID)
+	var revokedNodeAddr [8]byte
+	for _, e := range revokedEntries {
+		if string(e.PublicKey) == string(revokedPub) {
+			revokedNodeAddr = e.NodeAddr
+			break
+		}
+	}
+	if err := controlKS.RevokeKey(svtnID, revokedNodeAddr); err != nil {
+		t.Fatalf("RevokeKey: %v", err)
+	}
+
+	// Generate control keypair.
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	// endpoint[1] = real reachable router.
+	routerKS := admission.NewAdmittedKeySet()
+	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
+
+	// endpoint[0] = black-hole (first endpoint, before reachable).
+	blackHoleAddr := "192.0.2.1:9"
+
+	client := newAdmissionSyncClient(
+		[]config.RouterManagementEndpoint{
+			{Addr: blackHoleAddr},
+			{Addr: routerAddr},
+		},
+		controlPriv,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	// PushFullSnapshot — error from black-hole is expected and advisory.
+	_ = client.PushFullSnapshot(ctx, controlKS)
+
+	// Assert: reachable router state is correct.
+	reachableEntries := routerKS.AllSVTNEntries()
+	svtnEntries := reachableEntries[svtnID]
+
+	// Active key must be PRESENT.
+	activeFound := false
+	for _, e := range svtnEntries {
+		if string(e.PublicKey) == string(activePub) {
+			activeFound = true
+			break
+		}
+	}
+	if !activeFound {
+		t.Errorf("F-P8-01 FirstUnreachable FAIL: active key NOT present on reachable (second) router. "+
+			"Per-endpoint sequencing must process the second endpoint independently of the first. "+
+			"This FAILS without 17h: the old flatten path may skip the second endpoint entirely "+
+			"when the first endpoint fails all retries.")
+	}
+
+	// Revoked key must be ABSENT (Ruling 13: revoke-only, no register).
+	for _, e := range svtnEntries {
+		if string(e.PublicKey) == string(revokedPub) {
+			t.Errorf("F-P8-01 FirstUnreachable FAIL: revoked key IS PRESENT on reachable router. "+
+				"Ruling 13: revoked entries must be revoke-only (no register). IsRevoked=%v",
+				e.IsRevoked())
+		}
+	}
+
+	if activeFound {
+		t.Logf("F-P8-01 FirstUnreachable: active key present on reachable router — correct")
+	}
+	t.Logf("F-P8-01 FirstUnreachable: revoked key absent from reachable router — correct (Ruling 13)")
+}
+
+// ── 17i (F-P8-02): runControl load→push ordering guard ───────────────────────
+
+// TestControlAdmission_RunControl_LoadThenPush_E2E_RealKey tests the REAL
+// load→push ordering through runControlWithKey: loads a snapshot with 1 active +
+// 1 revoked key, pushes to a real in-process router using an AUTHENTICATED key
+// (controlPriv registered in the router's OperatorKeySet), and asserts the router
+// ends in the correct state:
+//   - active key PRESENT (registered)
+//   - revoked key ABSENT (Ruling 13 skip-register)
+//
+// This is a REAL guard for load-before-push ordering: if a refactor moves
+// the load AFTER PushFullSnapshot, the router receives an empty push and the
+// active-key assertion fails.
+//
+// The existing TestControlAdmission_RunControl_LoadThenPush_E2E uses a direct
+// helper fallback because runControl generates its own ephemeral key (not in
+// the router's OperatorKeySet) — authentication fails so the push is advisory-
+// no-op and the router state cannot be directly asserted. This new test uses
+// runControlWithKey to inject the pre-registered key, making the router assertion
+// a REAL behavioral guard.
+//
+// NOT t.Parallel: starts real TCP listeners + runControlWithKey goroutine.
+// AC-009 PC-2 / AC-011 PC-3 / BC-2.05.009 PC-7 v1.6; S-BL.ADMISSION-SYNC-WIRE LOW-2 / F-P8-02.
+func TestControlAdmission_RunControl_LoadThenPush_E2E_RealKey(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sb-ctrl-e2e-realkey-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	_ = os.Chmod(dir, 0o700)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	// Build snapshot: 1 active + 1 revoked key.
+	var svtnID [16]byte
+	if _, err := rand.Read(svtnID[:]); err != nil {
+		t.Fatalf("rand.Read: %v", err)
+	}
+	activePub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate active key: %v", err)
+	}
+	revokedPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate revoked key: %v", err)
+	}
+
+	snapToWrite := snapshotFile{
+		SchemaVersion: snapshotCurrentSchemaVersion,
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+		SVTNs: []snapshotSVTN{
+			{
+				SVTNID: svtnIDToHex(svtnID),
+				Keys: []snapshotKey{
+					{
+						PubKey:  base64.RawURLEncoding.EncodeToString([]byte(activePub)),
+						Role:    "access",
+						Revoked: false,
+					},
+					{
+						PubKey:  base64.RawURLEncoding.EncodeToString([]byte(revokedPub)),
+						Role:    "access",
+						Revoked: true,
+					},
+				},
+			},
+		},
+	}
+	snapData, err := json.Marshal(snapToWrite)
+	if err != nil {
+		t.Fatalf("marshal snap: %v", err)
+	}
+	snapshotPath := filepath.Join(dir, "ctrl-admission-state.json")
+	if err := os.WriteFile(snapshotPath, snapData, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Generate control daemon keypair — THIS key will be registered in the router's
+	// OperatorKeySet so authentication succeeds.
+	controlPub, controlPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate control keypair: %v", err)
+	}
+
+	// Start real router with controlPub authorized.
+	routerKS := admission.NewAdmittedKeySet()
+	routerAddr := startRouterMgmtServerTCP(t, controlPub, routerKS)
+
+	// Bind ephemeral port for control mgmt socket.
+	probeCtrl, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("probe ctrl listen: %v", err)
+	}
+	ctrlMgmtAddr := probeCtrl.Addr().String()
+	_ = probeCtrl.Close()
+
+	cfg := &config.Config{
+		ManagementSocket:          ctrlMgmtAddr,
+		RouterManagementEndpoints: []config.RouterManagementEndpoint{{Addr: routerAddr}},
+		ControlAdmissionStateFile: snapshotPath,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sighupCh := make(chan os.Signal, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		// runControlWithKey injects controlPriv so the push authenticates.
+		errCh <- runControlWithKey(ctx, nil, cfg, "", sighupCh, controlPriv)
+	}()
+
+	// Give runControlWithKey time to load snapshot and push.
+	time.Sleep(300 * time.Millisecond)
+
+	cancel()
+	select {
+	case rErr := <-errCh:
+		if rErr != nil {
+			t.Logf("F-P8-02 RealKey: runControlWithKey returned: %v", rErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("F-P8-02 RealKey: runControlWithKey did not return within 5s after ctx cancel")
+	}
+
+	// F-P8-02 core assertion: router must have received the REAL push.
+	// active key PRESENT, revoked key ABSENT (Ruling 13).
+	reachableEntries := routerKS.AllSVTNEntries()
+	svtnEntries := reachableEntries[svtnID]
+
+	activeFound := false
+	for _, e := range svtnEntries {
+		if string(e.PublicKey) == string(activePub) {
+			activeFound = true
+		}
+		if string(e.PublicKey) == string(revokedPub) {
+			t.Errorf("F-P8-02 RealKey FAIL: revoked key IS PRESENT on router. "+
+				"Ruling 13: revoked entries must NOT be registered. IsRevoked=%v", e.IsRevoked())
+		}
+	}
+
+	if !activeFound {
+		t.Errorf("F-P8-02 RealKey FAIL: active key NOT present on router after runControlWithKey push. "+
+			"This FAILS if load happened AFTER PushFullSnapshot (empty push) or if the push failed "+
+			"due to auth mismatch (runControlWithKey must use the injected controlPriv). "+
+			"If this fires, check that runControlWithKey uses daemonPriv for the admissionSyncClient.")
+	}
+
+	if activeFound {
+		t.Logf("F-P8-02 RealKey: active key present on router — load-before-push ordering confirmed")
+	}
+}
