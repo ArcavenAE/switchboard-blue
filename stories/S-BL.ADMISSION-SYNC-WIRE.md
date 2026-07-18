@@ -40,7 +40,15 @@ modified:
       loopback-only TCP, router-only exemption — F-P3-02); amend AC-009 (load-then-push);
       remove control-persistence deferral from Non-Goals; points 8→11; AC count 10→12;
       note F-P3-03 shutdown-drain bound as impl task.
-version: "1.3"
+  - date: 2026-07-17
+    version: "1.4"
+    change: >
+      Propagate BC-2.05.009 v1.3: AC-009 now requires PushFullSnapshot semantic-equivalence
+      (revoked→revoked, past-expiry→expired, not register-only) + 2 new test names
+      (RevokedKeyStaysRevoked, PastExpiryStaysExpired) — fixes F-1 revocation-un-propagation
+      (adversary pass 5); add impl tasks for F-3 (WARN log on advisory failures) + F-4
+      (bind-log for console/access modes).
+version: "1.4"
 phase: 2
 epic: E-7
 wave: backlog
@@ -53,7 +61,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'
-input-hash: "2db3e98"
+input-hash: "07f9097"
 traces_to: 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.05.009
@@ -83,7 +91,7 @@ risk_mitigations: []
 acceptance_criteria_count: 12
 inputDocuments:
   - 'decisions/S-BL.ADMISSION-SYNC-WIRE-rulings.md'   # v1.4 — BINDING. All 12 rulings: push RPC via internal/mgmt JSON-over-TCP; four internal.admission.* commands; control dials routers (TCP, dial-on-demand); retry-with-backoff (100ms/2x/10s/5); push failure advisory WARN no-rollback; RouterManagementEndpoints config field; admission_state_file config field; JSON snapshot schema_version:1; router TCP listener no loopback restriction (Ruling 9, ADR-012 is auth boundary); mgmt listener auto-detects TCP-vs-unix on management_socket via validateHostPort (Ruling 10, F-2 fix); nil-syncer no-op; full-snapshot push on control startup; control_admission_state_file persistence field + synchronous write-on-mutation + load-on-startup BEFORE push (Ruling 11, F-P3-01, now IN-SCOPE); buildMgmtListener loopback guard extends to console/control/access modes, router-only exemption (Ruling 12, F-P3-02).
-  - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.2 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op. Invariant 4 exempts svtn_id from admin-args encoding parity (it is the hex UUID, not the name). PC-7 (v1.2): EC-007 resync guarantee requires control_admission_state_file; control-side persist-write synchronous before push dispatch; writeSnapshotAtomic reused.
+  - 'specs/behavioral-contracts/ss-05/BC-2.05.009.md'  # v1.3 — admission-state-sync push RPC: four write paths, internal.admission.* commands, push-failure advisory (WARN no rollback), admitted=false on load, full-snapshot on control startup, nil-syncer no-op. Invariant 4 exempts svtn_id from admin-args encoding parity (it is the hex UUID, not the name). PC-7 (v1.3): PushFullSnapshot must propagate COMPLETE authoritative state — register + expire(originalExpiry) + revoke — so router converges to SEMANTIC EQUIVALENCE with control. Invariant 6 (v1.3): PushFullSnapshot MUST NOT leave router in less-restrictive state (no un-revoking, no un-expiring). EC-009 (revoked key on restart → register then revoke), EC-010 (past-expiry → register + expire(originalExpiry)).
   - 'specs/behavioral-contracts/ss-05/BC-2.05.010.md'  # v1.0 — VLR-local admitted-state snapshot: JSON schema_version:1 format, atomic write-on-receive, load-on-startup, fail-closed-on-corrupt (E-KEY-002), missing-file→empty-keyset, admitted=false invariant, no FrameAuthKey/NodeAddr/nonces stored.
   - 'specs/behavioral-contracts/ss-09/BC-2.09.003.md'  # v2.2 — PC-13 (admission_state_file: non-empty when present, E-CFG-015); PC-14 (router_management_endpoints: each addr host:port, E-CFG-016, NO loopback restriction per Ruling 9); PC-15 (control_admission_state_file: non-empty when present, E-CFG-017, control-mode only); PC-11b (mgmt loopback guard: console/control/access must bind loopback TCP, router exempt).
 ---
@@ -461,9 +469,9 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 
 ---
 
-### AC-009 — Full-snapshot push on control startup: control loads persisted keyset THEN pushes all entries to configured routers (BC-2.05.009 PC-7 v1.2)
+### AC-009 — Full-snapshot push on control startup: control loads persisted keyset THEN pushes complete authoritative state to configured routers (BC-2.05.009 PC-7 v1.3 + Invariant 6)
 
-**BC Anchor:** BC-2.05.009 Postcondition 7 (v1.2 — EC-007 resync conditional on control_admission_state_file).
+**BC Anchor:** BC-2.05.009 Postcondition 7 (v1.3) + Invariant 6 (v1.3). PC-7 v1.3 requires `PushFullSnapshot` to propagate COMPLETE authoritative state — register + expire(originalExpiry) + revoke — so the router converges to SEMANTIC EQUIVALENCE with control. Invariant 6: `PushFullSnapshot` MUST NOT leave a router in a less-restrictive state (no un-revoking, no un-expiring). EC-009 (revoked key on restart → register then revoke), EC-010 (past-expiry → register + expire(originalExpiry)).
 
 **Postconditions:**
 1. When `runControl` starts and `SVTNManager` is initialised, `admissionSyncClient.PushFullSnapshot(ctx)`
@@ -473,12 +481,22 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
    and calling `PushFullSnapshot`. The test setup MUST configure `control_admission_state_file`
    and pre-populate it with a known non-empty keyset to exercise this path. A push of a
    manually-populated in-memory keyset (without load-from-file) does not satisfy this postcondition.
-3. `PushFullSnapshot` iterates all `(svtn, pubkey, role)` triples in the loaded `AdmittedKeySet`
-   (via `ListBySVTN` across all SVTNs) and issues `internal.admission.register` to each configured
-   router endpoint for each entry.
-4. For entries with non-zero expiry, `internal.admission.expire` is also issued.
-5. After `PushFullSnapshot`, the router's keyset matches the control daemon's loaded `AdmittedKeySet`
-   state (modulo push failures, which are logged at WARN and do not block startup).
+3. `PushFullSnapshot` iterates all entries in the loaded `AdmittedKeySet` (via `ListBySVTN` across
+   all SVTNs) and for each entry:
+   (a) issues `internal.admission.register` to each configured router endpoint;
+   (b) for entries with expiry (past or future), issues `internal.admission.expire(originalExpiry)`
+       so the router preserves the original expiry timestamp, not a new one;
+   (c) for REVOKED entries, issues `internal.admission.revoke` AFTER register so the router
+       reflects the revoked status and does not leave the key active.
+4. After `PushFullSnapshot` completes, the router's `AdmittedKeySet` is SEMANTICALLY EQUIVALENT
+   to the control daemon's loaded `AdmittedKeySet`: same keys, roles, revoked status, and expiries.
+   Specifically: a key that is revoked in control MUST be revoked on the router (NOT re-registered
+   active); a key with a past expiry MUST be expired on the router (NOT left active-and-non-expiring).
+   This satisfies BC-2.05.009 PC-7 v1.3 and Invariant 6 (router MUST NOT be left in a less-restrictive
+   state than control).
+5. Push failures are logged at WARN and do not block startup. They do not satisfy the semantic-
+   equivalence guarantee — a router that failed to receive the full snapshot is stale until the
+   next per-write push or a subsequent control restart.
 6. When `control_admission_state_file` is absent/empty, `PushFullSnapshot` on startup pushes an
    empty keyset (EC-007 resync is inert — this is expected and tested by the EmptyKeyset test below).
 
@@ -486,6 +504,8 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 - `TestAdmissionSync_PushFullSnapshot_AllEntriesPushedToRouter` (integration: `control_admission_state_file` configured + pre-populated; two in-process mgmt.Server instances; router keyset receives loaded keys)
 - `TestAdmissionSync_PushFullSnapshot_ExpiryPushed`
 - `TestAdmissionSync_PushFullSnapshot_EmptyKeysetNoPushAttempt` (no `control_admission_state_file` → empty keyset → no push attempt)
+- `TestAdmissionSync_PushFullSnapshot_RevokedKeyStaysRevoked` (a revoked entry in the pushed keyset → router shows it revoked, not active; verifies BC-2.05.009 PC-7 v1.3 + Invariant 6 + EC-009)
+- `TestAdmissionSync_PushFullSnapshot_PastExpiryStaysExpired` (a past-expiry entry in the pushed keyset → router shows it expired, not active-and-non-expiring; verifies BC-2.05.009 PC-7 v1.3 + EC-010)
 
 ---
 
@@ -677,6 +697,8 @@ packages already imported by `mgmt_wire.go` (`internal/admission`, `internal/mgm
 16b. [ ] Extend `buildMgmtListener` loopback guard from `if mode == "console"` to `if mode != "router"` — control/access/console all require loopback TCP; router remains exempt (Ruling 12) — implementer
 17. [ ] Wire `runControl`: (a) load `ControlAdmissionStateFile` snapshot via `loadSnapshotFromFile` BEFORE constructing sync client + calling `PushFullSnapshot`; (b) client construction + PushFullSnapshot + SIGHUP reload — implementer [Ruling 11]
 17a. [ ] F-P3-03 (impl obligation, no new AC): bound the push dialer timeout and bound `pushWG.Wait()` shutdown drain so a black-holed router endpoint cannot stall daemon shutdown indefinitely — implementer
+17b. [ ] F-3 (impl obligation, no new AC — BC-2.05.009 PC-2/PC-4, BC-2.05.010 PC-2): advisory push/write failures that currently swallow the error with `_ = err` MUST emit a WARN log instead. The push handlers in `admission_sync_client.go` and the snapshot-write path in `admission_sync_wire.go` need a log writer threaded in. Push failure WARN must include the endpoint address and the underlying error. Snapshot-write failure WARN must include the file path and error. — implementer
+17c. [ ] F-4 (impl obligation, no new AC — BC-2.09.003 PC-11b / AC-012 PC-4): the bind-address INFO log `"<mode> management listener bound to <address>"` must fire for console and access modes in addition to router and control. AC-012 PC-4 states "any mode that binds TCP." Extend the INFO log emission in `buildMgmtListener` to cover all four modes, not just router+control. — implementer
 18. [ ] Run `go test ./... -race`; confirm all AC tests pass
 19. [ ] Update STATE.md
 
@@ -757,6 +779,7 @@ have not changed.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-17 | Propagate BC-2.05.009 v1.3: AC-009 now requires PushFullSnapshot semantic-equivalence (revoked→revoked, past-expiry→expired, not register-only) + 2 new test names (RevokedKeyStaysRevoked, PastExpiryStaysExpired) — fixes F-1 revocation-un-propagation (adversary pass 5); add impl tasks for F-3 (WARN log on advisory failures) + F-4 (bind-log for console/access modes). |
 | 1.3 | 2026-07-17 | Propagate rulings v1.4 (Rulings 11+12) + BC-2.09.003 v2.2 + BC-2.05.009 v1.2: add AC-011 (control-side keyset persistence via control_admission_state_file — F-P3-01, now in-scope) + AC-012 (mgmt loopback guard scope: control/access loopback-only TCP, router-only exemption — F-P3-02); amend AC-009 (load-then-push); remove control-persistence deferral from Non-Goals; points 8→11; AC count 10→12; note F-P3-03 shutdown-drain bound as impl task. |
 | 1.2 | 2026-07-17 | Propagate rulings v1.3 Ruling 10 (F-2 fix): router mgmt listener auto-detects TCP-vs-unix on management_socket; AC-008 postconditions rewritten (5 PCs incl. real TCP-bind + push-handshake assertions) + 2 new test names (TCPBind_ConnectionSucceeds, TCPBind_PushHandshakeSucceeds); implementer task for mgmtNetwork/buildMgmtListener auto-detect. rulings ref v1.2→v1.3. |
 | 1.1 | 2026-07-16 | Propagate rulings v1.2 svtn_id hex-[16]byte wire encoding fix (admissionSyncer interface svtnName→svtnID [16]byte; Decisions 2/5, AC-003/004/005); BC-2.05.009 ref 1.0→1.1; removed stale free-text input-hash citation from POL-005 note. |
