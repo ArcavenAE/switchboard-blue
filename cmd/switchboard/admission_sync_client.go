@@ -384,27 +384,28 @@ func (c *admissionSyncClient) PushRemoveSVTN(
 }
 
 // PushFullSnapshot iterates all admitted key entries across all SVTNs in ks
-// and issues internal.admission.register, internal.admission.expire (for entries
-// with non-zero expiry — including past-expiry), and internal.admission.revoke
-// (for revoked entries) to each configured router endpoint.
+// and issues the appropriate internal.admission.* RPCs to each configured router
+// endpoint. The per-entry logic depends on the entry's revocation state:
 //
-// Per-entry order: register → (expire if non-zero expiry) → (revoke if revoked).
-// This ensures the router is semantically equivalent to the control keyset.
+//   - REVOKED entry (Ruling 13 / BC-2.05.009 v1.4 PC-7c): MUST NOT issue
+//     internal.admission.register. Issue internal.admission.revoke ONLY (advisory
+//     — WARN on failure, same as any push failure). On a fresh router that has no
+//     entry for the revoked key, the revoke RPC arrives for an absent key and the
+//     router's revoke handler treats "key not found" as success (absent = correct
+//     non-admissible terminal state). The register+revoke two-RPC pattern is
+//     PROHIBITED for revoked entries.
+//
+//   - ACTIVE (not revoked) entry: issue internal.admission.register, then
+//     internal.admission.expire (if non-zero expiry — including past-expiry).
 //
 // Called from runControl on startup, before the management server begins serving
-// (BC-2.05.009 v1.3 PC-7, Postcondition 7, Invariant 6 / AC-009 / Decision 10).
+// (BC-2.05.009 v1.4 PC-7, Postcondition 7, Invariant 6 / AC-009 / Decision 10).
 //
-// Past-expiry handling (BC-2.05.009 v1.3 PC-7 / Invariant 6):
+// Past-expiry handling (BC-2.05.009 v1.4 PC-7 / Invariant 6 / EC-010):
 // PushSetKeyExpiry sends the ORIGINAL expiry (time.Until(expiry) may be negative
 // for past entries). The router's expire handler accepts a negative "after" duration
-// and computes expiry = now + after, which yields a past timestamp — the router
-// then marks the entry as expired. This is correct: a past-expiry entry MUST NOT
-// be left active-and-non-expiring on the router (Invariant 6).
-//
-// Revocation handling (BC-2.05.009 v1.3 PC-7 / Invariant 6 / EC-009):
-// After register, if IsRevoked() is true, PushRevokeKey is called with confirm=true
-// so the router marks the entry revoked. A revoked entry MUST NOT be left active
-// on the router (Invariant 6 / EC-009: revocation durability).
+// and computes expiry = now + after, which yields a past timestamp. A past-expiry
+// entry MUST NOT be left active-and-non-expiring on the router (Invariant 6 / EC-010).
 //
 // An empty keyset is a no-op (return nil). Push errors are advisory — the
 // caller (runControl) logs WARN and continues.
@@ -418,6 +419,20 @@ func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admissio
 	var lastErr error
 	for svtnID, entries := range allEntries {
 		for _, e := range entries {
+			if e.IsRevoked() {
+				// Ruling 13 / BC-2.05.009 v1.4 PC-7c: REVOKED entry — issue
+				// internal.admission.revoke ONLY. MUST NOT issue register first.
+				// Fresh router: key-not-found is success (absent = correct state).
+				// Existing-entry router: transitions existing entry to revoked.
+				if err := c.PushRevokeKey(ctx, svtnID, e.PublicKey, e.Role, true); err != nil {
+					lastErr = err
+					// Advisory: continue with remaining entries.
+				}
+				continue
+			}
+
+			// ACTIVE (not revoked) entry: register, then expire if non-zero.
+
 			// (a) Register the key on the router.
 			if err := c.PushRegisterKey(ctx, svtnID, e.PublicKey, e.Role); err != nil {
 				lastErr = err
@@ -425,7 +440,7 @@ func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admissio
 			}
 
 			// (b) Push expiry if set — including past-expiry entries
-			// (BC-2.05.009 v1.3 PC-7 / Invariant 6: MUST NOT leave past-expiry
+			// (BC-2.05.009 v1.4 PC-7 / Invariant 6 / EC-010: MUST NOT leave past-expiry
 			// entries active-and-non-expiring on the router). time.Until returns a
 			// negative duration for past expiries; the router expire handler accepts
 			// negative durations and marks the entry expired.
@@ -436,16 +451,6 @@ func (c *admissionSyncClient) PushFullSnapshot(ctx context.Context, ks *admissio
 					ttl = -1 * time.Millisecond
 				}
 				if err := c.PushSetKeyExpiry(ctx, svtnID, e.PublicKey, ttl); err != nil {
-					lastErr = err
-					// Advisory: continue.
-				}
-			}
-
-			// (c) Revoke if the entry is revoked — AFTER register so the router has
-			// the entry before the revoke is applied (BC-2.05.009 v1.3 PC-7 / Invariant 6 /
-			// EC-009: revocation durability across control restart).
-			if e.IsRevoked() {
-				if err := c.PushRevokeKey(ctx, svtnID, e.PublicKey, e.Role, true); err != nil {
 					lastErr = err
 					// Advisory: continue.
 				}

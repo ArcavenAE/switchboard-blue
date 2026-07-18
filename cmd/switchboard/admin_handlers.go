@@ -157,8 +157,10 @@ func BuildAdminHandlers(m *svtnmgmt.SVTNManager, ops *mgmt.OperatorKeySet, syncC
 	// F-4A fix: create a shared controlPersister so all four write handlers
 	// serialise their {snapshot-read, marshal, write, rename} sequence under
 	// the same mutex (BC-2.05.010 Invariant 1). A nil persister is a no-op
-	// (empty path = no persistence configured).
-	p := newControlPersister(snapshotPath)
+	// (empty path = no persistence configured). LOW-1 fix: pass nil writer here;
+	// runControl injects its writer via the controlSnapshotPath+logWriter fields.
+	// The persister falls back to os.Stderr when w is nil (backward-compat).
+	p := newControlPersister(snapshotPath, nil)
 	return []mgmt.Handler{
 		{Command: "admin.key.register", Fn: makeRegisterHandler(m, ops, syncClient, pushWG, p)},
 		{Command: "admin.key.revoke", Fn: makeRevokeHandler(m, ops, syncClient, pushWG, p)},

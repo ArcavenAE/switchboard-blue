@@ -65,24 +65,30 @@ var errSnapshotNotImplemented = errors.New("admission snapshot: not implemented"
 // {snapshot-read, marshal, write-temp, rename} sequence so that rename order
 // matches keyset-read order, which matches mutation order.
 //
-// Router-side: writeSnapshotAtomic calls from admission_sync_wire.go are
-// router-side handler invocations (router is a cache; control re-pushes on
-// restart self-heal any transient staleness — BC-2.05.010 Inv-2). They do NOT
-// share the control-side persist mutex. Each router-side path is single-handler
-// per RPC (no concurrent router-side handlers share a path), so staleness is
-// transient rather than permanent.
+// Router-side: router-side push handlers (register, revoke, expire, remove-svtn)
+// each run in their own goroutine (mgmt.Serve dispatches per-connection). When
+// two RPCs arrive simultaneously, their handlers write the keyset and call
+// writeSnapshotAtomic concurrently — a lost-update race identical to the F-4A
+// control-side race. F-P6-01 fix: wireAdmissionSyncHandlers constructs a shared
+// routerPersister (admission_sync_wire.go) whose mutex serialises all four
+// router-side snapshot writes. The false claim "no concurrent router-side handlers
+// share a path" has been corrected and removed.
 type controlPersister struct {
 	path string
+	w    io.Writer // log writer for WARN messages; nil falls back to os.Stderr (LOW-1 fix)
 	mu   sync.Mutex
 }
 
 // newControlPersister returns a *controlPersister for path.
 // Returns nil if path is empty (no persistence configured).
-func newControlPersister(path string) *controlPersister {
+// w is the log writer for advisory WARN messages (nil-safe — falls back to
+// os.Stderr for backward-compat, but injecting a real writer is preferred for
+// test observability and log routing consistency, LOW-1 / F-3).
+func newControlPersister(path string, w io.Writer) *controlPersister {
 	if path == "" {
 		return nil
 	}
-	return &controlPersister{path: path}
+	return &controlPersister{path: path, w: w}
 }
 
 // persist writes the current keyset state to disk under the persist mutex.
@@ -98,8 +104,13 @@ func (p *controlPersister) persist(ks *admission.AdmittedKeySet) {
 	defer p.mu.Unlock()
 	if err := writeSnapshotAtomic(p.path, ks); err != nil {
 		// Advisory: WARN only (BC-2.05.010 PC-2/EC-008 / F-3 fix).
-		// Do not propagate write failure to RPC caller.
-		_, _ = fmt.Fprintf(os.Stderr, "switchboard control: WARN: control admission snapshot write failed: path=%s err=%v\n", p.path, err)
+		// LOW-1 fix: use the injected writer (p.w) for log routing consistency;
+		// fall back to os.Stderr only when no writer was injected.
+		w := p.w
+		if w == nil {
+			w = os.Stderr
+		}
+		_, _ = fmt.Fprintf(w, "switchboard control: WARN: control admission snapshot write failed: path=%s err=%v\n", p.path, err)
 	}
 }
 
