@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
@@ -35,23 +36,26 @@ import (
 // ks is the router's AdmittedKeySet — the same instance passed to buildRouter.
 // snapshotPath is cfg.AdmissionStateFile; an empty string disables snapshot
 // persistence (writes are silently skipped with WARN advisory).
+// w is the log writer for advisory WARN messages (nil-safe — no-op when nil).
+// BC-2.05.010 PC-2/EC-008 mandates WARN log on snapshot-write failure (F-3 fix).
 //
 // BC-2.05.009 PC-1/Inv-3; BC-2.05.010 PC-1/PC-3; S-BL.ADMISSION-SYNC-WIRE AC-002/AC-005.
 func wireAdmissionSyncHandlers(
 	srv *mgmt.Server,
 	ks *admission.AdmittedKeySet,
 	snapshotPath string,
+	w io.Writer,
 ) error {
-	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionRegister, Fn: makeAdmissionRegisterHandler(ks, snapshotPath)}); err != nil {
+	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionRegister, Fn: makeAdmissionRegisterHandler(ks, snapshotPath, w)}); err != nil {
 		return fmt.Errorf("wireAdmissionSyncHandlers: register %s: %w", CmdAdmissionRegister, err)
 	}
-	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionRevoke, Fn: makeAdmissionRevokeHandler(ks, snapshotPath)}); err != nil {
+	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionRevoke, Fn: makeAdmissionRevokeHandler(ks, snapshotPath, w)}); err != nil {
 		return fmt.Errorf("wireAdmissionSyncHandlers: register %s: %w", CmdAdmissionRevoke, err)
 	}
-	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionExpire, Fn: makeAdmissionExpireHandler(ks, snapshotPath)}); err != nil {
+	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionExpire, Fn: makeAdmissionExpireHandler(ks, snapshotPath, w)}); err != nil {
 		return fmt.Errorf("wireAdmissionSyncHandlers: register %s: %w", CmdAdmissionExpire, err)
 	}
-	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionRemoveSVTN, Fn: makeAdmissionRemoveSVTNHandler(ks, snapshotPath)}); err != nil {
+	if err := srv.Register(mgmt.Handler{Command: CmdAdmissionRemoveSVTN, Fn: makeAdmissionRemoveSVTNHandler(ks, snapshotPath, w)}); err != nil {
 		return fmt.Errorf("wireAdmissionSyncHandlers: register %s: %w", CmdAdmissionRemoveSVTN, err)
 	}
 	return nil
@@ -99,10 +103,13 @@ func parseSVTNIDHex(hexStr string) ([16]byte, error) {
 
 // makeAdmissionRegisterHandler returns the internal.admission.register handler.
 // Decodes svtn_id (hex → [16]byte), pubkey, and role; calls ks.RegisterKey;
-// then writes snapshot atomically (failure is advisory).
+// then writes snapshot atomically (failure is WARN-logged and advisory).
+//
+// w is the log writer (nil-safe). BC-2.05.010 PC-2/EC-008: snapshot-write
+// failure MUST be logged at WARN level (F-3 fix).
 //
 // BC-2.05.009 PC-8 / BC-2.05.010 PC-1/PC-3; S-BL.ADMISSION-SYNC-WIRE AC-005.
-func makeAdmissionRegisterHandler(ks *admission.AdmittedKeySet, snapshotPath string) func(ctx context.Context, args json.RawMessage) (any, error) {
+func makeAdmissionRegisterHandler(ks *admission.AdmittedKeySet, snapshotPath string, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a admissionRegisterArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -127,10 +134,12 @@ func makeAdmissionRegisterHandler(ks *admission.AdmittedKeySet, snapshotPath str
 		// RegisterKey: admitted=false always (challenge-response required; BC-2.05.009 PC-8).
 		ks.RegisterKey(svtnID, pubkey, role)
 
-		// Write snapshot atomically — failure is advisory (BC-2.05.010 PC-2 / AC-005).
+		// Write snapshot atomically — failure is advisory WARN (BC-2.05.010 PC-2/EC-008 / F-3 fix).
 		if err := writeSnapshotAtomic(snapshotPath, ks); err != nil {
-			// WARN only — do not return error to caller.
-			_ = err // caller (mgmt.Server) log seam; real daemon would log via slog
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "switchboard router: WARN: admission snapshot write failed: path=%s err=%v\n",
+					snapshotPath, err)
+			}
 		}
 
 		return map[string]any{"status": "ok"}, nil
@@ -138,7 +147,8 @@ func makeAdmissionRegisterHandler(ks *admission.AdmittedKeySet, snapshotPath str
 }
 
 // makeAdmissionRevokeHandler returns the internal.admission.revoke handler.
-func makeAdmissionRevokeHandler(ks *admission.AdmittedKeySet, snapshotPath string) func(ctx context.Context, args json.RawMessage) (any, error) {
+// w is the log writer (nil-safe) for advisory WARN on snapshot-write failure (F-3 fix).
+func makeAdmissionRevokeHandler(ks *admission.AdmittedKeySet, snapshotPath string, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a admissionRevokeArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -165,8 +175,12 @@ func makeAdmissionRevokeHandler(ks *admission.AdmittedKeySet, snapshotPath strin
 			return nil, fmt.Errorf("E-ADM-013: RevokeKey: %w", err)
 		}
 
+		// Write snapshot atomically — failure is advisory WARN (BC-2.05.010 PC-2/EC-008 / F-3 fix).
 		if err := writeSnapshotAtomic(snapshotPath, ks); err != nil {
-			_ = err // advisory WARN only
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "switchboard router: WARN: admission snapshot write failed: path=%s err=%v\n",
+					snapshotPath, err)
+			}
 		}
 
 		return map[string]any{"status": "ok"}, nil
@@ -174,7 +188,8 @@ func makeAdmissionRevokeHandler(ks *admission.AdmittedKeySet, snapshotPath strin
 }
 
 // makeAdmissionExpireHandler returns the internal.admission.expire handler.
-func makeAdmissionExpireHandler(ks *admission.AdmittedKeySet, snapshotPath string) func(ctx context.Context, args json.RawMessage) (any, error) {
+// w is the log writer (nil-safe) for advisory WARN on snapshot-write failure (F-3 fix).
+func makeAdmissionExpireHandler(ks *admission.AdmittedKeySet, snapshotPath string, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a admissionExpireArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -193,8 +208,15 @@ func makeAdmissionExpireHandler(ks *admission.AdmittedKeySet, snapshotPath strin
 		}
 
 		ttl, err := time.ParseDuration(a.After)
-		if err != nil || ttl <= 0 {
+		if err != nil {
 			return nil, fmt.Errorf("E-CFG-001: invalid duration: %q", a.After)
+		}
+		// ttl == 0 is rejected (ambiguous — use a non-zero value).
+		// ttl < 0 is accepted: a negative duration means the expiry is in the past
+		// (BC-2.05.009 v1.3 PC-7 / Invariant 6: PushFullSnapshot propagates original
+		// expiry regardless of past/future; router marks already-past entries expired).
+		if ttl == 0 {
+			return nil, fmt.Errorf("E-CFG-001: invalid duration: %q (zero duration not allowed)", a.After)
 		}
 
 		entry, found := ks.LookupByPubkey(svtnID, pubkey)
@@ -206,8 +228,12 @@ func makeAdmissionExpireHandler(ks *admission.AdmittedKeySet, snapshotPath strin
 			return nil, fmt.Errorf("E-ADM-015: SetKeyExpiry: %w", err)
 		}
 
+		// Write snapshot atomically — failure is advisory WARN (BC-2.05.010 PC-2/EC-008 / F-3 fix).
 		if err := writeSnapshotAtomic(snapshotPath, ks); err != nil {
-			_ = err // advisory WARN only
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "switchboard router: WARN: admission snapshot write failed: path=%s err=%v\n",
+					snapshotPath, err)
+			}
 		}
 
 		return map[string]any{"status": "ok"}, nil
@@ -215,7 +241,8 @@ func makeAdmissionExpireHandler(ks *admission.AdmittedKeySet, snapshotPath strin
 }
 
 // makeAdmissionRemoveSVTNHandler returns the internal.admission.remove-svtn handler.
-func makeAdmissionRemoveSVTNHandler(ks *admission.AdmittedKeySet, snapshotPath string) func(ctx context.Context, args json.RawMessage) (any, error) {
+// w is the log writer (nil-safe) for advisory WARN on snapshot-write failure (F-3 fix).
+func makeAdmissionRemoveSVTNHandler(ks *admission.AdmittedKeySet, snapshotPath string, w io.Writer) func(ctx context.Context, args json.RawMessage) (any, error) {
 	return func(_ context.Context, args json.RawMessage) (any, error) {
 		var a admissionRemoveSVTNArgs
 		if err := json.Unmarshal(args, &a); err != nil {
@@ -231,8 +258,12 @@ func makeAdmissionRemoveSVTNHandler(ks *admission.AdmittedKeySet, snapshotPath s
 
 		ks.RemoveSVTN(svtnID)
 
+		// Write snapshot atomically — failure is advisory WARN (BC-2.05.010 PC-2/EC-008 / F-3 fix).
 		if err := writeSnapshotAtomic(snapshotPath, ks); err != nil {
-			_ = err // advisory WARN only
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "switchboard router: WARN: admission snapshot write failed: path=%s err=%v\n",
+					snapshotPath, err)
+			}
 		}
 
 		return map[string]any{"status": "ok"}, nil
