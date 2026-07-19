@@ -3,7 +3,7 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.7"
+version: "1.8"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: ready
 producer: story-writer
@@ -22,7 +22,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-01/BC-2.01.010.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.001.md'
   - 'specs/behavioral-contracts/ss-01/BC-2.01.008.md'
-input-hash: "2cbf305"
+input-hash: "f32d7ee"
 traces_to: "decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md"
 epic_id: E-7
 behavioral_contracts:
@@ -56,9 +56,9 @@ provenance:
   spec_annotation: "S-BL.DISCOVERY-WIRE-rulings.md v1.9, Ruling 3(f) subsection item (j) — the human gate disposition naming and scoping this story"
   adjudication: "S-BL.DISCOVERY-WIRE-fanout-options.md v1.1 Option 1 selected at the story-ready human gate — Option 1's NODE_IDENTIFY handshake mechanism delivered via Option 3's name-and-schedule-now shape"
 inputDocuments:
-  - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'   # v1.1 — BINDING. All obligations resolved. Wire format (§§2–9): control_type=0x04 with msg_kind sub-byte at payload[2]; NodeIdentify(80B)/Challenge(144B)/ChallengeResponse(112B) frame layouts; outer header fields; handshake sequence (§7); Router.BindInterface/LookupInterface/UnbindInterface signatures (§8); bounds guards (§9). Obligation 3 (§12): LWW overwrite on reconnect; prior connection self-removing via stale cleanup guard; second NodeIdentify on same connection = hard error E-ADM-023. Obligation 4 (§13): nodeIdentifyHandshakeTimeout=10s (conn.SetDeadline in onAccept); failure path table with E-ADM-022/-023 new codes; eventual-consistency race → ErrNotAdmitted+retry. Obligations 5/6 resolved-by-delivery (§14): PR #126 (admission-sync router keyset populated) + PR #125 (node keypair provisioned). O-1 (§15): AdmitNode MUST gain expiry check (Option A, mirrors ReAuthenticate); BC-2.05.001 amendment required; human-ratified 2026-07-18.
+  - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'   # v1.2 (signature errata: UnbindInterface 3-arg) — BINDING. All obligations resolved. Wire format (§§2–9): control_type=0x04 with msg_kind sub-byte at payload[2]; NodeIdentify(80B)/Challenge(144B)/ChallengeResponse(112B) frame layouts; outer header fields; handshake sequence (§7); Router.BindInterface/LookupInterface/UnbindInterface signatures (§8); bounds guards (§9). Obligation 3 (§12): LWW overwrite on reconnect; prior connection self-removing via stale cleanup guard; second NodeIdentify on same connection = hard error E-ADM-023. Obligation 4 (§13): nodeIdentifyHandshakeTimeout=10s (conn.SetDeadline in onAccept); failure path table with E-ADM-022/-023 new codes; eventual-consistency race → ErrNotAdmitted+retry. Obligations 5/6 resolved-by-delivery (§14): PR #126 (admission-sync router keyset populated) + PR #125 (node keypair provisioned). O-1 (§15): AdmitNode MUST gain expiry check (Option A, mirrors ReAuthenticate); BC-2.05.001 amendment required; human-ratified 2026-07-18.
   - 'specs/behavioral-contracts/ss-01/BC-2.01.009.md'  # v1.1 — NODE_IDENTIFY three-message handshake wire protocol; all failure paths (PC/Invariants/Error Codes/Edge Cases/Test Vectors); single opcode/msg_kind model; zero HMACTag in all frames; SVTNID mandatory non-zero; exact payload lengths enforced; second NodeIdentify Invariant 7; eventual-consistency EC-001.
-  - 'specs/behavioral-contracts/ss-01/BC-2.01.010.md'  # v1.0 — BindInterface binding lifecycle: BindInterface(LWW on reconnect, write-lock), LookupInterface((InterfaceID,bool) value return, read-lock), UnbindInterface(stale cleanup guard). identityIfaceMap field on Router. All three methods protected by r.mu. Prior connection NOT actively torn down on LWW overwrite.
+  - 'specs/behavioral-contracts/ss-01/BC-2.01.010.md'  # v1.2 (UnbindInterface now 3-arg (callerIfaceID)) — BindInterface binding lifecycle: BindInterface(LWW on reconnect, write-lock), LookupInterface((InterfaceID,bool) value return, read-lock), UnbindInterface(stale cleanup guard). identityIfaceMap field on Router. All three methods protected by r.mu. Prior connection NOT actively torn down on LWW overwrite.
   - 'specs/behavioral-contracts/ss-05/BC-2.05.001.md'  # v1.2 — AdmitNode admission postconditions including NEW Postcondition 6 (ErrKeyExpired/E-ADM-015 when expiry set and past) + Invariant 5 (symmetric expiry enforcement across AdmitNode and ReAuthenticate). O-1 ruling human-ratified 2026-07-18. Implementation anchor: expiry check after snap.revoked read, before write-lock acquire, mirroring ReAuthenticate.
   - 'specs/behavioral-contracts/ss-01/BC-2.01.008.md'  # v1.3 — NODE_IDENTIFY=0x04 row already in PC-2 registry (Obligation 1 RESOLVED). No further edits to this BC required by this story.
 ---
@@ -172,7 +172,7 @@ Three methods:
 ```go
 func (r *Router) BindInterface(svtnID [16]byte, nodeAddr [8]byte, ifaceID InterfaceID)
 func (r *Router) LookupInterface(svtnID [16]byte, nodeAddr [8]byte) (InterfaceID, bool)
-func (r *Router) UnbindInterface(svtnID [16]byte, nodeAddr [8]byte)
+func (r *Router) UnbindInterface(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)
 ```
 `BindInterface`/`UnbindInterface` hold `r.mu` write lock. `LookupInterface` holds read lock.
 Return type is `(InterfaceID, bool)` value — not a pointer (go.md rule 12).
@@ -625,6 +625,7 @@ code until `go test ./...` shows compile errors or test failures for ALL ACs.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.8 | 2026-07-18 | UnbindInterface signature errata cascade (rulings v1.2 / BC-2.01.010 v1.2, architect commit d050552): line-175 signature block 2-arg→3-arg (callerIfaceID InterfaceID); inputDocuments version pins refreshed rulings v1.1→v1.2, BC-2.01.010 v1.0→v1.2; input-hash refreshed 2cbf305→f32d7ee. No AC semantics/count/points change — signature-only errata. |
 | 1.7 | 2026-07-18 | input-hash refresh: BC-2.01.009 v1.0→v1.1 (PC-5 citation-accuracy fix — "BC-2.05.001 Postconditions 3–6" → "Postconditions 3–7"; consistency-audit Finding 3 cascade) — no AC/content change; hash a252659→2cbf305. |
 | 1.6 | 2026-07-18 | Consistency-audit Finding 2 cascade: BC-2.01.010 PC renumber (duplicate PC-4 fixed; LookupInterface 4→5/5→6/6→7, UnbindInterface 7→8/8→9/9→10). Citations updated: AC-010 heading/BC Anchor PC-8→PC-9 (stale cleanup guard); AC-012 heading/BC Anchor PC-7→PC-8 (binding removed on close); Prev-Story-Intel S-7.04 row PC-7→PC-8 / PC-8→PC-9; Task 15 PC-7/PC-8→PC-8/PC-9; Task 20 PC-7→PC-8. input-hash recomputed. |
 | 1.5 | 2026-07-18 | Full decomposition: 13 ACs covering all §15 AC areas + wire-format error paths; frontmatter updated (`behavioral_contracts`, `bc_traces`, `inputs`, `points=10`, `status=ready`); all [TODO] sections populated; O-1 AdmitNode expiry check added to scope (supersedes "zero changes to internal/admission" claim); BC-2.01.009, BC-2.01.010, BC-2.05.001 added to bc_traces; File-Change List corrected (BC-2.01.008 edit is DONE — removed from list); Previous Story Intelligence populated with #125/#126 lessons; Architecture Compliance Rules expanded; `inputDocuments:` added; stale claim superseded. input-hash updated to reflect new inputs list. |
