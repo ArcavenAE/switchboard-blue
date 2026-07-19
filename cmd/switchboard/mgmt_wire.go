@@ -655,6 +655,14 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			return routing.RouteFrame(hdr, payload, router)
 		}
 	}
+	// route := buildRoute(nil) is the shared-fallback form used when PerConnRoute is nil.
+	// IMPORTANT: This form captures conn==nil, so case 0x04 CANNOT call conn.Close() and
+	// therefore CANNOT tear down the connection on E-ADM-023. This is NOT a bug for this
+	// fallback: it is intentional for any caller that passes ServeConfig{} without
+	// PerConnRoute. However, runRouter MUST set ServeConfig.PerConnRoute (done below at
+	// the netingress.Serve call, line ~758) so that each per-connection route closure has
+	// a live conn handle and E-ADM-023 teardown is functional. Do NOT remove the
+	// PerConnRoute assignment below — the shared fallback form cannot substitute for it.
 	route := buildRoute(nil) // shared fallback: conn==nil → no close; drop-and-continue retained
 
 	// onAccept is the BEHAVIOR half of the Q-SEAM ownership split:
@@ -674,9 +682,43 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// Conduct NODE_IDENTIFY handshake before registering the connection.
 		// On failure, nodeIdentifyHandshake closes conn and returns a non-nil
 		// error; return a no-op cleanup func — there is nothing to deregister.
+		// svtnID is populated for all post-decode failure paths (admission errors,
+		// ChallengeResponse read/decode errors) so WARN logs can include it.
+		// For pre-decode failures (malformed NodeIdentify, zero SVTN, timeout on
+		// first read) svtnID may be zero — the WARN still records the error code.
 		svtnID, nodeAddr, hsErr := nodeIdentifyHandshake(conn, router, daemonPriv, routerKS, h)
 		if hsErr != nil {
-			routerLogger.Log(fmt.Sprintf("runRouter: NODE_IDENTIFY handshake failed: %v", hsErr))
+			// Emit a code-bearing WARN log for each classified admission failure path
+			// (AC-004 PC2 through AC-009 PC3; rulings §13 failure-path table).
+			// Use errors.Is to classify — NEVER string-match error messages (go.md).
+			// The timeout path is detected via os.ErrDeadlineExceeded (net package
+			// wraps this via the net.Error.Timeout() path; errors.Is unwraps both).
+			// Admission sentinels classified via the admission package sentinel vars.
+			switch {
+			case errors.Is(hsErr, os.ErrDeadlineExceeded):
+				// E-ADM-022: handshake deadline fired before exchange completed.
+				// "handshake timeout" literal included (AC-009 PC3).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-022 key %x handshake timeout svtn=%x", [8]byte{}, svtnID))
+			case errors.Is(hsErr, admission.ErrNotAdmitted):
+				// E-ADM-003: node's pubkey not registered for this SVTN (AC-004 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-003 not admitted svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrKeyRevoked):
+				// E-ADM-005: node's key has been revoked (AC-005 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-005 key revoked svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrKeyExpired):
+				// E-ADM-015: node's key has expired (AC-006 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-015 key expired svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrNonceReplay):
+				// E-ADM-008: challenge nonce already consumed (AC-007 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-008 nonce replay svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrSignatureVerificationFailed):
+				// E-ADM-001: ChallengeResponse signature did not verify (AC-008 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-001 sig verify failed svtn=%x", svtnID))
+			default:
+				// Unclassified error (e.g. raw I/O failure on write, SetDeadline error).
+				// Log the underlying error so nothing is silently swallowed.
+				routerLogger.Log(fmt.Sprintf("runRouter: NODE_IDENTIFY handshake failed: %v", hsErr))
+			}
 			return func() {}
 		}
 

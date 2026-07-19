@@ -39,8 +39,13 @@ import (
 // cleared on success. Matches admission_sync_client.go:154 handshakeTimeout
 // precedent (rulings §13).
 //
+// var, not const, to allow test-override to a short value (e.g. 50ms) so tests
+// do not block the full 10s production deadline. Production value is fixed at 10s
+// per BC-2.01.009 PC-4 / rulings §13. Any test that overrides this MUST restore
+// the original value via t.Cleanup or defer.
+//
 // Traces to BC-2.01.009 Precondition 4; E-ADM-022.
-const nodeIdentifyHandshakeTimeout = 10 * time.Second
+var nodeIdentifyHandshakeTimeout = 10 * time.Second
 
 // nodeIdentifyPayloadSize is the exact fixed wire size of the NodeIdentify
 // payload in bytes (rulings §4):
@@ -263,8 +268,16 @@ func nodeIdentifyHandshake(
 	// Message 1: read NodeIdentify (80 bytes = 44 header + 36 payload).
 	hdr, payload, err := frame.ReadOuterFrame(conn)
 	if err != nil {
+		// Distinguish timeout (E-ADM-022) from other read errors by checking for
+		// os.ErrDeadlineExceeded. The caller uses this to emit the correct WARN code.
 		_ = conn.Close()
 		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: reading NodeIdentify: %w", err)
+	}
+
+	// Decoder precondition: outer FrameType MUST be FrameTypeCtl (rulings §4).
+	if hdr.FrameType != frame.FrameTypeCtl {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: malformed NodeIdentify frame: frame_type=%#x want %#x", hdr.FrameType, frame.FrameTypeCtl)
 	}
 
 	// Validate outer header payload size against expected NodeIdentify size.
@@ -295,40 +308,50 @@ func nodeIdentifyHandshake(
 	challenge, err := admission.GenerateChallenge(routerPrivKey)
 	if err != nil {
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: GenerateChallenge: %w", err)
+		return svtnID, [8]byte{}, fmt.Errorf("node_identify: GenerateChallenge: %w", err)
 	}
 
 	// Message 2: send Challenge (144 bytes = 44 header + 100 payload).
 	challengeFrame := encodeChallenge(svtnID, challenge)
 	if _, err = conn.Write(challengeFrame); err != nil {
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: sending Challenge: %w", err)
+		return svtnID, [8]byte{}, fmt.Errorf("node_identify: sending Challenge: %w", err)
 	}
 
 	// Message 3: read ChallengeResponse (112 bytes = 44 header + 68 payload).
 	crHdr, crPayload, err := frame.ReadOuterFrame(conn)
 	if err != nil {
+		// Deadline-exceeded here: caller emits E-ADM-022 WARN. svtnID is known at
+		// this point so the caller can include it in the log message.
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: reading ChallengeResponse: %w", err)
+		return svtnID, [8]byte{}, fmt.Errorf("node_identify: reading ChallengeResponse: %w", err)
+	}
+
+	// Decoder precondition: outer FrameType MUST be FrameTypeCtl (rulings §6).
+	if crHdr.FrameType != frame.FrameTypeCtl {
+		_ = conn.Close()
+		return svtnID, [8]byte{}, fmt.Errorf("node_identify: malformed ChallengeResponse: frame_type=%#x want %#x", crHdr.FrameType, frame.FrameTypeCtl)
 	}
 
 	// Validate outer header payload size against expected ChallengeResponse size.
 	if crHdr.PayloadLen != challengeResponsePayloadSize {
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: malformed ChallengeResponse: payload_len=%d want %d", crHdr.PayloadLen, challengeResponsePayloadSize)
+		return svtnID, [8]byte{}, fmt.Errorf("node_identify: malformed ChallengeResponse: payload_len=%d want %d", crHdr.PayloadLen, challengeResponsePayloadSize)
 	}
 
 	// Decode ChallengeResponse payload.
 	resp, err := decodeChallengeResponse(crPayload)
 	if err != nil {
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, err
+		return svtnID, [8]byte{}, err
 	}
 
 	// Admit the node: verify signature, check nonce, check revocation/expiry.
+	// Return the decoded svtnID alongside the error so the caller can emit
+	// code-bearing WARN logs (E-ADM-001/003/005/008/015) that include the SVTN ID.
 	if err = admission.AdmitNode(challenge, resp, pubkey, svtnID, ks); err != nil {
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, err
+		return svtnID, [8]byte{}, err
 	}
 
 	// Handshake succeeded: record binding and clear deadline.
