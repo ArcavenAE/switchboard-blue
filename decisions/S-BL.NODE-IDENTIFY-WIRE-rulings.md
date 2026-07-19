@@ -2,7 +2,7 @@
 artifact_id: S-BL.NODE-IDENTIFY-WIRE-rulings
 document_type: decision
 level: ops
-version: "1.1"
+version: "1.2"
 status: final
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
@@ -36,6 +36,7 @@ against develop HEAD at `92a2c65` (post `S-BL.ADMISSION-SYNC-WIRE` merge, PR #12
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-18 | Errata §8 and Summary: `UnbindInterface` signature corrected from 2-arg `(svtnID, nodeAddr)` to 3-arg `(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)`. The 2-arg form was inconsistent with PC-9's stale-cleanup guard (BC-2.01.010), which requires the caller's own `ifaceID` to guard against LWW-overwrite-then-stale-cleanup deleting the new binding. No behavioral change — PC-9's guard semantics are unchanged; only the signature is corrected to make them implementable. Red Gate stubbing surfaced this contradiction; errata adjudicated by architect. BC-2.01.010 aligned to 3-arg form (v1.2). Story body (line 175, Task 15, AC-012) requires cascade update by story-writer/spec-steward. |
 | 1.1 | 2026-07-18 | Sections 12–16 added. Obligation 3 resolved: LWW overwrite on reconnect; second NodeIdentify on same conn = hard error. Obligation 4 resolved: `nodeIdentifyHandshakeTimeout = 10s`; failure path table with E-ADM-* codes; eventual-consistency race disposition. Obligations 5/6 marked RESOLVED-BY-DELIVERY citing PR #125 (node keypair) and PR #126 (admission-sync). O-1 resolved: `AdmitNode` must gain expiry check (Option A); BC-2.05.001 amendment required. Follow-on Actions table updated. Summary table updated. Human confirmation flag raised for O-1 policy change. POL-001: `modified:` frontmatter entry added. |
 | 1.0 | 2026-07-15 | Initial ruling: wire format for Obligation 2 (challenge-transcript byte layout). Obligations 5/6 identified as blockers; Obligations 3/4 gated. |
 File:line anchors are cited per claim.
@@ -365,10 +366,12 @@ func (r *Router) BindInterface(svtnID [16]byte, nodeAddr [8]byte, ifaceID Interf
 // (S-BL.DISCOVERY-WIRE Task 6) to resolve a NodeAddr to a send-map key.
 func (r *Router) LookupInterface(svtnID [16]byte, nodeAddr [8]byte) (InterfaceID, bool)
 
-// UnbindInterface removes the (svtnID, nodeAddr) binding. Called from the
-// per-connection cleanup func (the func() returned by onAccept) when a node
-// disconnects, so the identity map stays consistent with sendMap.
-func (r *Router) UnbindInterface(svtnID [16]byte, nodeAddr [8]byte)
+// UnbindInterface removes the (svtnID, nodeAddr) binding if the stored
+// ifaceID matches callerIfaceID (stale-cleanup guard — PC-9 of BC-2.01.010).
+// Called from the per-connection cleanup func (the func() returned by onAccept)
+// when a node disconnects, so the identity map stays consistent with sendMap.
+// callerIfaceID is the connection's own InterfaceID (h.IfaceID from onAccept).
+func (r *Router) UnbindInterface(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)
 ```
 
 **Concurrency contract**: All three methods hold `r.mu` (write lock for Bind/Unbind,
@@ -819,7 +822,7 @@ The story-writer receives all six obligations resolved. The story's ACs should c
 | BindInterface method location | `internal/routing` — new method on `*Router`, backed by new `identityIfaceMap` field |
 | BindInterface signature | `BindInterface(svtnID [16]byte, nodeAddr [8]byte, ifaceID InterfaceID)` |
 | LookupInterface signature | `LookupInterface(svtnID [16]byte, nodeAddr [8]byte) (InterfaceID, bool)` |
-| UnbindInterface signature | `UnbindInterface(svtnID [16]byte, nodeAddr [8]byte)` |
+| UnbindInterface signature | `UnbindInterface(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)` — 3-arg; callerIfaceID required for stale-cleanup guard (PC-9) |
 | Concurrent writes gated by | `r.mu` (existing Router mutex) |
 | Rebind semantics (Obligation 3) | LWW overwrite on reconnect; no active prior-conn teardown; second NodeIdentify on same conn = hard error + close |
 | Handshake timeout (Obligation 4) | `const nodeIdentifyHandshakeTimeout = 10 * time.Second` (matches admission_sync_client.go precedent); `conn.SetDeadline` before first read, cleared on success |
