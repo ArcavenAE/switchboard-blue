@@ -519,10 +519,17 @@ func AdmitNode(
 		return err
 	}
 
-	// Verify signature (pure, but placed here to keep the nonce-consume-before-verify
-	// invariant — nonce is already consumed above; sig failure returns error and
-	// the consumed nonce prevents replay of the same challenge).
-	if !ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig) {
+	// Verify signature against the stored public key (BC-2.05.001 PC-3): the router
+	// MUST use the key from the admitted keyset, not the pubkey supplied in the frame.
+	// The frame pubkey was used only to derive the nodeAddr lookup (line ~464); it is
+	// untrusted input and must not be the verification authority.  Using liveEntry.PublicKey
+	// (the stored key) closes the impersonation vector where an attacker presents a valid
+	// nodeAddr with a different key and forges a signature with their own private key.
+	// Symmetry: reauth.go verifies against snap.PublicKey (the stored key) for the same reason.
+	//
+	// The nonce is already consumed above; sig failure returns error and the consumed
+	// nonce prevents replay of the same challenge.
+	if !ed25519.Verify(liveEntry.PublicKey, challenge.Nonce[:], resp.NonceSig) {
 		return ErrSignatureVerificationFailed
 	}
 
