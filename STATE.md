@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-nidw-elaboration-complete-tdd-starting
+phase_step: steady-state-nidw-tdd-delivery-step45-in-progress
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,11 +42,11 @@ develop_head: 92a2c65
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.NODE-IDENTIFY-WIRE TDD delivery IN PROGRESS (human-approved 2026-07-18). Elaboration arc: rulings v1.1 (83db343), O-1 RATIFIED (AdmitNode expiry guard → ErrKeyExpired E-ADM-015, Task 16/AC-013), Obligations 3/4 resolved, 5/6 resolved-by-delivery; BCs v3.8 (BC-2.01.009/010 v1.1, BC-2.05.001 v1.3, E-ADM-022/023); story v1.7 13 ACs 10 pts (1f22de1); 2× consistency audits clean. feature/S-BL.NODE-IDENTIFY-WIRE worktree mounting (devops parallel). Open: stash@{0} (user). Parked: S-BL.LOOPBACK-FULLSTACK v1.1."
-current_step: "NODE-IDENTIFY-WIRE elaboration COMPLETE 2026-07-18 — rulings v1.1 (83db343), BCs v3.8 (7480e64 + e6d547c + e466866), story v1.7 13 ACs 10 pts (1f22de1). O-1 RATIFIED: AdmitNode expiry guard at both lock levels → ErrKeyExpired E-ADM-015 (Task 16/AC-013). TDD delivery STARTING — feature/S-BL.NODE-IDENTIFY-WIRE worktree mounting (devops parallel). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "S-BL.NODE-IDENTIFY-WIRE Step-4.5 adversarial convergence IN PROGRESS. All 13 ACs implemented + tested. F-1 (HIGH, stored-key verify) + F-2 (LOW, WARN-log coverage) fixed 2026-07-19; code HEAD 93d8fe5; rulings v1.4 / story v1.12 (input-hash 5a7f8c3). Consecutive NITPICK_ONLY counter reset to 0 after F-1; re-converging toward 3× NITPICK_ONLY. After convergence: demos → PR into develop → merge → worktree cleanup. Parked: S-BL.LOOPBACK-FULLSTACK v1.1."
+current_step: "NODE-IDENTIFY-WIRE TDD delivery + Step-4.5 convergence IN PROGRESS 2026-07-19 — all 13 ACs implemented; F-1 (HIGH stored-key verify BC-2.05.001 PC-3) + F-2 (LOW WARN-log coverage) fixed; code HEAD 93d8fe5; rulings v1.4 / story v1.12; NITPICK_ONLY counter reset to 0, re-converging. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-19T03:42:13Z
-last_update: 2026-07-18
+timestamp: 2026-07-19T20:30:00Z
+last_update: 2026-07-19
 ---
 
 <!--
@@ -55,7 +55,7 @@ last_update: 2026-07-18
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-18 — S-BL.NODE-IDENTIFY-WIRE elaboration complete; O-1 RATIFIED; story v1.7 13 ACs; TDD delivery starting; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-19 — S-BL.NODE-IDENTIFY-WIRE TDD delivery + Step-4.5 IN PROGRESS; F-1/F-2 fixed; rulings v1.4 / story v1.12; code HEAD 93d8fe5; NITPICK_ONLY counter reset to 0, re-converging; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -69,9 +69,9 @@ last_update: 2026-07-18
 | **Language** | Go |
 | **Target Workspace** | run/switchboard-blue |
 | **Started** | 2026-06-23 |
-| **Last Updated** | 2026-07-18 |
+| **Last Updated** | 2026-07-19 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | NODE-IDENTIFY-WIRE elaborated; O-1 RATIFIED; TDD delivery starting |
+| **Current Step** | NODE-IDENTIFY-WIRE TDD delivery + Step-4.5 convergence IN PROGRESS; F-1/F-2 fixed 2026-07-19; re-converging |
 
 ## Phase Progress
 
@@ -86,6 +86,7 @@ last_update: 2026-07-18
 | Phase 7 — Convergence | **CONVERGED** 2026-07-06 (human-approved); fresh-context audit CONVERGENCE-CLEAN; CYCLE-1 CLOSED | evidence: cycles/cycle-1/phase-7/ |
 | pass-12 adversary (S-BL.ADMISSION-SYNC-WIRE Step-4.5) | CONVERGED — 12 passes total; passes 1-9 HAS_FINDINGS; passes 10/11/12 NITPICK_ONLY (3/3 clean streak) | →3→3→3→3 |
 | fix burst (S-BL.ADMISSION-SYNC-WIRE Step-4.5) | Rulings 12–15; BC-2.05.009 v1.0→v1.6; code HEAD ab043c5→92a2c65 (squash) | 4 fix bursts |
+| S-BL.NODE-IDENTIFY-WIRE Step-4.5 adversary | IN PROGRESS — F-1 (HIGH, stored-key verify BC-2.05.001 PC-3) + F-2 (LOW, WARN-log coverage) fixed 2026-07-19; rulings v1.4; story v1.12; NITPICK_ONLY counter: 0 | →2 (F-1 HIGH + F-2 LOW fixed; re-converging) |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -97,6 +98,8 @@ pass count: 39 (Phase 5 aggregate); per-story Step-4.5 passes continue in steady
 
 S-BL.ADMISSION-SYNC-WIRE per-story convergence: 12 passes; final streak 3/3 NITPICK_ONLY; CONVERGED 2026-07-18
 
+S-BL.NODE-IDENTIFY-WIRE per-story convergence: IN PROGRESS — F-1 (HIGH) + F-2 (LOW) fixed 2026-07-19; code 93d8fe5; rulings v1.4; NITPICK_ONLY counter: 0, re-converging toward 3× streak
+
 ## Current Phase Steps
 
 Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
@@ -107,7 +110,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 | 2026-07-15 | **S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED — PR #123 merged @ d249f88; step-4.5 impl-diff converged 3/3 @ pass 6 (4 fix-bursts); AC-017/018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE.** | completed | PR #123 MERGED. develop @ d249f88. |
 | 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts.** | completed | PR #126 MERGED. develop @ 92a2c65. NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
 | 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
-| 2026-07-18 | **S-BL.NODE-IDENTIFY-WIRE elaboration arc COMPLETE — rulings v1.1 (83db343), O-1 RATIFIED, BCs v3.8 (7480e64/e6d547c/e466866), story v1.7 13 ACs 10 pts (1f22de1); 2× consistency audits clean. TDD delivery STARTING.** | in-progress | Elaboration COMPLETE. TDD delivery → feature/S-BL.NODE-IDENTIFY-WIRE (worktree mounting). |
+| 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE TDD delivery + Step-4.5 convergence IN PROGRESS — all 13 ACs implemented + tested; F-1 (HIGH, stored-key verify BC-2.05.001 PC-3) + F-2 (LOW, WARN-log coverage) fixed 2026-07-19; code HEAD 93d8fe5; rulings v1.4 / story v1.12; NITPICK_ONLY counter reset to 0 after F-1, re-converging.** | in-progress | F-1/F-2 fixed. Awaiting 3× NITPICK_ONLY streak → demos → PR → merge. |
 
 ## Wave 6 Story Status
 
@@ -137,6 +140,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* cite log_level but config.Config rejects it (E-CFG-005). | technical-writer | open |
 | O-1 (NODE-IDENTIFY-WIRE FWD) | MED | AdmitNode expiry enforcement — O-1 RATIFIED 2026-07-18: enforce at both lock levels → ErrKeyExpired (E-ADM-015). **IN-DELIVERY via Task 16/AC-013 of S-BL.NODE-IDENTIFY-WIRE.** | architect | in-delivery |
 | CI-FLAKE-DISCOVERY-HEARTBEAT | LOW | develop tip 92a2c65 post-merge push run (#29659181289) failed on TestDiscovery_Advertise_PeriodicHeartbeat (0.03s) — timing-based flake under loaded harden-runner. Dispositioned FLAKE; prior tip green; PR-merge run passed; local 20/20 + 10x -race pass. NOT a merge-blocker. | orchestrator | known-flake |
+| NODEADDR-WIDTH-8B | OBS | 8-byte DeriveNodeAddress width is an availability/correctness param post-F-1 fix (legit-key addr collision → admission FAILURE, not impersonation). ADR candidate. Anchor: rulings §18. | architect | deferred |
 
 Additional drift items: `cycles/cycle-1/closed-drift.md`.
 
@@ -181,17 +185,13 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.NODE-IDENTIFY-WIRE elaboration COMPLETE (2026-07-18); TDD delivery STARTING. Elaboration arc: rulings v1.1 (83db343), O-1 RATIFIED, BCs v3.8 (7480e64/e6d547c/e466866), story v1.7 13 ACs 10 pts (1f22de1). trajectory-tail →21→7→4→3
+**Position:** S-BL.NODE-IDENTIFY-WIRE TDD delivery + Step-4.5 adversarial convergence IN PROGRESS (2026-07-19). All 13 ACs implemented and tested. F-1 (HIGH, stored-key verify BC-2.05.001 PC-3) + F-2 (LOW, WARN-log coverage) fixed; code HEAD 93d8fe5; rulings v1.4 / story v1.12 (input-hash 5a7f8c3). NITPICK_ONLY counter reset to 0 after F-1; re-converging toward 3× NITPICK_ONLY.
 
-**S-BL.NODE-IDENTIFY-WIRE status:** DECOMPOSITION-READY — 13 ACs, 10 pts; story v1.7; all obligations resolved (O-1 RATIFIED → Task 16/AC-013; 3/4 in rulings v1.1; 5/6 resolved-by-delivery). TDD delivery STARTING on feature/S-BL.NODE-IDENTIFY-WIRE (worktree mounting via devops-engineer in parallel). PR targets develop.
-
-**O-1 disposition:** RATIFIED 2026-07-18 — `admission.AdmitNode` MUST enforce expiry at both lock levels → `ErrKeyExpired` (E-ADM-015). Implemented as Task 16/AC-013 in S-BL.NODE-IDENTIFY-WIRE. O-1 drift item marked IN-DELIVERY.
+**S-BL.NODE-IDENTIFY-WIRE status:** TDD delivery COMPLETE (all 13 ACs); Step-4.5 adversarial loop IN PROGRESS on feature/S-BL.NODE-IDENTIFY-WIRE (code HEAD 93d8fe5). After 3× NITPICK_ONLY streak: demos → PR into develop → merge → worktree cleanup.
 
 **Discovery-Wire gating:** S-BL.DISCOVERY-WIRE AC-017/018/Task 6 gated on NODE-IDENTIFY-WIRE delivery.
 
-**Held:** stash@{0} (WIP lookup_convention_test.go) — do NOT drop without inspection.
-
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) confirm feature/S-BL.NODE-IDENTIFY-WIRE worktree mounted; (4) proceed with TDD delivery.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) confirm feature/S-BL.NODE-IDENTIFY-WIRE worktree mounted; (4) dispatch next adversary pass (target: 3× NITPICK_ONLY streak).
 
 ## Concurrent Cycles
 
