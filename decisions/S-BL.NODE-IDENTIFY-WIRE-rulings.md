@@ -2,7 +2,7 @@
 artifact_id: S-BL.NODE-IDENTIFY-WIRE-rulings
 document_type: decision
 level: ops
-version: "1.3"
+version: "1.4"
 status: final
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
@@ -38,6 +38,7 @@ against develop HEAD at `92a2c65` (post `S-BL.ADMISSION-SYNC-WIRE` merge, PR #12
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-19 | §18 added: F-1 adjudication — AdmitNode verify-source corrected to stored key (`liveEntry.PublicKey`); Verified Premises line 70 updated to reflect fixed code (commit `044ba02`); residual 8-byte `nodeAddr` width ADR candidate recorded as forward pointer. |
 | 1.3 | 2026-07-19 | §17 added: E-ADM-023 connection-teardown mechanism ruling. Adjudicates the production defect where `route()` case 0x04 returned an error that `netingress.ServeConn` dropped (drop-and-continue contract). Ruling: Option B — per-conn `net.Conn` close handle injected into the route closure for the E-ADM-023 path only; no RouteFn contract change; E-ADM-016/017 drop-and-continue preserved. BC-2.01.009 Invariant 7 mechanism note added (how "close immediately" is achieved). Follow-on Actions table updated with downstream cascade. POL-001: modified entry added. |
 | 1.2 | 2026-07-18 | Errata §8 and Summary: `UnbindInterface` signature corrected from 2-arg `(svtnID, nodeAddr)` to 3-arg `(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)`. The 2-arg form was inconsistent with PC-9's stale-cleanup guard (BC-2.01.010), which requires the caller's own `ifaceID` to guard against LWW-overwrite-then-stale-cleanup deleting the new binding. No behavioral change — PC-9's guard semantics are unchanged; only the signature is corrected to make them implementable. Red Gate stubbing surfaced this contradiction; errata adjudicated by architect. BC-2.01.010 aligned to 3-arg form (v1.2). Story body (line 175, Task 15, AC-012) requires cascade update by story-writer/spec-steward. |
 | 1.1 | 2026-07-18 | Sections 12–16 added. Obligation 3 resolved: LWW overwrite on reconnect; second NodeIdentify on same conn = hard error. Obligation 4 resolved: `nodeIdentifyHandshakeTimeout = 10s`; failure path table with E-ADM-* codes; eventual-consistency race disposition. Obligations 5/6 marked RESOLVED-BY-DELIVERY citing PR #125 (node keypair) and PR #126 (admission-sync). O-1 resolved: `AdmitNode` must gain expiry check (Option A); BC-2.05.001 amendment required. Follow-on Actions table updated. Summary table updated. Human confirmation flag raised for O-1 policy change. POL-001: `modified:` frontmatter entry added. |
@@ -67,7 +68,7 @@ the 5/6 resolved-by-delivery status update. See §§12–16.
 | `admission.Challenge` struct: `Nonce [32]byte` + `RouterSig []byte` (Ed25519, always 64 bytes) | `internal/admission/admission.go:189-195` | `Challenge { Nonce [32]byte; RouterSig []byte }` |
 | `admission.ChallengeResponse` struct: `NonceSig []byte` (Ed25519, always 64 bytes) | `internal/admission/admission.go:202-206` | `ChallengeResponse { NonceSig []byte }` |
 | `admission.GenerateChallenge(routerPrivKey)` generates a 32-byte crypto/rand nonce and signs it: `RouterSig = ed25519.Sign(routerPrivKey, nonce[:])` | `internal/admission/admission.go:428-439` | Signs the nonce slice; Ed25519 signature is always 64 bytes |
-| `admission.AdmitNode(challenge, resp, pubKey, svtnID, ks)` verifies `resp.NonceSig` = `ed25519.Sign(nodePrivKey, challenge.Nonce[:])` | `internal/admission/admission.go:457-525` | Signature verify: `ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig)` |
+| `admission.AdmitNode(challenge, resp, pubKey, svtnID, ks)` verifies `resp.NonceSig` = `ed25519.Sign(nodePrivKey, challenge.Nonce[:])` | `internal/admission/admission.go:532` (post-fix, commit `044ba02`) | Signature verify: `ed25519.Verify(liveEntry.PublicKey, challenge.Nonce[:], resp.NonceSig)`. The frame-supplied `pubKey` argument is used ONLY to derive `nodeAddr` via `frame.DeriveNodeAddress(svtnID, pubkey)` for the keyset lookup — it is NOT the verification authority. The stored registered key (`liveEntry.PublicKey`, re-fetched under the write lock) is the authority. This matches `ReAuthenticate`'s pattern (`reauth.go` verifies against `snap.PublicKey`). See BC-2.05.001 PC-3 ("verifies the signature using the **stored** public key") and §18. |
 | Ed25519 public key is always 32 bytes, signature is always 64 bytes | `crypto/ed25519` stdlib | `PublicKeySize = 32`, `SignatureSize = 64` |
 | `frame.DeriveNodeAddress(svtnID, pubkey)` derives the 8-byte NodeAddr from (svtnID, publicKey) | `internal/admission/admission.go:241,391`; `internal/frame/address.go` | Called at RegisterKey time; `LookupByPubkey` also derives via this |
 | `routing.InterfaceID` is `uint64` defined in `internal/routing/split_horizon.go:27` | `internal/routing/split_horizon.go:24-27` | `type InterfaceID uint64` |
@@ -1038,7 +1039,86 @@ its text body — the append does not invalidate any citation). POL-001 changelo
 
 ---
 
-## Follow-on Actions (v1.3 — updated)
+### 18. F-1 Adjudication — AdmitNode verify-source corrected to stored key (RESOLVED — v1.4)
+
+#### Defect statement (surfaced by Step-4.5 adversarial pass)
+
+The delivered `AdmitNode` implementation (pre-fix commit on feature/S-BL.NODE-IDENTIFY-WIRE)
+verified the `ChallengeResponse` signature against the **frame-supplied `pubKey` parameter**:
+
+```go
+// DEFECTIVE (pre-fix):
+ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig)
+```
+
+This violated:
+
+1. **BC-2.05.001 PC-3** — "verifies the signature using the **stored** public key"
+   (the behavioral contract already specified stored-key verification; the code failed
+   to implement it).
+2. **Story Previous Story Intelligence** — explicitly stated that `AdmitNode` verifies
+   against the registered key, not the frame-supplied key.
+3. **Symmetry with `ReAuthenticate`** — `reauth.go` correctly verifies against
+   `snap.PublicKey` (the stored key snapshot). `AdmitNode` had asymmetric behavior
+   with no documented rationale.
+
+#### Adjudication
+
+**BC-2.05.001 PC-3 is authoritative. The code was wrong; the spec was already correct.**
+No spec content change is required.
+
+**Fix (code commit `044ba02` on feature/S-BL.NODE-IDENTIFY-WIRE):** `AdmitNode` now
+re-fetches the live registry entry under the write lock and verifies against
+`liveEntry.PublicKey`:
+
+```go
+// CORRECT (post-fix, ~line 532):
+ed25519.Verify(liveEntry.PublicKey, challenge.Nonce[:], resp.NonceSig)
+```
+
+The frame-supplied `pubKey` argument is still used — but ONLY to derive the 8-byte
+`nodeAddr` for the `AdmittedKeySet` keyset lookup:
+
+```go
+nodeAddr := frame.DeriveNodeAddress(svtnID, pubkey)
+// ... keyset lookup using nodeAddr ...
+// liveEntry is the result of that lookup — it holds the REGISTERED public key
+```
+
+This is the correct trust model: the connecting node supplies a pubkey claim; the router
+derives the lookup address from that claim; the STORED key at that address is the
+verification authority. A node presenting a pubkey that does not match the stored key
+for the claimed address fails `ErrSignatureVerificationFailed` — it cannot forge a
+valid `NonceSig` for a key it does not hold.
+
+#### Verified symmetry with ReAuthenticate
+
+`reauth.go` verifies against `snap.PublicKey` (the snapshot taken under read lock,
+consistent with `liveEntry.PublicKey` under write lock). Both paths now use the stored
+key as the verification authority. The frame-supplied pubkey is address derivation only
+in both paths.
+
+#### Residual (forward pointer — not in scope for this story's convergence)
+
+With the fix in place, the 8-byte `DeriveNodeAddress` width is correctly characterized
+as an **availability and correctness parameter**, not an impersonation vector:
+
+- A hash collision between two LEGITIMATELY-registered keys' derived addresses would
+  cause an admission FAILURE (the stored key for the colliding address would not match
+  the connecting node's actual key) — NOT a successful impersonation.
+- The probability of an 8-byte (64-bit) collision across the registered key population
+  of a single SVTN is operationally negligible for the expected deployment scale, but
+  the parameter is undocumented as a design choice.
+
+**Recommendation**: document the 8-byte `nodeAddr` width as an explicit security/
+availability parameter in a future ADR. Specifically: what collision probability is
+acceptable, at what registered-key population size, and whether the width should be
+increased if fleet sizes grow. This is a Phase 5 / ADR candidate — it is NOT a gate
+on `S-BL.NODE-IDENTIFY-WIRE` convergence.
+
+---
+
+## Follow-on Actions (v1.4 — updated)
 
 | Action | Owner | Status | Notes |
 |--------|-------|--------|-------|
