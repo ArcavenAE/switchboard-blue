@@ -686,7 +686,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// ChallengeResponse read/decode errors) so WARN logs can include it.
 		// For pre-decode failures (malformed NodeIdentify, zero SVTN, timeout on
 		// first read) svtnID may be zero — the WARN still records the error code.
-		svtnID, nodeAddr, hsErr := nodeIdentifyHandshake(conn, router, daemonPriv, routerKS, h)
+		svtnID, nodeAddr, hsErr := nodeIdentifyHandshakeFn(conn, router, daemonPriv, routerKS, h)
 		if hsErr != nil {
 			// Emit a code-bearing WARN log for each classified admission failure path
 			// (AC-004 PC2 through AC-009 PC3; rulings §13 failure-path table).

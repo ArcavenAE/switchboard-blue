@@ -47,6 +47,13 @@ import (
 // Traces to BC-2.01.009 Precondition 4; E-ADM-022.
 var nodeIdentifyHandshakeTimeout = 10 * time.Second
 
+// nodeIdentifyHandshakeFn is the handshake driver onAccept invokes. It is a
+// package var (not a direct call) solely so tests can inject a deterministic
+// error to exercise onAccept's error-classification/logging switch — in
+// particular the E-ADM-008 (ErrNonceReplay) arm, which cannot be induced over
+// black-box TCP (the router never reuses a nonce). Production value is fixed.
+var nodeIdentifyHandshakeFn = nodeIdentifyHandshake
+
 // nodeIdentifyPayloadSize is the exact fixed wire size of the NodeIdentify
 // payload in bytes (rulings §4):
 //
