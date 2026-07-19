@@ -24,11 +24,12 @@ package main
 
 import (
 	"crypto/ed25519"
-	"errors"
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/netingress"
 	"github.com/arcavenae/switchboard/internal/routing"
 )
@@ -62,6 +63,17 @@ const challengePayloadSize = 100
 //	control_type(1) + version(1) + msg_kind(1) + reserved(1) + nonce_sig(64) = 68
 const challengeResponsePayloadSize = 68
 
+// nodeIdentifyControlType is the control_type discriminator for the
+// NODE_IDENTIFY handshake sub-protocol (BC-2.01.008 registry; rulings §2).
+const nodeIdentifyControlType = 0x04
+
+// msg_kind constants for the three NODE_IDENTIFY handshake messages (rulings §2).
+const (
+	msgKindNodeIdentify       = 0x01
+	msgKindChallenge          = 0x02
+	msgKindChallengeResponse  = 0x03
+)
+
 // encodeNodeIdentify assembles the 80-byte NodeIdentify frame (44-byte outer
 // header + 36-byte payload, msg_kind=0x01) for a connecting node. Pure-core:
 // no I/O; deterministic serialization.
@@ -71,8 +83,23 @@ const challengeResponsePayloadSize = 68
 //
 // Traces to BC-2.01.009 Postcondition 1; rulings §4.
 func encodeNodeIdentify(svtnID [16]byte, pubkey ed25519.PublicKey) []byte {
-	// todo: unimplemented
-	return nil
+	payload := make([]byte, nodeIdentifyPayloadSize)
+	payload[0] = nodeIdentifyControlType
+	payload[1] = frame.VersionByte
+	payload[2] = msgKindNodeIdentify
+	payload[3] = 0x00 // reserved
+	copy(payload[4:36], pubkey)
+
+	hdr := frame.EncodeOuterHeader(frame.OuterHeader{
+		Version:    frame.VersionByte,
+		FrameType:  frame.FrameTypeCtl,
+		SVTNID:     svtnID,
+		PayloadLen: uint16(nodeIdentifyPayloadSize),
+	})
+	raw := make([]byte, 0, frame.OuterHeaderSize+nodeIdentifyPayloadSize)
+	raw = append(raw, hdr[:]...)
+	raw = append(raw, payload...)
+	return raw
 }
 
 // encodeChallenge assembles the 144-byte Challenge frame (44-byte outer
@@ -81,8 +108,24 @@ func encodeNodeIdentify(svtnID [16]byte, pubkey ed25519.PublicKey) []byte {
 //
 // Traces to BC-2.01.009 Postcondition 2; rulings §5.
 func encodeChallenge(svtnID [16]byte, challenge admission.Challenge) []byte {
-	// todo: unimplemented
-	return nil
+	payload := make([]byte, challengePayloadSize)
+	payload[0] = nodeIdentifyControlType
+	payload[1] = frame.VersionByte
+	payload[2] = msgKindChallenge
+	payload[3] = 0x00 // reserved
+	copy(payload[4:36], challenge.Nonce[:])
+	copy(payload[36:100], challenge.RouterSig)
+
+	hdr := frame.EncodeOuterHeader(frame.OuterHeader{
+		Version:    frame.VersionByte,
+		FrameType:  frame.FrameTypeCtl,
+		SVTNID:     svtnID,
+		PayloadLen: uint16(challengePayloadSize),
+	})
+	raw := make([]byte, 0, frame.OuterHeaderSize+challengePayloadSize)
+	raw = append(raw, hdr[:]...)
+	raw = append(raw, payload...)
+	return raw
 }
 
 // encodeChallengeResponse assembles the 112-byte ChallengeResponse frame
@@ -95,8 +138,23 @@ func encodeChallenge(svtnID [16]byte, challenge admission.Challenge) []byte {
 //
 // Traces to BC-2.01.009 Postcondition 3; rulings §6.
 func encodeChallengeResponse(svtnID [16]byte, resp admission.ChallengeResponse) []byte {
-	// todo: unimplemented
-	return nil
+	payload := make([]byte, challengeResponsePayloadSize)
+	payload[0] = nodeIdentifyControlType
+	payload[1] = frame.VersionByte
+	payload[2] = msgKindChallengeResponse
+	payload[3] = 0x00 // reserved
+	copy(payload[4:68], resp.NonceSig)
+
+	hdr := frame.EncodeOuterHeader(frame.OuterHeader{
+		Version:    frame.VersionByte,
+		FrameType:  frame.FrameTypeCtl,
+		SVTNID:     svtnID,
+		PayloadLen: uint16(challengeResponsePayloadSize),
+	})
+	raw := make([]byte, 0, frame.OuterHeaderSize+challengeResponsePayloadSize)
+	raw = append(raw, hdr[:]...)
+	raw = append(raw, payload...)
+	return raw
 }
 
 // decodeNodeIdentify decodes the 36-byte NodeIdentify payload received from a
@@ -113,7 +171,24 @@ func encodeChallengeResponse(svtnID [16]byte, resp admission.ChallengeResponse) 
 //
 // Traces to BC-2.01.009 Invariant 5; rulings §4.
 func decodeNodeIdentify(payload []byte) (ed25519.PublicKey, error) {
-	return nil, errors.New("unimplemented: decodeNodeIdentify")
+	if len(payload) != nodeIdentifyPayloadSize {
+		return nil, fmt.Errorf("node_identify: NodeIdentify payload size %d != %d", len(payload), nodeIdentifyPayloadSize)
+	}
+	if payload[0] != nodeIdentifyControlType {
+		return nil, fmt.Errorf("node_identify: NodeIdentify control_type %#x != 0x04", payload[0])
+	}
+	if payload[1] != frame.VersionByte {
+		return nil, fmt.Errorf("node_identify: NodeIdentify version %#x != 0x01", payload[1])
+	}
+	if payload[2] != msgKindNodeIdentify {
+		return nil, fmt.Errorf("node_identify: NodeIdentify msg_kind %#x != 0x01", payload[2])
+	}
+	if payload[3] != 0x00 {
+		return nil, fmt.Errorf("node_identify: NodeIdentify reserved byte %#x != 0x00", payload[3])
+	}
+	pubkey := make(ed25519.PublicKey, ed25519.PublicKeySize)
+	copy(pubkey, payload[4:36])
+	return pubkey, nil
 }
 
 // decodeChallengeResponse decodes the 68-byte ChallengeResponse payload
@@ -129,7 +204,26 @@ func decodeNodeIdentify(payload []byte) (ed25519.PublicKey, error) {
 //
 // Traces to BC-2.01.009 Invariant 5; rulings §6.
 func decodeChallengeResponse(payload []byte) (admission.ChallengeResponse, error) {
-	return admission.ChallengeResponse{}, errors.New("unimplemented: decodeChallengeResponse")
+	if len(payload) != challengeResponsePayloadSize {
+		return admission.ChallengeResponse{}, fmt.Errorf("node_identify: ChallengeResponse payload size %d != %d", len(payload), challengeResponsePayloadSize)
+	}
+	if payload[0] != nodeIdentifyControlType {
+		return admission.ChallengeResponse{}, fmt.Errorf("node_identify: ChallengeResponse control_type %#x != 0x04", payload[0])
+	}
+	if payload[1] != frame.VersionByte {
+		return admission.ChallengeResponse{}, fmt.Errorf("node_identify: ChallengeResponse version %#x != 0x01", payload[1])
+	}
+	if payload[2] != msgKindChallengeResponse {
+		return admission.ChallengeResponse{}, fmt.Errorf("node_identify: ChallengeResponse msg_kind %#x != 0x03", payload[2])
+	}
+	if payload[3] != 0x00 {
+		return admission.ChallengeResponse{}, fmt.Errorf("node_identify: ChallengeResponse reserved byte %#x != 0x00", payload[3])
+	}
+	resp := admission.ChallengeResponse{
+		NonceSig: make([]byte, ed25519.SignatureSize),
+	}
+	copy(resp.NonceSig, payload[4:68])
+	return resp, nil
 }
 
 // nodeIdentifyHandshake executes the complete three-message NODE_IDENTIFY
@@ -159,5 +253,92 @@ func nodeIdentifyHandshake(
 	ks *admission.AdmittedKeySet,
 	h netingress.NodeHandle,
 ) (svtnID [16]byte, nodeAddr [8]byte, err error) {
-	return [16]byte{}, [8]byte{}, errors.New("unimplemented: nodeIdentifyHandshake")
+	// Set 10s deadline for the entire three-message exchange (rulings §13;
+	// E-ADM-022). Cleared on success below.
+	if err = conn.SetDeadline(time.Now().Add(nodeIdentifyHandshakeTimeout)); err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: SetDeadline: %w", err)
+	}
+
+	// Message 1: read NodeIdentify (80 bytes = 44 header + 36 payload).
+	hdr, payload, err := frame.ReadOuterFrame(conn)
+	if err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: reading NodeIdentify: %w", err)
+	}
+
+	// Validate outer header payload size against expected NodeIdentify size.
+	if hdr.PayloadLen != nodeIdentifyPayloadSize {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: malformed NodeIdentify frame: payload_len=%d want %d", hdr.PayloadLen, nodeIdentifyPayloadSize)
+	}
+
+	// Decode NodeIdentify payload (also validates field values).
+	pubkey, err := decodeNodeIdentify(payload)
+	if err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, err
+	}
+
+	// Validate SVTNID non-zero (rulings §9; zero SVTN ID is explicitly rejected).
+	svtnID = hdr.SVTNID
+	var zeroSVTN [16]byte
+	if svtnID == zeroSVTN {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: zero SVTN ID rejected")
+	}
+
+	// Derive node address from (svtnID, pubkey).
+	nodeAddr = frame.DeriveNodeAddress(svtnID, []byte(pubkey))
+
+	// Generate challenge (router signs the nonce with its private key).
+	challenge, err := admission.GenerateChallenge(routerPrivKey)
+	if err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: GenerateChallenge: %w", err)
+	}
+
+	// Message 2: send Challenge (144 bytes = 44 header + 100 payload).
+	challengeFrame := encodeChallenge(svtnID, challenge)
+	if _, err = conn.Write(challengeFrame); err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: sending Challenge: %w", err)
+	}
+
+	// Message 3: read ChallengeResponse (112 bytes = 44 header + 68 payload).
+	crHdr, crPayload, err := frame.ReadOuterFrame(conn)
+	if err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: reading ChallengeResponse: %w", err)
+	}
+
+	// Validate outer header payload size against expected ChallengeResponse size.
+	if crHdr.PayloadLen != challengeResponsePayloadSize {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: malformed ChallengeResponse: payload_len=%d want %d", crHdr.PayloadLen, challengeResponsePayloadSize)
+	}
+
+	// Decode ChallengeResponse payload.
+	resp, err := decodeChallengeResponse(crPayload)
+	if err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, err
+	}
+
+	// Admit the node: verify signature, check nonce, check revocation/expiry.
+	if err = admission.AdmitNode(challenge, resp, pubkey, svtnID, ks); err != nil {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, err
+	}
+
+	// Handshake succeeded: record binding and clear deadline.
+	r.BindInterface(svtnID, nodeAddr, h.IfaceID)
+	if err = conn.SetDeadline(time.Time{}); err != nil {
+		// Clearing the deadline failed: treat as a connection error.
+		_ = conn.Close()
+		r.UnbindInterface(svtnID, nodeAddr, h.IfaceID)
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: clearing deadline: %w", err)
+	}
+
+	return svtnID, nodeAddr, nil
 }
