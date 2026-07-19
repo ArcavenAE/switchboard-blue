@@ -2,11 +2,13 @@
 artifact_id: S-BL.NODE-IDENTIFY-WIRE-rulings
 document_type: decision
 level: ops
-version: "1.2"
+version: "1.3"
 status: final
 producer: architect
 timestamp: 2026-07-15T00:00:00Z
-modified: 2026-07-18T00:00:00Z
+modified:
+  - 2026-07-18T00:00:00Z
+  - 2026-07-19T00:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.NODE-IDENTIFY-WIRE]
 bc_traces:
@@ -36,6 +38,7 @@ against develop HEAD at `92a2c65` (post `S-BL.ADMISSION-SYNC-WIRE` merge, PR #12
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-19 | §17 added: E-ADM-023 connection-teardown mechanism ruling. Adjudicates the production defect where `route()` case 0x04 returned an error that `netingress.ServeConn` dropped (drop-and-continue contract). Ruling: Option B — per-conn `net.Conn` close handle injected into the route closure for the E-ADM-023 path only; no RouteFn contract change; E-ADM-016/017 drop-and-continue preserved. BC-2.01.009 Invariant 7 mechanism note added (how "close immediately" is achieved). Follow-on Actions table updated with downstream cascade. POL-001: modified entry added. |
 | 1.2 | 2026-07-18 | Errata §8 and Summary: `UnbindInterface` signature corrected from 2-arg `(svtnID, nodeAddr)` to 3-arg `(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)`. The 2-arg form was inconsistent with PC-9's stale-cleanup guard (BC-2.01.010), which requires the caller's own `ifaceID` to guard against LWW-overwrite-then-stale-cleanup deleting the new binding. No behavioral change — PC-9's guard semantics are unchanged; only the signature is corrected to make them implementable. Red Gate stubbing surfaced this contradiction; errata adjudicated by architect. BC-2.01.010 aligned to 3-arg form (v1.2). Story body (line 175, Task 15, AC-012) requires cascade update by story-writer/spec-steward. |
 | 1.1 | 2026-07-18 | Sections 12–16 added. Obligation 3 resolved: LWW overwrite on reconnect; second NodeIdentify on same conn = hard error. Obligation 4 resolved: `nodeIdentifyHandshakeTimeout = 10s`; failure path table with E-ADM-* codes; eventual-consistency race disposition. Obligations 5/6 marked RESOLVED-BY-DELIVERY citing PR #125 (node keypair) and PR #126 (admission-sync). O-1 resolved: `AdmitNode` must gain expiry check (Option A); BC-2.05.001 amendment required. Follow-on Actions table updated. Summary table updated. Human confirmation flag raised for O-1 policy change. POL-001: `modified:` frontmatter entry added. |
 | 1.0 | 2026-07-15 | Initial ruling: wire format for Obligation 2 (challenge-transcript byte layout). Obligations 5/6 identified as blockers; Obligations 3/4 gated. |
@@ -754,7 +757,288 @@ is the intended policy, since it modifies a shared `internal/` primitive.
 
 ---
 
-## Follow-on Actions (v1.1 — updated)
+### 17. E-ADM-023 Connection-Teardown Mechanism (RESOLVED — v1.3)
+
+#### Defect statement (disk-verified at feature/S-BL.NODE-IDENTIFY-WIRE @ 4179ee3)
+
+`cmd/switchboard/mgmt_wire.go` `route()` `case 0x04` (lines 628–629):
+
+```go
+routerLogger.Log("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
+return errors.New("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
+```
+
+The comment claims this triggers connection teardown via `netingress.ServeConn`'s error path.
+
+`internal/netingress/netingress.go` `ServeConn` (lines 151–153, disk-verified):
+
+```go
+if err := route(hdr, payload); err != nil {
+    // Drop-and-continue: routing already logs E-ADM-016/017 per BC-2.05.008.
+    continue
+}
+```
+
+`route()` errors are DROPPED. The connection is NOT closed. `ServeConn` returns only
+on `io.EOF` / read-error / ctx-cancel — never on a non-nil `route()` return.
+
+**Net**: BC-2.01.009 Invariant 7 ("second `NodeIdentify` on the same connection is a
+hard error: the router closes the connection immediately") is NON-FUNCTIONAL. A duplicate
+`NODE_IDENTIFY` is silently ignored; the connection stays open. AC-011 / Invariant 7 are
+not enforced by the current stub.
+
+#### Architectural premises (disk-verified)
+
+| Premise | Evidence |
+|---------|---------|
+| `RouteFn` drop-and-continue is CORRECT and INTENTIONAL for E-ADM-016/017 | `netingress.go:67-72` RouteFn doc: "RouteFn returning a non-nil error is NOT a signal to close the connection…the ingress keeps reading. See BC-2.05.008 PC-4." Drop-and-continue is the explicit spec for the existing route-error class. |
+| `route` closure is stateless — no `net.Conn` in scope | `mgmt_wire.go:541` closure signature: `func(hdr frame.OuterHeader, payload []byte) error`. The closure captures `router`, `routerLogger`, `sendMap`, etc., but NOT the per-conn `net.Conn` or `nc` — confirmed by reading the closure body (lines 566–640). Route is constructed once in `runRouter` and shared across all per-conn goroutines via `netingress.Serve`. |
+| `nc.done` / `nc.doneOnce` signals the WRITER GOROUTINE to exit, NOT a conn-close | `mgmt_wire.go:388-394`: `doneOnce`/`done` are the single writer-goroutine exit signal. `conn.Close()` is owned by `Serve`'s per-conn goroutine via `defer func() { _ = c.Close() }()` at `netingress.go:269`. Closing `nc.done` stops the writer but does not close the TCP connection. |
+| The ONLY path that closes the TCP conn from inside `ServeConn` is a read-error or ctx-cancel | `netingress.go:140-154`: `ReadFrame` returning non-EOF error → `return err`; ctx-cancel closes conn via `conn.Close()` in the ctx-watcher goroutine at line 130. There is no "close on route error" path. |
+| There is no pre-existing selective per-conn teardown precedent in `runRouter` | §12 of this ruling (v1.1) noted: "No active connection-teardown precedent in runRouter." DRAIN broadcasts but does not selectively close connections. The prior `doneOnce`/`done` path is a writer-goroutine-exit signal, not a TCP close. |
+
+#### Option evaluation
+
+**Option A — Teardown-class `RouteFn` error (sentinel error type in `netingress`):**
+
+Add a sentinel error type (e.g., `type ErrCloseConn struct{ Cause error }`) to
+`internal/netingress`. `ServeConn` tests `errors.As(err, &ErrCloseConn{})` and
+returns / closes on that class; all other errors continue. E-ADM-016/017 remain
+drop-and-continue by not wrapping in `ErrCloseConn`.
+
+Assessment:
+- Requires modifying `internal/netingress` — a shared package (ARCH-08 position 18).
+- Requires changing the `RouteFn` _effective_ contract (callers that return
+  `ErrCloseConn` trigger close; callers that don't, continue). The _signature_ is
+  unchanged but the _semantics_ are extended.
+- `ServeConn` callers: `netingress.Serve` (line 289) and all callers of `Serve` —
+  `mgmt_wire.go` is the only production caller. Blast radius is internal but real.
+- E-ADM-016/017 preservation: yes, provably — they use `return errors.New(…)` not
+  `return ErrCloseConn{…}`.
+- Testability: clean — test passes `ErrCloseConn` from a mock route, asserts conn closes.
+- Concern: introduces a semantic extension to the `RouteFn` contract that is invisible
+  in the type signature. Future maintainers adding new route errors must know about the
+  close-class sentinel or they get silent-ignore. The contract is now split-documented
+  across `netingress.go` and wherever `ErrCloseConn` is defined.
+
+**Option B — Per-conn close handle in the `case 0x04` path (no RouteFn change):**
+
+The `route` closure in `runRouter` is currently stateless. For the E-ADM-023 path only,
+close the connection by capturing the specific per-conn `net.Conn` directly in the part
+of the route closure that handles `case 0x04`. This is structurally possible because
+`route` is a closure over `runRouter`-local state — it can capture anything
+`runRouter` has in scope. The mechanism: `runRouter` passes `conn net.Conn` into
+the route closure for each connection (or the closure is constructed per-conn rather
+than once globally), so `case 0x04` can call `conn.Close()` directly.
+
+Assessment:
+- `RouteFn` signature unchanged. `ServeConn` unchanged. `netingress` unchanged.
+- Blast radius: ZERO for all `netingress` callers. The change is entirely within
+  `runRouter`'s `route` closure construction.
+- E-ADM-016/017 preservation: provably yes — they are in `case 0x01` (DRAIN) and
+  `case 0x03` (DISCOVERY_RELAY), which do not call `conn.Close()`.
+- Race safety: `conn.Close()` called from inside the per-conn goroutine (the same
+  goroutine that owns `ServeConn`) is race-free with respect to that goroutine's
+  read loop. `ServeConn`'s next `ReadFrame` call will return a read error on a
+  closed conn, causing `ServeConn` to return naturally, which triggers the deferred
+  `cleanup()` → `sendMap.Delete` → `nc.doneOnce.Do(close(nc.done))` chain.
+  `doneOnce` ensures the writer goroutine sees exactly one close, regardless of whether
+  the shutdown-flush pass fires concurrently. This is the standard conn-close ordering
+  already proven safe by `netingress`'s ctx-cancel path (which also calls `conn.Close()`
+  from a separate goroutine while `ServeConn` reads — the `go.md` rule 12 pattern).
+- Implementation: `runRouter`'s `route` closure changes from being constructed once
+  (shared across all conns) to being constructed once per connection inside `onAccept`
+  — or equivalently, `case 0x04` is extracted to a per-conn helper that receives
+  `conn net.Conn`.
+- Testability: clean — integration test over `net.Pipe` can directly observe that
+  the server-side conn closes after sending a second `NodeIdentify`.
+
+**Option C — Detect duplicate in `onAccept`-adjacent state, not `route()`:**
+
+`onAccept` runs before `ServeConn`. A second `NodeIdentify` frame arrives during
+`ServeConn` (post-handshake). `onAccept` has already returned by the time the duplicate
+arrives. There is no `onAccept`-adjacent hook that fires on subsequent frames.
+
+**Ruling: ELIMINATED.** The duplicate arrives at `route()`, not at `onAccept`. There
+is no hook point between `onAccept` and `route()` for post-handshake frames.
+
+#### Decision: Option B
+
+**RULING: The E-ADM-023 teardown mechanism is Option B — per-conn `net.Conn` close
+handle injected into the `route` closure for `case 0x04`, without any change to the
+`RouteFn` contract or `netingress.ServeConn`.**
+
+Rationale summary:
+
+1. **Zero blast radius.** Option A modifies a shared package (`internal/netingress`)
+   and extends the effective `RouteFn` contract invisibly. Option B confines all changes
+   to `runRouter`'s route closure construction — a single function in `cmd/switchboard`.
+   No exported API changes; no shared-package changes.
+
+2. **E-ADM-016/017 drop-and-continue is provably preserved.** The other `case` branches
+   in `route()` do not receive `conn` and cannot call `conn.Close()`. The drop-and-continue
+   behaviour for those paths is untouched structurally.
+
+3. **Reuses established conn-close semantics.** `conn.Close()` from within the per-conn
+   goroutine (or a goroutine that shares the conn) is the existing pattern in
+   `netingress`'s ctx-cancel path. The shutdown ordering invariant (doneOnce) is already
+   proven race-safe and requires no new mechanism.
+
+4. **Option A's type-invisible contract extension is a future-maintainer hazard.**
+   The `RouteFn` type signature gives no indication that some errors trigger close.
+   Option B keeps the semantics of `RouteFn` exactly as documented: errors are
+   drop-and-continue. The close for E-ADM-023 is explicit in the implementation,
+   not hidden in a sentinel type.
+
+#### Concrete implementation contract for the implementer
+
+The implementer must make the `route` closure per-connection rather than shared.
+In `runRouter`, the current `route` closure is constructed once outside `onAccept`
+and passed to `netingress.Serve`. The change:
+
+1. **Move route closure construction inside `onAccept`**, so each call to `onAccept`
+   gets its own `route` closure that captures `conn net.Conn` (the specific connection
+   for this `onAccept` invocation).
+
+2. **Pass the per-conn `route` to `netingress.Serve` via `ServeConn`.** `netingress.Serve`
+   currently calls `_ = ServeConn(ctx, c, route, logger)` with the shared `route`.
+   After this change, `onAccept` must return the per-conn route to `Serve`. The cleanest
+   way: `ServeConfig.OnAccept` receives `conn` and `h`; the per-conn `route` is
+   constructed there and stored so that the per-conn goroutine's `ServeConn` call uses
+   it. Since `ServeConn` is called in the same goroutine that ran `onAccept`, the
+   per-conn route can be a closure variable captured in the per-conn goroutine's scope.
+
+   Concretely, the pattern in `netingress.Serve` is:
+   ```
+   cleanup = cfg.OnAccept(c, h)      // per-conn setup; may also return a per-conn route
+   _ = ServeConn(ctx, c, route, logger)
+   ```
+   One idiomatic way: add an optional `PerConnRoute` field to `ServeConfig`:
+   ```go
+   // PerConnRoute, if non-nil, is called after OnAccept to obtain the
+   // route function for this specific connection. It receives the same
+   // conn and NodeHandle as OnAccept. If nil, the shared route is used.
+   // This is the mechanism for E-ADM-023 teardown — the per-conn route
+   // captures conn and calls conn.Close() on a duplicate NodeIdentify.
+   PerConnRoute func(conn net.Conn, h NodeHandle) RouteFn
+   ```
+   If `PerConnRoute` is nil, `Serve` falls back to the shared `route` (backward-
+   compatible; all existing callers pass nil and see no behavior change).
+
+   **This is the preferred approach** — it avoids changing the `RouteFn` contract
+   while keeping `netingress.Serve` generic. The change to `netingress` is additive
+   (new optional field, nil-safe fallback); the existing `RouteFn` doc comment is
+   unchanged; blast radius is one new field with a nil guard.
+
+   **Alternative if `PerConnRoute` is rejected:** construct the `route` closure entirely
+   inside `onAccept` and wire it by having `Serve` accept a `RouteFactory` instead of a
+   `RouteFn`. This is a larger API change and not recommended — the `PerConnRoute` field
+   is the minimal-impact path.
+
+3. **`case 0x04` in the per-conn route closure:**
+   ```go
+   case 0x04: // NODE_IDENTIFY — duplicate on established connection
+       routerLogger.Log("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
+       _ = conn.Close() // triggers ServeConn read-error → return → cleanup()
+       return errors.New("node_identify: E-ADM-023 duplicate NodeIdentify — connection closed")
+   ```
+   After `conn.Close()`, `ServeConn`'s next `ReadFrame` returns a read error, causing
+   `ServeConn` to return, which runs `cleanup()` (`sendMap.Delete` +
+   `nc.doneOnce.Do(close(nc.done))` + `router.UnbindInterface`). The `return` from
+   `route()` is a belt-and-suspenders signal; `ServeConn` will drop it (drop-and-continue),
+   but the conn is already closed so the loop terminates on the next read anyway.
+
+4. **Teardown call sequence** (full, in order):
+   - `conn.Close()` called from `case 0x04` inside per-conn goroutine's `route` closure
+   - `ServeConn`'s `ReadFrame` returns a net error (use of closed network connection)
+   - `ServeConn` returns (non-nil error, but `Serve` discards it at line 289)
+   - Deferred `cleanup()` runs: `sendMap.Delete(h.IfaceID)`, `router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)`, `nc.doneOnce.Do(func() { close(nc.done) })`
+   - Deferred `func() { _ = c.Close() }()` runs (no-op, already closed)
+   - `wg.Done()` fires; `sem` slot released
+
+#### E-ADM-016/017 drop-and-continue preservation proof
+
+E-ADM-016 and E-ADM-017 are logged and returned by `RouteFrame` inside
+`internal/routing/routing.go`, called from `route`'s outer dispatch as:
+```go
+return routing.RouteFrame(hdr, payload, router)
+```
+This returns a non-nil error on malformed/unauthorized frames. Under Option B:
+
+- The `case 0x04` branch is the ONLY branch that calls `conn.Close()`.
+- The outer `routing.RouteFrame` call path (handling `FrameTypeData` frames for
+  E-ADM-016/017) does NOT call `conn.Close()` — it returns a non-nil error that
+  `ServeConn` drops per the existing drop-and-continue contract.
+- Even if the per-conn `route` closure captures `conn`, it only uses it in `case 0x04`.
+  The other branches are structurally unchanged.
+
+**Therefore: Option B does not change the handling of any error path other than `case
+0x04`. E-ADM-016/017 drop-and-continue is preserved by construction.**
+
+#### Race-safety argument
+
+`conn.Close()` is called from inside the per-conn goroutine — the same goroutine
+executing `ServeConn`. This is NOT a concurrent close; it is a synchronous call from
+within the read loop's dispatch (the `route()` call). After `conn.Close()`, the
+goroutine returns from `route()`, `ServeConn` drops the error (continue), then
+attempts `ReadFrame` on the now-closed conn, which returns a net error causing
+`ServeConn` to `return err`. This is the standard "close from within the read goroutine"
+pattern — no concurrent write goroutine is racing to close the same conn.
+
+The writer goroutine (`nc.send` / `nc.done` loop) does NOT call `conn.Close()`. It
+exits when `nc.done` is closed (via `doneOnce`). `doneOnce` ensures that regardless
+of whether the teardown fires from (a) the E-ADM-023 `conn.Close()` → cleanup path,
+or (b) the router-wide shutdown flush pass at `mgmt_wire.go:967`, only one `close(nc.done)`
+executes. The second caller's `doneOnce.Do(…)` is a no-op. This invariant is already
+proven by the existing DRAIN-wire shutdown tests; Option B adds no new close sites.
+
+The `defer func() { _ = c.Close() }()` in `Serve`'s per-conn goroutine (line 269) calls
+`conn.Close()` again after `ServeConn` returns — this is a no-op on an already-closed
+conn (idiomatic Go, returns `net.ErrClosed`).
+
+#### ServeConn caller blast radius
+
+`grep -rn "ServeConn\b"` in the worktree shows `ServeConn` is called in exactly two
+production sites:
+1. `internal/netingress/netingress.go:289` — inside `Serve`'s per-conn goroutine
+2. Directly in `internal/netingress/netingress_test.go` and `fuzz_test.go` tests
+
+Neither production caller changes under Option B (if the `PerConnRoute` field approach
+is used). `netingress.Serve` gains one new optional field (`PerConnRoute`) with a
+nil-safe fallback — zero behavior change for callers that don't set it. All existing
+tests continue to pass without modification.
+
+**ServeConn blast radius: ZERO production callers broken.**
+
+If the `PerConnRoute` field is rejected in favor of a `RouteFactory` approach, the
+`Serve` signature changes — that would require updating `mgmt_wire.go`'s `Serve` call
+site. That is still a blast radius of ONE known caller. The `PerConnRoute` field is
+recommended precisely because it avoids this.
+
+#### BC-2.01.009 Invariant 7 mechanism note
+
+Invariant 7 currently reads (disk-verified):
+
+> **Second `NodeIdentify` on the same connection is a hard error:** If an already-admitted
+> connection sends a second `NODE_IDENTIFY` frame, the router closes the connection and
+> logs E-ADM-023.
+
+This says "closes the connection" without specifying HOW. The PO should amend BC-2.01.009
+Invariant 7 by appending the following mechanism sentence:
+
+> Implementation: `conn.Close()` is called directly in the per-conn `route` closure for
+> `case 0x04`, via the per-conn close handle injected by `runRouter` (§17 of the
+> `S-BL.NODE-IDENTIFY-WIRE-rulings.md`). `ServeConn` does not need to be modified —
+> the TCP close causes the next `ReadFrame` to return an error, which terminates
+> `ServeConn` naturally and triggers the cleanup func.
+
+**PO action**: BC-2.01.009 v1.1 → v1.2. Append mechanism sentence to Invariant 7.
+No PC renumbering. No AC citation changes (AC-011 cites Invariant 7 by number, not by
+its text body — the append does not invalidate any citation). POL-001 changelog required.
+
+---
+
+## Follow-on Actions (v1.3 — updated)
 
 | Action | Owner | Status | Notes |
 |--------|-------|--------|-------|
@@ -765,8 +1049,14 @@ is the intended policy, since it modifies a shared `internal/` primitive.
 | Mark Obligations 5 and 6 resolved-by-delivery | architect | **DONE** (§14, this ruling) | PR #126 (admission-sync) + PR #125 (node-keypair) |
 | Resolve O-1 (AdmitNode expiry gap) | architect | **DONE** (§15, this ruling) | AdmitNode must gain expiry check; BC-2.05.001 amendment required |
 | Amend BC-2.05.001 to add `ErrKeyExpired` postcondition for `AdmitNode` | product-owner | **OPEN** | O-1 ruling (§15) requires this. New postcondition: `AdmitNode` returns `ErrKeyExpired` (E-ADM-015) when key expiry is set and past. |
-| Story-writer: decompose `S-BL.NODE-IDENTIFY-WIRE` into ACs | story-writer | **OPEN — story-writer gate** | All obligations resolved; decomposition unblocked. Scope includes: wire codec + handshake handler (§§2–9); `Router.BindInterface/LookupInterface/UnbindInterface` (§8); rebind/reconnect semantics (§12); timeout + failure paths (§13); `AdmitNode` expiry check (§15). |
+| Story-writer: decompose `S-BL.NODE-IDENTIFY-WIRE` into ACs | story-writer | **OPEN — story-writer gate** | All obligations resolved; decomposition unblocked. Scope includes: wire codec + handshake handler (§§2–9); `Router.BindInterface/LookupInterface/UnbindInterface` (§8); rebind/reconnect semantics (§12); timeout + failure paths (§13); `AdmitNode` expiry check (§15); E-ADM-023 teardown wiring (§17). |
 | PO: verify BC-2.01.008 Postcondition 2 has `NODE_IDENTIFY = 0x04` row (if not already present in current version) | product-owner | **OPEN — verify** | Obligation 1 was marked RESOLVED per story v1.3 changelog; confirm BC-2.01.008 current version reflects this |
+| Resolve E-ADM-023 teardown mechanism defect | architect | **DONE** (§17, this ruling) | Option B: per-conn `conn net.Conn` handle injected into the duplicate-NodeIdentify detection path; `conn.Close()` called directly; no RouteFn contract change |
+| Story-writer: update Task 19 wording and add Task 20 wiring subtask for E-ADM-023 teardown | story-writer | **OPEN** | §17 specifies exact Task 19 wording correction and new Task 20 subtask. story input-hash must be refreshed after story update. |
+| Implementer: build E-ADM-023 teardown wiring per §17 ruling | implementer | **OPEN** | story-writer cascade must complete first; then implementer builds the per-conn close handle injection into `runRouter`'s route closure for case 0x04 |
+| Test-writer: write AC-011 test for E-ADM-023 → connection close | test-writer | **OPEN** | §17 specifies: integration test over `net.Pipe`, admits connection, sends second `NodeIdentify` frame, asserts conn closes within deadline, asserts no data frames are routed after the duplicate |
+| BC-2.01.009 Invariant 7 mechanism note | architect | **DONE** (§17, this ruling) | Invariant 7 currently says "closes the connection immediately" without HOW. §17 adds the mechanism note: "via `conn.Close()` called directly in the route closure for `case 0x04`, through the per-conn close handle injected by `runRouter`." No PC renumbering — mechanism note appended to Invariant 7 body in BC-2.01.009 v1.1 → v1.2. |
+| Update BC-2.01.009 Invariant 7 with mechanism note | product-owner | **OPEN** | PO adds one sentence to Invariant 7 body per §17 specification. Version bump v1.1 → v1.2 with POL-001 changelog entry. No PC or AC number changes. |
 
 ### Named downstream BC work (for product-owner)
 
@@ -832,3 +1122,7 @@ The story-writer receives all six obligations resolved. The story's ACs should c
 | Obligation status | All six obligations + O-1 resolved. Story is decomposition-ready pending BC-2.05.001 amendment by PO. |
 | Human confirmation flag | O-1 ruling changes AdmitNode behavior (was: no expiry check; will be: ErrKeyExpired on past-expiry key). Zero existing production callers affected. PO/human should confirm this is the intended policy before story-writer decomposes ACs. |
 | RouterSig scope note | Pre-existing property of admission package — nonce-only signing in GenerateChallenge; not a new concern for this wire story; documented in §11 for future audit transparency |
+| E-ADM-023 teardown mechanism (§17) | Option B — per-conn `net.Conn` handle injected into the `route` closure for `case 0x04`; `conn.Close()` called directly; no `RouteFn` contract change; E-ADM-016/017 drop-and-continue preserved |
+| RouteFn contract change | NONE — `RouteFn` signature and `ServeConn` drop-and-continue contract are unchanged |
+| ServeConn caller blast radius | Zero — no change to `netingress.ServeConn` or `netingress.Serve` |
+| Human flag (§17) | Option B requires `runRouter` to pass `conn net.Conn` into the `route` closure. This is an internal `runRouter` refactor (no exported API change). No human sign-off required — blast radius confirmed zero. |
