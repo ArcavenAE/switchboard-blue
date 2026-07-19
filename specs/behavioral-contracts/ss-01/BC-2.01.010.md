@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.010
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "4450bc4"
+input-hash: "af775b9"
 extracted_from: null
 bc_id: BC-2.01.010
 subsystem: session-networking
@@ -27,6 +27,15 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.3"
+    date: 2026-07-19
+    author: product-owner
+    change: >
+      PC-2: correct dead type reference netingress.ConnHandle → netingress.NodeHandle
+      (real type per internal/netingress — NodeHandle is the struct returned by the
+      accept path; ConnHandle does not exist in the package). Completes the
+      ConnHandle→NodeHandle sweep that touched the story body (Task 18) but missed
+      this BC. No PC renumber. Step-4.5 adversarial finding LOW-2.
   - version: "1.2"
     date: 2026-07-18
     author: architect
@@ -83,7 +92,7 @@ After a successful NODE_IDENTIFY handshake (BC-2.01.009), the router records a `
 ## Preconditions
 
 1. `Router.BindInterface(svtnID [16]byte, nodeAddr [8]byte, ifaceID InterfaceID)` is called from the `onAccept` closure in `runRouter`, immediately after `admission.AdmitNode` returns `nil`.
-2. `ifaceID` is the `InterfaceID` of the accepted connection (from the `netingress.ConnHandle`).
+2. `ifaceID` is the `InterfaceID` of the accepted connection (from the `netingress.NodeHandle`).
 3. `Router.identityIfaceMap` is initialized as `map[[16]byte]map[[8]byte]InterfaceID` (backed by `r.mu`, same mutex as `forwardingTable`).
 
 ## Postconditions
@@ -191,6 +200,7 @@ After a successful NODE_IDENTIFY handshake (BC-2.01.009), the router records a `
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-19 | PC-2: correct dead type reference `netingress.ConnHandle` → `netingress.NodeHandle` (real type per `internal/netingress` — `NodeHandle` is the struct returned by the accept path; `ConnHandle` does not exist in the package). Completes the ConnHandle→NodeHandle sweep that touched the story body (Task 18) but missed this BC. No PC renumber. Step-4.5 adversarial finding LOW-2. |
 | 1.2 | 2026-07-18 | Errata: `UnbindInterface` signature corrected from 2-arg `(svtnID, nodeAddr)` to 3-arg `(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID)` in PC-8. The 2-arg form was inconsistent with PC-9's stale-cleanup guard, which requires the caller's own `ifaceID` to detect and suppress a stale-cleanup delete after a LWW overwrite. No behavioral change — PC-9 semantics are unchanged; PC-8 now names the third argument explicitly. Postcondition numbering (PC-8/PC-9) unchanged. Source: architect errata ruling S-BL.NODE-IDENTIFY-WIRE-rulings.md v1.2. Input-hash updated to reflect rulings v1.2. |
 | 1.1 | 2026-07-18 | Consistency-audit Finding 2: fix duplicate Postcondition 4 numbering. The LookupInterface group was numbered 4/5/6 (duplicate leading "4."), creating two items labeled "4." in a single Postconditions section. Correct global sequence is 1–10: BindInterface PCs 1–4 (unchanged), LookupInterface PCs 5–7 (was 4–6), UnbindInterface PCs 8–10 (was 7–9). Also updated EC-002 reference from PC-8→PC-9. Story S-BL.NODE-IDENTIFY-WIRE v1.6 citations updated: AC-010 PC-8→PC-9 (stale cleanup guard), AC-012 PC-7→PC-8 (binding removed on close), Prev-Story-Intel PC-7→PC-8/PC-8→PC-9, Task 15 PC-7/PC-8→PC-8/PC-9, Task 20 PC-7→PC-8. |
 | 1.0 | 2026-07-18 | Initial commission — `(SVTNID, NodeAddr) → IfaceID` binding lifecycle: `BindInterface` (LWW on reconnect), `LookupInterface` (read-lock value return), `UnbindInterface` (stale-cleanup guard). Sourced from S-BL.NODE-IDENTIFY-WIRE-rulings.md §8 and §12. |
