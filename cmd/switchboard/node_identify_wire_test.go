@@ -65,12 +65,13 @@ func nodeAddrHandshake(svtnID [16]byte, pubKey ed25519.PublicKey) [8]byte {
 	return addr
 }
 
-// encodeOuterHeaderRaw encodes a 44-byte outer header directly.
+// encodeCtlHeaderRaw encodes a 44-byte outer header for a FrameTypeCtl (0x03) frame.
 // Layout: version(1)+frameType(1)+payloadLen(2)+svtnID(16)+srcAddr(8)+dstAddr(8)+hmacTag(8).
-func encodeOuterHeaderRaw(frameType byte, payloadLen uint16, svtnID [16]byte) []byte {
+// frameType is always 0x03 (FrameTypeCtl) for all NODE_IDENTIFY handshake test frames.
+func encodeCtlHeaderRaw(payloadLen uint16, svtnID [16]byte) []byte {
 	hdr := make([]byte, 44)
 	hdr[0] = 0x01 // version = VersionByte
-	hdr[1] = frameType
+	hdr[1] = 0x03 // FrameTypeCtl
 	binary.BigEndian.PutUint16(hdr[2:4], payloadLen)
 	copy(hdr[4:20], svtnID[:])
 	// src_addr[8], dst_addr[8], hmac_tag[8] remain zero
@@ -78,42 +79,27 @@ func encodeOuterHeaderRaw(frameType byte, payloadLen uint16, svtnID [16]byte) []
 }
 
 // buildNodeIdentifyFrame builds a valid 80-byte NodeIdentify frame.
+// Uses encodeNodeIdentify (the production codec) so this helper doubles as
+// a regression guard for that function.
 func buildNodeIdentifyFrame(svtnID [16]byte, pubkey ed25519.PublicKey) []byte {
-	payload := make([]byte, 36)
-	payload[0] = 0x04 // control_type NODE_IDENTIFY
-	payload[1] = 0x01 // version
-	payload[2] = 0x01 // msg_kind NodeIdentify
-	payload[3] = 0x00 // reserved
-	copy(payload[4:36], pubkey)
-	hdr := encodeOuterHeaderRaw(0x03, 36, svtnID)
-	return append(hdr, payload...)
+	return encodeNodeIdentify(svtnID, pubkey)
 }
 
 // buildChallengeResponseFrame builds a valid 112-byte ChallengeResponse frame.
+// Uses encodeChallengeResponse (the production codec) so this helper doubles as
+// a regression guard for that function.
 func buildChallengeResponseFrame(svtnID [16]byte, nodePriv ed25519.PrivateKey, nonce [32]byte) []byte {
 	sig := ed25519.Sign(nodePriv, nonce[:])
-	payload := make([]byte, 68)
-	payload[0] = 0x04
-	payload[1] = 0x01
-	payload[2] = 0x03 // msg_kind ChallengeResponse
-	payload[3] = 0x00
-	copy(payload[4:68], sig)
-	hdr := encodeOuterHeaderRaw(0x03, 68, svtnID)
-	return append(hdr, payload...)
+	resp := admission.ChallengeResponse{NonceSig: sig}
+	return encodeChallengeResponse(svtnID, resp)
 }
 
 // buildChallengeResponseFrameWrongKey builds a ChallengeResponse signed with
 // a DIFFERENT private key (bad signature).
 func buildChallengeResponseFrameWrongKey(svtnID [16]byte, wrongPriv ed25519.PrivateKey, nonce [32]byte) []byte {
 	sig := ed25519.Sign(wrongPriv, nonce[:])
-	payload := make([]byte, 68)
-	payload[0] = 0x04
-	payload[1] = 0x01
-	payload[2] = 0x03
-	payload[3] = 0x00
-	copy(payload[4:68], sig)
-	hdr := encodeOuterHeaderRaw(0x03, 68, svtnID)
-	return append(hdr, payload...)
+	resp := admission.ChallengeResponse{NonceSig: sig}
+	return encodeChallengeResponse(svtnID, resp)
 }
 
 // newTestHandle constructs a minimal netingress.NodeHandle for testing.
@@ -175,15 +161,6 @@ func doFullNodeHandshake(nodeConn net.Conn, svtnID [16]byte, nodePub ed25519.Pub
 	// Send ChallengeResponse.
 	crFrame := buildChallengeResponseFrame(svtnID, nodePriv, nonce)
 	_, _ = nodeConn.Write(crFrame)
-}
-
-// doPartialNodeHandshake sends only the NodeIdentify frame (no ChallengeResponse).
-// Used for timeout tests where we want the handshake to stall.
-func doPartialNodeHandshake(nodeConn net.Conn, svtnID [16]byte, nodePub ed25519.PublicKey) {
-	_ = nodeConn.SetDeadline(time.Now().Add(5 * time.Second))
-	frame := buildNodeIdentifyFrame(svtnID, nodePub)
-	_, _ = nodeConn.Write(frame)
-	// Intentionally does not send ChallengeResponse — lets timeout fire.
 }
 
 // ── AC-001: Successful handshake ──────────────────────────────────────────────
@@ -324,7 +301,7 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongPayloadLen(t *testing.
 	// Send a frame with payload_len=20 (wrong — should be 36).
 	go func() {
 		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
-		hdr := encodeOuterHeaderRaw(0x03, 20, svtnID)
+		hdr := encodeCtlHeaderRaw(20, svtnID)
 		payload := make([]byte, 20)
 		payload[0] = 0x04
 		payload[1] = 0x01
@@ -372,7 +349,7 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongMsgKind(t *testing.T) 
 		payload[2] = 0x02 // wrong msg_kind — should be 0x01
 		payload[3] = 0x00
 		copy(payload[4:36], nodePub)
-		hdr := encodeOuterHeaderRaw(0x03, 36, svtnID)
+		hdr := encodeCtlHeaderRaw(36, svtnID)
 		_, _ = nodeConn.Write(append(hdr, payload...))
 		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
 	}()
@@ -415,7 +392,7 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte(t *test
 		payload[2] = 0x01
 		payload[3] = 0x01 // non-zero reserved — hard decoder error
 		copy(payload[4:36], nodePub)
-		hdr := encodeOuterHeaderRaw(0x03, 36, svtnID)
+		hdr := encodeCtlHeaderRaw(36, svtnID)
 		_, _ = nodeConn.Write(append(hdr, payload...))
 		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
 	}()

@@ -69,9 +69,9 @@ const nodeIdentifyControlType = 0x04
 
 // msg_kind constants for the three NODE_IDENTIFY handshake messages (rulings §2).
 const (
-	msgKindNodeIdentify       = 0x01
-	msgKindChallenge          = 0x02
-	msgKindChallengeResponse  = 0x03
+	msgKindNodeIdentify      = 0x01
+	msgKindChallenge         = 0x02
+	msgKindChallengeResponse = 0x03
 )
 
 // encodeNodeIdentify assembles the 80-byte NodeIdentify frame (44-byte outer

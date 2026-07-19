@@ -33,7 +33,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/routing"
@@ -75,62 +74,6 @@ func awaitNodeConnEvent(t *testing.T, events chan nodeConnRecord, want nodeConnE
 		t.Fatalf("nodeConnHook did not observe event %v within %v", want, budget)
 		return nodeConnRecord{}
 	}
-}
-
-// dialNode dials an inbound TCP connection to cfg.ListenAddr, simulating a
-// connected node. The connection is closed via t.Cleanup.
-func dialNode(t *testing.T, cfg *config.Config) net.Conn {
-	t.Helper()
-	conn, err := net.Dial("tcp", cfg.ListenAddr)
-	if err != nil {
-		t.Fatalf("dialNode: dial %s: %v", cfg.ListenAddr, err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn
-}
-
-// dialNodeAndAwaitRegistration is the shared AC-001/AC-004 harness helper
-// (Q-AC002/Q3-AMENDED discharge-trace step 3): starts runRouter, dials a
-// simulated node, and blocks until nodeConnHook observes nodeConnRegistered
-// for that connection — the mandatory accept/register barrier both ACs
-// require before triggering drain (skipping it risks the observer's
-// sendMap.Range seeing zero entries at Signal time).
-//
-// Returns the dialed conn, a non-blocking cancel (the caller calls this to
-// trigger drainCoord.Signal via the shutdown block), and awaitReturn — an
-// idempotent, Once-guarded blocking wait for runRouter's return value, safe
-// to call both explicitly in the test body (for synchronization) and via
-// the registered t.Cleanup safety net (leak protection if an earlier step
-// fails a Fatal before the body reaches it). The registered IfaceID itself
-// is AC-002's observable (see TestNetingress_OnAccept_RegistersNodeHandle)
-// — AC-001/AC-004 callers don't need it, only the barrier it confirms.
-func dialNodeAndAwaitRegistration(t *testing.T, cfg *config.Config, buf *syncBuffer) (
-	conn net.Conn, cancel context.CancelFunc, awaitReturn func() error,
-) {
-	t.Helper()
-	events := setNodeConnHook(t)
-	errCh, cancelFn := startRunRouterWithConfig(t, cfg, buf)
-
-	var once sync.Once
-	var waitErr error
-	awaitReturn = func() error {
-		once.Do(func() {
-			select {
-			case waitErr = <-errCh:
-			case <-time.After(2 * time.Second):
-				waitErr = fmt.Errorf("runRouter did not return within 2s after ctx cancel")
-			}
-		})
-		return waitErr
-	}
-	t.Cleanup(func() {
-		cancelFn()
-		_ = awaitReturn()
-	})
-
-	conn = dialNode(t, cfg)
-	awaitNodeConnEvent(t, events, nodeConnRegistered, 2*time.Second)
-	return conn, cancelFn, awaitReturn
 }
 
 // ── NODE_IDENTIFY handshake helpers (S-BL.NODE-IDENTIFY-WIRE Task 20) ────────
@@ -285,11 +228,6 @@ func dialNodeAndAwaitRegistrationAdmitted(t *testing.T, cfg *config.Config, buf 
 	awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
 	return conn, cancelFn, awaitReturn
 }
-
-// Compile-time check: ensure admission is imported (used by makeAdmittedNode indirectly
-// via the snapshot schema). The _ import ensures the package is linked even if
-// Go's unused-import check is triggered before the function body is analyzed.
-var _ = admission.RoleAccess
 
 // ── shared raw-frame helpers (Q-CTL-GUARD pins) ─────────────────────────────
 
