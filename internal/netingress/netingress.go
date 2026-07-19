@@ -192,12 +192,22 @@ type ServeConfig struct {
 	// OnAccept nor cleanup, regardless of whether OnAccept is nil.
 	OnAccept func(conn net.Conn, h NodeHandle) func()
 
+	// PerConnRoute, if non-nil, is called after OnAccept to obtain the
+	// RouteFn for this specific connection (receiving the same conn and
+	// NodeHandle as OnAccept). Serve passes the returned RouteFn to ServeConn
+	// instead of the shared route. If nil, the shared route is used. This is
+	// the mechanism for E-ADM-023 teardown (S-BL.NODE-IDENTIFY-WIRE rulings
+	// §17): the per-conn route captures conn and calls conn.Close() on a
+	// duplicate NodeIdentify.
+	PerConnRoute func(conn net.Conn, h NodeHandle) RouteFn
+
 	// IfaceIDSeed is the first InterfaceID netingress allocates for an
-	// admitted connection when OnAccept is non-nil; subsequent admitted
-	// connections get IfaceIDSeed+1, IfaceIDSeed+2, ... via an internal
-	// atomic counter. Shed connections do not consume a value from this
-	// counter. Callers reserve low IDs (e.g. a PE-upstream interface ID)
-	// by setting IfaceIDSeed above them. Zero defaults to 2.
+	// admitted connection when OnAccept is non-nil or PerConnRoute is
+	// non-nil; subsequent admitted connections get IfaceIDSeed+1,
+	// IfaceIDSeed+2, ... via an internal atomic counter. Shed connections
+	// do not consume a value from this counter. Callers reserve low IDs
+	// (e.g. a PE-upstream interface ID) by setting IfaceIDSeed above them.
+	// Zero defaults to 2.
 	IfaceIDSeed routing.InterfaceID
 }
 
@@ -211,9 +221,9 @@ type ServeConfig struct {
 // success rather than a refused connect at kernel level) then immediately closed
 // to shed load.
 //
-// Runtime compat: callers passing ServeConfig{} (OnAccept == nil) see
-// unchanged runtime behavior — Serve allocates no IfaceID/Send/Done and
-// calls no hook.
+// Runtime compat: callers passing ServeConfig{} (OnAccept == nil and
+// PerConnRoute == nil) see unchanged runtime behavior — Serve allocates no
+// IfaceID/Send/Done and calls no hook.
 func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger, cfg ServeConfig) error {
 	if logger == nil {
 		logger = nopLogger{}
@@ -272,21 +282,30 @@ func Serve(ctx context.Context, ln net.Listener, route RouteFn, logger Logger, c
 			// pin), never from the accept loop, once this connection has
 			// cleared admission (Ownership split: netingress owns DATA
 			// creation; the caller's closure owns BEHAVIOR only).
+			// PerConnRoute, if set, is called with the same NodeHandle and
+			// its returned RouteFn replaces the shared route for this conn
+			// (E-ADM-023 teardown seam, rulings §17).
 			var cleanup func()
-			if cfg.OnAccept != nil {
+			connRoute := route
+			if cfg.OnAccept != nil || cfg.PerConnRoute != nil {
 				h := NodeHandle{
 					IfaceID: routing.InterfaceID(ifaceCounter.Add(1)),
 					Send:    make(chan []byte, 32),
 					Done:    make(chan struct{}),
 				}
-				cleanup = cfg.OnAccept(c, h)
+				if cfg.OnAccept != nil {
+					cleanup = cfg.OnAccept(c, h)
+				}
+				if cfg.PerConnRoute != nil {
+					connRoute = cfg.PerConnRoute(c, h)
+				}
 			}
 			// Registered AFTER defer wg.Done() above so LIFO defer ordering
 			// runs cleanup before wg.Done() fires.
 			if cleanup != nil {
 				defer cleanup()
 			}
-			_ = ServeConn(ctx, c, route, logger)
+			_ = ServeConn(ctx, c, connRoute, logger)
 		}(conn)
 	}
 }

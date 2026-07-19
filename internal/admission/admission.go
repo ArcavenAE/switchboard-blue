@@ -442,13 +442,18 @@ func GenerateChallenge(routerPrivKey ed25519.PrivateKey) (Challenge, error) {
 // AdmitNode verifies a node's challenge-response and, on success, marks the
 // node as admitted in the AdmittedKeySet (BC-2.05.001 PC4).
 //
-// Per BC-2.05.001 postcondition 3: verifies resp.NonceSig using pubKey against
-// challenge.Nonce. On success (postcondition 4): records the nonce (replay
-// prevention) and sets entry.admitted = true atomically under the write lock.
+// Per BC-2.05.001 postcondition 3: verifies resp.NonceSig using the stored
+// public key from the admitted keyset (liveEntry.PublicKey) against
+// challenge.Nonce. The frame-supplied pubKey is used only to derive the
+// nodeAddr keyset lookup via frame.DeriveNodeAddress; it is NOT the
+// verification authority (BC-2.01.009 PC-5; rulings §18).
+// On success (postcondition 4): records the nonce (replay prevention) and
+// sets entry.admitted = true atomically under the write lock.
 //
 // Error returns:
 //   - ErrNotAdmitted  (E-ADM-003) if the key is not registered for this SVTN.
 //   - ErrKeyRevoked   (E-ADM-005) if the key is registered but revoked (EC-001).
+//   - ErrKeyExpired   (E-ADM-015) if the registered key has a non-zero expiry that is now past (BC-2.05.001 PC-6, O-1).
 //   - ErrNonceReplay  (E-ADM-008) if the nonce has already been consumed (invariant 3).
 //   - ErrSignatureVerificationFailed (E-ADM-001) if signature verification fails.
 //
@@ -487,13 +492,15 @@ func AdmitNode(
 		return ErrKeyRevoked
 	}
 
-	// Step 2: snapshot the current time before acquiring the write lock.
-	// ed25519.Verify (~50μs) is held INSIDE the write lock by design (see
-	// Step 3) — it is part of the nonce-consume + verify + admit critical
-	// section. This preserves the invariant that a replay attempt cannot
-	// race a legitimate sig-verify on the same nonce. See inline comments
-	// at Step 3 for the order-of-operations rationale.
+	// Step 2 (expiry): check expiry under the RLock snapshot before acquiring the write lock.
+	// Mirrors ReAuthenticate reauth.go:195-197. The snapshot was taken under RLock so
+	// snap.expiry is a safe read (no torn access). A concurrent SetKeyExpiry racing between
+	// RUnlock and Lock is caught by the re-check under the write lock below (O-1; BC-2.05.001
+	// PC-6 / Invariant 5; S-BL.NODE-IDENTIFY-WIRE rulings §15).
 	now := time.Now().UTC()
+	if !snap.expiry.IsZero() && now.After(snap.expiry) {
+		return ErrKeyExpired
+	}
 
 	// Step 3: acquire write lock once — record nonce AND set admitted=true atomically (H-2).
 	// Re-checking revoked under the write lock defends against a concurrent RevokeKey
@@ -506,6 +513,10 @@ func AdmitNode(
 	if liveEntry == nil || liveEntry.revoked {
 		return ErrKeyRevoked
 	}
+	// Re-check expiry under write lock in case SetKeyExpiry raced (mirrors reauth.go:219-222).
+	if !liveEntry.expiry.IsZero() && now.After(liveEntry.expiry) {
+		return ErrKeyExpired
+	}
 
 	// Inline nonce record (replaces recordNonce call — avoids double-lock and
 	// keeps nonce + admitted mutation in a single critical section).
@@ -513,10 +524,17 @@ func AdmitNode(
 		return err
 	}
 
-	// Verify signature (pure, but placed here to keep the nonce-consume-before-verify
-	// invariant — nonce is already consumed above; sig failure returns error and
-	// the consumed nonce prevents replay of the same challenge).
-	if !ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig) {
+	// Verify signature against the stored public key (BC-2.05.001 PC-3): the router
+	// MUST use the key from the admitted keyset, not the pubkey supplied in the frame.
+	// The frame pubkey was used only to derive the nodeAddr lookup (line ~464); it is
+	// untrusted input and must not be the verification authority.  Using liveEntry.PublicKey
+	// (the stored key) closes the impersonation vector where an attacker presents a valid
+	// nodeAddr with a different key and forges a signature with their own private key.
+	// Symmetry: reauth.go verifies against snap.PublicKey (the stored key) for the same reason.
+	//
+	// The nonce is already consumed above; sig failure returns error and the consumed
+	// nonce prevents replay of the same challenge.
+	if !ed25519.Verify(liveEntry.PublicKey, challenge.Nonce[:], resp.NonceSig) {
 		return ErrSignatureVerificationFailed
 	}
 

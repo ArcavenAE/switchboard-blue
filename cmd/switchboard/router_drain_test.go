@@ -31,6 +31,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -341,6 +342,11 @@ func TestRunRouter_ForcedExitPastDrainTimeout(t *testing.T) {
 	}
 	t.Cleanup(func() { drainCoordHook = nil })
 
+	// S-BL.NODE-IDENTIFY-WIRE Task 20: onAccept now runs the NODE_IDENTIFY
+	// handshake BEFORE sendMap.Store; raw TCP connections block in the 10s
+	// handshake and hold dataWG open past the test's 5s timeout. Use an
+	// admitted connection so the per-conn goroutine enters ServeConn promptly.
+	info := makeAdmittedNode(t, cfg)
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
 
@@ -358,6 +364,38 @@ func TestRunRouter_ForcedExitPastDrainTimeout(t *testing.T) {
 	// close — ingressCancel triggers netingress to close its side of the
 	// conn (netingress.go ServeConn: "Close conn when ctx is cancelled").
 	t.Cleanup(func() { _ = conn.Close() })
+
+	// Complete the NODE_IDENTIFY handshake in a goroutine so we don't block
+	// the test goroutine. The handshake must succeed before cancel() fires so
+	// the per-conn goroutine is in ServeConn (not onAccept) during shutdown.
+	hsErrCh := make(chan error, 1)
+	go func() {
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		niFrame := buildNodeIdentifyFrame(info.svtnID, info.nodePub)
+		if _, err := conn.Write(niFrame); err != nil {
+			hsErrCh <- err
+			return
+		}
+		buf144 := make([]byte, 144)
+		if _, err := io.ReadFull(conn, buf144); err != nil {
+			hsErrCh <- err
+			return
+		}
+		var nonce [32]byte
+		copy(nonce[:], buf144[48:80])
+		crFrame := buildChallengeResponseFrame(info.svtnID, info.nodePriv, nonce)
+		if _, err := conn.Write(crFrame); err != nil {
+			hsErrCh <- err
+			return
+		}
+		_ = conn.SetDeadline(time.Time{})
+		hsErrCh <- nil
+	}()
+	if hsErr := <-hsErrCh; hsErr != nil {
+		cancel()
+		<-errCh
+		t.Fatalf("NODE_IDENTIFY handshake for live ingress conn: %v", hsErr)
+	}
 
 	start := time.Now()
 	cancel()

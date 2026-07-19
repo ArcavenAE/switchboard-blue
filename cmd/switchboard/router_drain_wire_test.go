@@ -19,9 +19,15 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -70,37 +76,134 @@ func awaitNodeConnEvent(t *testing.T, events chan nodeConnRecord, want nodeConnE
 	}
 }
 
-// dialNode dials an inbound TCP connection to cfg.ListenAddr, simulating a
-// connected node. The connection is closed via t.Cleanup.
-func dialNode(t *testing.T, cfg *config.Config) net.Conn {
+// ── NODE_IDENTIFY handshake helpers (S-BL.NODE-IDENTIFY-WIRE Task 20) ────────
+//
+// After S-BL.NODE-IDENTIFY-WIRE lands, runRouter's onAccept closure runs the
+// NODE_IDENTIFY handshake BEFORE calling sendMap.Store. Raw TCP connections
+// that don't complete the handshake are rejected (conn closed within 10s).
+// These helpers wire the node side of the handshake so the drain/ctl tests can
+// establish admitted connections.
+
+// admittedNodeInfo carries a test-generated Ed25519 keypair and the SVTN ID
+// to use for all tests that need an admitted node.
+type admittedNodeInfo struct {
+	svtnID   [16]byte
+	nodePub  ed25519.PublicKey
+	nodePriv ed25519.PrivateKey
+}
+
+// makeAdmittedNode generates a node keypair and a deterministic SVTN ID, writes
+// a JSON admission snapshot to a temp file, and sets cfg.AdmissionStateFile so
+// that runRouter will load the key on startup. Must be called BEFORE
+// startRunRouterWithConfig.
+func makeAdmittedNode(t *testing.T, cfg *config.Config) admittedNodeInfo {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("makeAdmittedNode: GenerateKey: %v", err)
+	}
+	var svtnID [16]byte
+	svtnID[0] = 0xAB // deterministic test SVTN
+
+	// Build a minimal admission snapshot JSON directly (avoids importing the
+	// private marshalSnapshot helper — uses the public snapshotFile fields
+	// that writeSnapshotAtomic / loadSnapshotFromFile use).
+	type snapKey struct {
+		PubKey  string `json:"pubkey"`
+		Role    string `json:"role"`
+		Revoked bool   `json:"revoked"`
+	}
+	type snapSVTN struct {
+		SVTNID string    `json:"svtn_id"`
+		Keys   []snapKey `json:"keys"`
+	}
+	type snapFile struct {
+		SchemaVersion int        `json:"schema_version"`
+		Timestamp     string     `json:"timestamp"`
+		SVTNs         []snapSVTN `json:"svtns"`
+	}
+	snap := snapFile{
+		SchemaVersion: 1,
+		Timestamp:     time.Now().UTC().Format(time.RFC3339),
+		SVTNs: []snapSVTN{{
+			SVTNID: hex.EncodeToString(svtnID[:]),
+			Keys: []snapKey{{
+				PubKey:  base64.RawURLEncoding.EncodeToString([]byte(pub)),
+				Role:    "access",
+				Revoked: false,
+			}},
+		}},
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatalf("makeAdmittedNode: json.Marshal: %v", err)
+	}
+	f, err := os.CreateTemp(t.TempDir(), "admission-*.json")
+	if err != nil {
+		t.Fatalf("makeAdmittedNode: CreateTemp: %v", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		t.Fatalf("makeAdmittedNode: write snapshot: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("makeAdmittedNode: close snapshot: %v", err)
+	}
+	cfg.AdmissionStateFile = f.Name()
+	return admittedNodeInfo{svtnID: svtnID, nodePub: pub, nodePriv: priv}
+}
+
+// completeNodeHandshake performs the node side of the NODE_IDENTIFY handshake
+// on conn using the provided admitted node info. The router must already be
+// running and waiting for the handshake.
+func completeNodeHandshake(t *testing.T, conn net.Conn, info admittedNodeInfo) {
+	t.Helper()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	defer func() { _ = conn.SetDeadline(time.Time{}) }()
+
+	// Send NodeIdentify (80 bytes).
+	niFrame := buildNodeIdentifyFrame(info.svtnID, info.nodePub)
+	if _, err := conn.Write(niFrame); err != nil {
+		t.Fatalf("completeNodeHandshake: write NodeIdentify: %v", err)
+	}
+
+	// Read Challenge (144 bytes); extract nonce from bytes [48:80].
+	buf := make([]byte, 144)
+	if _, err := io.ReadFull(conn, buf); err != nil {
+		t.Fatalf("completeNodeHandshake: read Challenge: %v", err)
+	}
+	var nonce [32]byte
+	copy(nonce[:], buf[48:80])
+
+	// Send ChallengeResponse (112 bytes).
+	crFrame := buildChallengeResponseFrame(info.svtnID, info.nodePriv, nonce)
+	if _, err := conn.Write(crFrame); err != nil {
+		t.Fatalf("completeNodeHandshake: write ChallengeResponse: %v", err)
+	}
+}
+
+// dialNodeAdmitted dials a node connection to cfg.ListenAddr and completes the
+// NODE_IDENTIFY handshake. Returns the open (post-handshake) connection.
+// The connection is closed via t.Cleanup.
+func dialNodeAdmitted(t *testing.T, cfg *config.Config, info admittedNodeInfo) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("tcp", cfg.ListenAddr)
 	if err != nil {
-		t.Fatalf("dialNode: dial %s: %v", cfg.ListenAddr, err)
+		t.Fatalf("dialNodeAdmitted: dial %s: %v", cfg.ListenAddr, err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
+	completeNodeHandshake(t, conn, info)
 	return conn
 }
 
-// dialNodeAndAwaitRegistration is the shared AC-001/AC-004 harness helper
-// (Q-AC002/Q3-AMENDED discharge-trace step 3): starts runRouter, dials a
-// simulated node, and blocks until nodeConnHook observes nodeConnRegistered
-// for that connection — the mandatory accept/register barrier both ACs
-// require before triggering drain (skipping it risks the observer's
-// sendMap.Range seeing zero entries at Signal time).
-//
-// Returns the dialed conn, a non-blocking cancel (the caller calls this to
-// trigger drainCoord.Signal via the shutdown block), and awaitReturn — an
-// idempotent, Once-guarded blocking wait for runRouter's return value, safe
-// to call both explicitly in the test body (for synchronization) and via
-// the registered t.Cleanup safety net (leak protection if an earlier step
-// fails a Fatal before the body reaches it). The registered IfaceID itself
-// is AC-002's observable (see TestNetingress_OnAccept_RegistersNodeHandle)
-// — AC-001/AC-004 callers don't need it, only the barrier it confirms.
-func dialNodeAndAwaitRegistration(t *testing.T, cfg *config.Config, buf *syncBuffer) (
+// dialNodeAndAwaitRegistrationAdmitted is the NODE_IDENTIFY-aware version of
+// dialNodeAndAwaitRegistration. It calls makeAdmittedNode, starts runRouter,
+// dials a connection, completes the handshake, and waits for nodeConnRegistered.
+func dialNodeAndAwaitRegistrationAdmitted(t *testing.T, cfg *config.Config, buf *syncBuffer) (
 	conn net.Conn, cancel context.CancelFunc, awaitReturn func() error,
 ) {
 	t.Helper()
+	info := makeAdmittedNode(t, cfg)
 	events := setNodeConnHook(t)
 	errCh, cancelFn := startRunRouterWithConfig(t, cfg, buf)
 
@@ -110,8 +213,8 @@ func dialNodeAndAwaitRegistration(t *testing.T, cfg *config.Config, buf *syncBuf
 		once.Do(func() {
 			select {
 			case waitErr = <-errCh:
-			case <-time.After(2 * time.Second):
-				waitErr = fmt.Errorf("runRouter did not return within 2s after ctx cancel")
+			case <-time.After(4 * time.Second):
+				waitErr = fmt.Errorf("runRouter did not return within 4s after ctx cancel")
 			}
 		})
 		return waitErr
@@ -121,8 +224,8 @@ func dialNodeAndAwaitRegistration(t *testing.T, cfg *config.Config, buf *syncBuf
 		_ = awaitReturn()
 	})
 
-	conn = dialNode(t, cfg)
-	awaitNodeConnEvent(t, events, nodeConnRegistered, 2*time.Second)
+	conn = dialNodeAdmitted(t, cfg, info)
+	awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
 	return conn, cancelFn, awaitReturn
 }
 
@@ -178,9 +281,8 @@ func assertConnAlive(t *testing.T, conn net.Conn) {
 // registered in the live per-node send map, and drainCoord.Wait returns
 // nil.
 //
-// RED GATE: fails at the accept/register barrier — runRouter does not wire
-// ServeConfig.OnAccept yet (step (a) left it ServeConfig{}), so
-// nodeConnHook never fires and dialNodeAndAwaitRegistration times out.
+// Updated by S-BL.NODE-IDENTIFY-WIRE Task 20: uses dialNodeAndAwaitRegistrationAdmitted
+// because onAccept now requires the NODE_IDENTIFY handshake before sendMap.Store.
 func TestDrainObserver_AssemblesAndSendsDRAINFrame(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, mutates
 	// the package-level nodeConnHook test hook (Q-AC002 test-isolation).
@@ -194,7 +296,7 @@ func TestDrainObserver_AssemblesAndSendsDRAINFrame(t *testing.T) {
 	}
 
 	var buf syncBuffer
-	conn, cancel, awaitReturn := dialNodeAndAwaitRegistration(t, cfg, &buf)
+	conn, cancel, awaitReturn := dialNodeAndAwaitRegistrationAdmitted(t, cfg, &buf)
 
 	cancel() // production path 1 (Q3-AMENDED): shutdown block → drainCoord.Signal
 
@@ -227,13 +329,11 @@ func TestDrainObserver_AssemblesAndSendsDRAINFrame(t *testing.T) {
 // ServeConfig.IfaceIDSeed-seeded counter (>= 2; peIfaceID=1 stays
 // reserved) and calls OnAccept for an admitted connection; runRouter's
 // OnAccept closure fires nodeConnHook(nodeConnRegistered, ...) — the
-// send-map-registration observable (Q-AC002). The "OnAccept fires before
-// ServeConn" ordering is a netingress.go control-flow property, verified
-// at the internal/netingress level (step (a)); this integration test
-// asserts the two externally-observable outcomes Q-AC002 scopes tests to.
+// send-map-registration observable (Q-AC002).
 //
-// RED GATE: runRouter does not wire ServeConfig.OnAccept yet, so
-// nodeConnHook never fires and awaitNodeConnEvent times out.
+// Updated by S-BL.NODE-IDENTIFY-WIRE Task 20: uses makeAdmittedNode +
+// dialNodeAdmitted because onAccept now requires the NODE_IDENTIFY handshake
+// before sendMap.Store fires nodeConnHook(nodeConnRegistered).
 func TestNetingress_OnAccept_RegistersNodeHandle(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, mutates
 	// the package-level nodeConnHook test hook (Q-AC002 test-isolation).
@@ -246,6 +346,7 @@ func TestNetingress_OnAccept_RegistersNodeHandle(t *testing.T) {
 		ManagementSocket: sockPath,
 	}
 
+	info := makeAdmittedNode(t, cfg)
 	events := setNodeConnHook(t)
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
@@ -253,13 +354,13 @@ func TestNetingress_OnAccept_RegistersNodeHandle(t *testing.T) {
 		cancel()
 		select {
 		case <-errCh:
-		case <-time.After(2 * time.Second):
+		case <-time.After(4 * time.Second):
 		}
 	})
 
-	dialNode(t, cfg)
+	dialNodeAdmitted(t, cfg, info)
 
-	rec := awaitNodeConnEvent(t, events, nodeConnRegistered, 2*time.Second)
+	rec := awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
 	if rec.ifaceID < 2 {
 		t.Errorf("AC-002: NodeHandle.IfaceID = %d, want >= 2 (peIfaceID=1 reserved)", rec.ifaceID)
 	}
@@ -269,14 +370,10 @@ func TestNetingress_OnAccept_RegistersNodeHandle(t *testing.T) {
 // 4: when the node's connection closes, OnAccept's behavior-cleanup func()
 // removes the per-node send-map entry and fires
 // nodeConnHook(nodeConnRemoved, ...) for the same IfaceID that was
-// registered. Per Q-AC002's binding observability rule, registration and
-// removal are observed EXCLUSIVELY via nodeConnHook — this test does not
-// (and structurally cannot, from cmd/switchboard) assert directly on
-// nc.send/nc.writerExited; those are internal invariants enforced by
-// construction and backstopped by go test -race across the suite.
+// registered.
 //
-// RED GATE: fails at the nodeConnRegistered wait — same as
-// TestNetingress_OnAccept_RegistersNodeHandle.
+// Updated by S-BL.NODE-IDENTIFY-WIRE Task 20: polls dial + completes the
+// NODE_IDENTIFY handshake before awaiting nodeConnRegistered.
 func TestRunRouter_NodeConnClose_CleansUpSendMap(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, mutates
 	// the package-level nodeConnHook test hook (Q-AC002 test-isolation).
@@ -289,6 +386,7 @@ func TestRunRouter_NodeConnClose_CleansUpSendMap(t *testing.T) {
 		ManagementSocket: sockPath,
 	}
 
+	info := makeAdmittedNode(t, cfg)
 	events := setNodeConnHook(t)
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
@@ -296,23 +394,14 @@ func TestRunRouter_NodeConnClose_CleansUpSendMap(t *testing.T) {
 		cancel()
 		select {
 		case <-errCh:
-		case <-time.After(2 * time.Second):
+		case <-time.After(4 * time.Second):
 		}
 	})
 
-	// Poll-dial the data-plane listener (same pattern as
-	// TestRunRouter_DataListenerBinds, mgmt_wire_test.go): this story's
-	// wireRouterControlHandlers adds two srv.Register calls before the
-	// data-plane bind (AC-013 register-before-serve), widening the startup
-	// window between startRunRouterWithConfig's mgmt-socket-ready return and
-	// cfg.ListenAddr's bind. A single un-retried net.Dial here raced that
-	// window under CI load (PR #122 review round 1, B2). Unlike
-	// TestRunRouter_DataListenerBinds, the successful connection is KEPT
-	// (not closed) — this test needs conn open for the registered/removed
-	// event assertions below.
+	// Poll-dial the data-plane listener then complete the handshake.
 	var conn net.Conn
 	var err error
-	deadline := time.Now().Add(1 * time.Second)
+	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		conn, err = net.DialTimeout("tcp", cfg.ListenAddr, 50*time.Millisecond)
 		if err == nil {
@@ -323,8 +412,10 @@ func TestRunRouter_NodeConnClose_CleansUpSendMap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial %s: %v", cfg.ListenAddr, err)
 	}
+	t.Cleanup(func() { _ = conn.Close() })
+	completeNodeHandshake(t, conn, info)
 
-	registered := awaitNodeConnEvent(t, events, nodeConnRegistered, 2*time.Second)
+	registered := awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
 
 	// Close from the CLIENT side — this is the trigger for the server's
 	// per-conn goroutine to observe a read error, return from ServeConn,
@@ -398,8 +489,8 @@ func TestDrainObserver_RegisteredAtStartup_FiresOnSignal(t *testing.T) {
 // conn.RemoteAddr() clause — no conn is in scope in the route closure) and
 // the connection is NOT closed.
 //
-// RED GATE: fails on the E-PRT-002 assertion — the route closure does not
-// length-check ctl payloads yet; nothing logs E-PRT-002.
+// Updated by S-BL.NODE-IDENTIFY-WIRE Task 20: completes the NODE_IDENTIFY
+// handshake (required by onAccept) before sending the ctl test frame.
 func TestRouter_CtlFrame_ShortPayload_NoConnClose(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -411,17 +502,18 @@ func TestRouter_CtlFrame_ShortPayload_NoConnClose(t *testing.T) {
 		ManagementSocket: sockPath,
 	}
 
+	info := makeAdmittedNode(t, cfg)
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
 	t.Cleanup(func() {
 		cancel()
 		select {
 		case <-errCh:
-		case <-time.After(2 * time.Second):
+		case <-time.After(4 * time.Second):
 		}
 	})
 
-	conn := dialNode(t, cfg)
+	conn := dialNodeAdmitted(t, cfg, info)
 
 	// PayloadLen=1 — shorter than the 4-byte control message BC-2.01.008
 	// requires before payload[0] may be read.
@@ -440,15 +532,8 @@ func TestRouter_CtlFrame_ShortPayload_NoConnClose(t *testing.T) {
 // (0xFF here; also covers the reserved-but-undispatched 0x02 RESYNC) is
 // silently ignored with NO logging of any kind and no connection close.
 //
-// KNOWN EXCEPTION TO THE RED GATE: every postcondition this test checks —
-// conn stays open, no matching log line, no E-PRT-002 — is an
-// absence-of-behavior property that already holds with NO ctl-specific
-// code at all (routing.RouteFrame today ignores FrameType entirely; the
-// guard this pins does not exist yet, so it cannot have logged anything).
-// This test is expected to PASS pre-implementation; its value is as a
-// regression guard for step (c) — the placement note's own v1.1→v1.2
-// history records a first-draft guard that mistakenly logged this path,
-// which PC-4 v1.1 forbids (F-DW-SP3-002).
+// Updated by S-BL.NODE-IDENTIFY-WIRE Task 20: completes the NODE_IDENTIFY
+// handshake (required by onAccept) before sending the unknown-ctl test frame.
 func TestRouter_CtlFrame_UnknownControlType_SilentIgnore(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket.
 
@@ -460,17 +545,18 @@ func TestRouter_CtlFrame_UnknownControlType_SilentIgnore(t *testing.T) {
 		ManagementSocket: sockPath,
 	}
 
+	info := makeAdmittedNode(t, cfg)
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
 	t.Cleanup(func() {
 		cancel()
 		select {
 		case <-errCh:
-		case <-time.After(2 * time.Second):
+		case <-time.After(4 * time.Second):
 		}
 	})
 
-	conn := dialNode(t, cfg)
+	conn := dialNodeAdmitted(t, cfg, info)
 
 	// 4-byte payload with an unrecognized control_type (0xFF) — neither
 	// 0x01 (DRAIN) nor the reserved-but-undispatched 0x02 (RESYNC).
@@ -493,13 +579,11 @@ func TestRouter_CtlFrame_UnknownControlType_SilentIgnore(t *testing.T) {
 // (Q4-AMENDED): an untagged (non-`go:build integration`) real-runRouter
 // test proving the wire round-trip — a connected node receives a
 // FrameTypeCtl frame with payload[0]=0x01 within 2s of drainCoord.Signal,
-// and drainCoord.Wait returns nil within the default drain window. Shares
-// its dial+barrier harness with AC-001's
-// TestDrainObserver_AssemblesAndSendsDRAINFrame — kept as a separate test
-// function per the AC-001-vs-AC-004 ruling (distinct BC vs VP
-// obligations).
+// and drainCoord.Wait returns nil within the default drain window.
 //
-// RED GATE: fails at the accept/register barrier, same as AC-001's test.
+// Updated by S-BL.NODE-IDENTIFY-WIRE Task 20: uses
+// dialNodeAndAwaitRegistrationAdmitted because onAccept now requires the
+// NODE_IDENTIFY handshake before sendMap.Store.
 func TestE2E_RouterDrain_WireRoundTrip(t *testing.T) {
 	// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, mutates
 	// the package-level nodeConnHook test hook (Q-AC002 test-isolation).
@@ -513,7 +597,7 @@ func TestE2E_RouterDrain_WireRoundTrip(t *testing.T) {
 	}
 
 	var buf syncBuffer
-	conn, cancel, awaitReturn := dialNodeAndAwaitRegistration(t, cfg, &buf)
+	conn, cancel, awaitReturn := dialNodeAndAwaitRegistrationAdmitted(t, cfg, &buf)
 
 	cancel()
 

@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -591,47 +592,78 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	var sendMap sync.Map // routing.InterfaceID -> *nodeConn
 	var writerWG sync.WaitGroup
 
-	route := func(hdr frame.OuterHeader, payload []byte) error {
-		// Q-CTL-GUARD: ctl frame receive path — exclusively in this
-		// closure, NOT the frozen PE FrameFn closure (Q2-AMENDED). Every
-		// ctl frame arriving here is terminal-consumer by construction
-		// under the current architecture (BC-2.01.008 v1.1 Invariant 2 —
-		// no inter-router relay path exists anywhere in this codebase);
-		// REVISIT this unconditional posture if a future story introduces
-		// router-to-router forwarding.
-		if hdr.FrameType == frame.FrameTypeCtl {
-			if len(payload) < 4 {
-				// E-PRT-002: control frame truncated. No conn is in scope
-				// here — this closure's signature is func(hdr, payload)
-				// error; there is no per-connection dispatch seam with
-				// conn access (F-DW-SP3-003) — do not add one for this log
-				// line.
-				routerLogger.Log(fmt.Sprintf(
-					"netingress: E-PRT-002: ctl frame payload_len=%d < 4; discarding",
-					len(payload)))
-				// silent-ignore: no connection close per BC-2.01.008 EC-002
+	// buildRoute constructs the per-connection RouteFn. conn is captured for
+	// E-ADM-023 teardown (§17 Option B): case 0x04 calls conn.Close() directly
+	// so ServeConn's next ReadFrame returns an error and the connection tears
+	// down, rather than relying on the drop-and-continue error path. Pass nil
+	// for the shared-fallback form (conn==nil → guarded; no close; retains the
+	// prior drop-and-continue behavior for any caller that does not use
+	// PerConnRoute).
+	buildRoute := func(conn net.Conn) netingress.RouteFn {
+		return func(hdr frame.OuterHeader, payload []byte) error {
+			// Q-CTL-GUARD: ctl frame receive path — exclusively in this
+			// closure, NOT the frozen PE FrameFn closure (Q2-AMENDED). Every
+			// ctl frame arriving here is terminal-consumer by construction
+			// under the current architecture (BC-2.01.008 v1.1 Invariant 2 —
+			// no inter-router relay path exists anywhere in this codebase);
+			// REVISIT this unconditional posture if a future story introduces
+			// router-to-router forwarding.
+			if hdr.FrameType == frame.FrameTypeCtl {
+				if len(payload) < 4 {
+					// E-PRT-002: control frame truncated. Drop-and-continue per
+					// BC-2.01.008 EC-002 — no connection close on this path.
+					routerLogger.Log(fmt.Sprintf(
+						"netingress: E-PRT-002: ctl frame payload_len=%d < 4; discarding",
+						len(payload)))
+					// silent-ignore: no connection close per BC-2.01.008 EC-002
+					return nil
+				}
+				controlType := payload[0]
+				switch controlType {
+				case 0x01: // DRAIN — router-originated broadcast (Q2-AMENDED);
+					// a router does not act on an inbound DRAIN byte from a node.
+				case 0x04: // NODE_IDENTIFY — second NodeIdentify on established
+					// connection is a protocol violation (BC-2.01.009 Invariant 7;
+					// E-ADM-023). The handshake is conducted in onAccept before
+					// ServeConn starts; a NODE_IDENTIFY reaching route() means
+					// a duplicate NodeIdentify was sent after admission.
+					//
+					// S-BL.NODE-IDENTIFY-WIRE Task 19 + rulings §17 Option B:
+					// call conn.Close() directly so ServeConn's next ReadFrame
+					// errors and the goroutine exits — drop-and-continue on the
+					// error return is insufficient (the connection must be torn
+					// down, not merely the frame dropped).
+					routerLogger.Log("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
+					if conn != nil {
+						_ = conn.Close() // §17 Option B: TCP close → ServeConn errors → cleanup()
+					}
+					return errors.New("node_identify: E-ADM-023 duplicate NodeIdentify — connection closed")
+				default:
+					// Unknown/forward-compat control_type (includes the
+					// reserved-but-undispatched 0x02 RESYNC opcode until
+					// S-BL.RESYNC-FRAME lands). BC-2.01.008 PC-4 (v1.1): silent-
+					// ignore means NO logging of any kind on this path — not
+					// even a diagnostic/informational line — and no connection
+					// close. Do NOT add a log call to this arm: a well-formed-
+					// but-unrecognized opcode is ordinary forward-compatible
+					// protocol evolution, not an anomaly (asymmetric with the
+					// E-PRT-002 branch above, which DOES log — truncation is
+					// corruption, diagnostic-worthy).
+				}
 				return nil
 			}
-			controlType := payload[0]
-			switch controlType {
-			case 0x01: // DRAIN — router-originated broadcast (Q2-AMENDED);
-				// a router does not act on an inbound DRAIN byte from a node.
-			default:
-				// Unknown/forward-compat control_type (includes the
-				// reserved-but-undispatched 0x02 RESYNC opcode until
-				// S-BL.RESYNC-FRAME lands). BC-2.01.008 PC-4 (v1.1): silent-
-				// ignore means NO logging of any kind on this path — not
-				// even a diagnostic/informational line — and no connection
-				// close. Do NOT add a log call to this arm: a well-formed-
-				// but-unrecognized opcode is ordinary forward-compatible
-				// protocol evolution, not an anomaly (asymmetric with the
-				// E-PRT-002 branch above, which DOES log — truncation is
-				// corruption, diagnostic-worthy).
-			}
-			return nil
+			return routing.RouteFrame(hdr, payload, router)
 		}
-		return routing.RouteFrame(hdr, payload, router)
 	}
+	// route := buildRoute(nil) is the shared-fallback form used when PerConnRoute is nil.
+	// IMPORTANT: This form captures conn==nil, so case 0x04 CANNOT call conn.Close() and
+	// therefore CANNOT tear down the connection on E-ADM-023. This is NOT a bug for this
+	// fallback: it is intentional for any caller that passes ServeConfig{} without
+	// PerConnRoute. However, runRouter MUST set ServeConfig.PerConnRoute (done below at
+	// the netingress.Serve call, line ~758) so that each per-connection route closure has
+	// a live conn handle and E-ADM-023 teardown is functional. Do NOT remove the
+	// PerConnRoute assignment below — the shared fallback form cannot substitute for it.
+	route := buildRoute(nil) // shared fallback: conn==nil → no close; drop-and-continue retained
 
 	// onAccept is the BEHAVIOR half of the Q-SEAM ownership split:
 	// netingress.Serve has already allocated h.IfaceID/h.Send/h.Done (DATA
@@ -639,7 +671,57 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// *nodeConn, stores it in the per-node send map, starts the sole
 	// writer goroutine for this connection, and returns a behavior-cleanup
 	// func() that deregisters the node when its connection closes.
+	//
+	// S-BL.NODE-IDENTIFY-WIRE Task 20: nodeIdentifyHandshake runs at the START
+	// of onAccept, BEFORE sendMap.Store. On handshake failure conn is already
+	// closed; return a no-op cleanup func so netingress.Serve does not try to
+	// re-close it. On success, the cleanup func also calls r.UnbindInterface
+	// with the stale-cleanup guard so identityIfaceMap stays consistent with
+	// sendMap (BC-2.01.010 PC-8; rulings §12).
 	onAccept := func(conn net.Conn, h netingress.NodeHandle) func() {
+		// Conduct NODE_IDENTIFY handshake before registering the connection.
+		// On failure, nodeIdentifyHandshake closes conn and returns a non-nil
+		// error; return a no-op cleanup func — there is nothing to deregister.
+		// svtnID is populated for all post-decode failure paths (admission errors,
+		// ChallengeResponse read/decode errors) so WARN logs can include it.
+		// For pre-decode failures (malformed NodeIdentify, zero SVTN, timeout on
+		// first read) svtnID may be zero — the WARN still records the error code.
+		svtnID, nodeAddr, hsErr := nodeIdentifyHandshakeFn(conn, router, daemonPriv, routerKS, h)
+		if hsErr != nil {
+			// Emit a code-bearing WARN log for each classified admission failure path
+			// (AC-004 PC2 through AC-009 PC3; rulings §13 failure-path table).
+			// Use errors.Is to classify — NEVER string-match error messages (go.md).
+			// The timeout path is detected via os.ErrDeadlineExceeded (net package
+			// wraps this via the net.Error.Timeout() path; errors.Is unwraps both).
+			// Admission sentinels classified via the admission package sentinel vars.
+			switch {
+			case errors.Is(hsErr, os.ErrDeadlineExceeded):
+				// E-ADM-022: handshake deadline fired before exchange completed.
+				// "handshake timeout" literal included (AC-009 PC3).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-022 handshake timeout svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrNotAdmitted):
+				// E-ADM-003: node's pubkey not registered for this SVTN (AC-004 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-003 not admitted svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrKeyRevoked):
+				// E-ADM-005: node's key has been revoked (AC-005 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-005 key revoked svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrKeyExpired):
+				// E-ADM-015: node's key has expired (AC-006 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-015 key expired svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrNonceReplay):
+				// E-ADM-008: challenge nonce already consumed (AC-007 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-008 nonce replay svtn=%x", svtnID))
+			case errors.Is(hsErr, admission.ErrSignatureVerificationFailed):
+				// E-ADM-001: ChallengeResponse signature did not verify (AC-008 PC2).
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-001 sig verify failed svtn=%x", svtnID))
+			default:
+				// Unclassified error (e.g. raw I/O failure on write, SetDeadline error).
+				// Log the underlying error so nothing is silently swallowed.
+				routerLogger.Log(fmt.Sprintf("runRouter: NODE_IDENTIFY handshake failed: %v", hsErr))
+			}
+			return func() {}
+		}
+
 		nc := &nodeConn{
 			send:         h.Send,
 			done:         h.Done,
@@ -689,6 +771,11 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 
 		return func() {
 			sendMap.Delete(h.IfaceID)
+			// Remove identity binding with stale-cleanup guard so that a LWW-
+			// overwritten binding (new connection, same identity) is not removed
+			// when this (stale) connection's cleanup fires (BC-2.01.010 PC-9;
+			// S-BL.NODE-IDENTIFY-WIRE rulings §12).
+			router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)
 			if nodeConnHook != nil {
 				nodeConnHook(nodeConnRemoved, h.IfaceID)
 			}
@@ -707,7 +794,11 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		// Serve returns nil on ctx cancel or a wrapped Accept error on
 		// terminal listener failure; we log and drop either way — the ctx
 		// cancel path is the graceful shutdown.
-		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger, netingress.ServeConfig{OnAccept: onAccept, IfaceIDSeed: 2}); serr != nil && ingressCtx.Err() == nil {
+		if serr := netingress.Serve(ingressCtx, dataLn, route, routerLogger, netingress.ServeConfig{
+			OnAccept:     onAccept,
+			IfaceIDSeed:  2,
+			PerConnRoute: func(conn net.Conn, _ netingress.NodeHandle) netingress.RouteFn { return buildRoute(conn) },
+		}); serr != nil && ingressCtx.Err() == nil {
 			routerLogger.Log(fmt.Sprintf("runRouter: netingress.Serve exited: %v", serr))
 		}
 	}()

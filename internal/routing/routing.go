@@ -148,9 +148,18 @@ type ForwardingEntry struct {
 //
 // All exported methods are safe for concurrent use.
 type Router struct {
-	mu                  sync.RWMutex
-	admittedKeySet      *admission.AdmittedKeySet
-	forwardingTable     map[[16]byte]map[[8]byte]*ForwardingEntry
+	mu              sync.RWMutex
+	admittedKeySet  *admission.AdmittedKeySet
+	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry
+	// identityIfaceMap maps (svtnID, nodeAddr) → InterfaceID for the
+	// DISCOVERY_RELAY fan-out path (S-BL.NODE-IDENTIFY-WIRE; unblocks
+	// S-BL.DISCOVERY-WIRE Task 6 / AC-017/AC-018).
+	// Protected by r.mu (same mutex as forwardingTable and admittedKeySet
+	// accesses). See internal/routing/identity.go for BindInterface,
+	// LookupInterface, and UnbindInterface.
+	//
+	// Traces to BC-2.01.010; S-BL.NODE-IDENTIFY-WIRE-rulings.md §8.
+	identityIfaceMap    map[[16]byte]map[[8]byte]InterfaceID
 	logger              Logger
 	failureCounter      hmacFailureRecorder // nil = no counter; set via WithFailureCounter
 	forwardingEntryHook ForwardingEntryHook // nil = no hook; set via WithForwardingEntryHook (S-BL.PATH-TRACKER-WIRING)
@@ -162,9 +171,10 @@ type Router struct {
 // WithLogger) are applied after construction.
 func NewRouter(ks *admission.AdmittedKeySet, opts ...RouterOption) *Router {
 	r := &Router{
-		admittedKeySet:  ks,
-		forwardingTable: make(map[[16]byte]map[[8]byte]*ForwardingEntry),
-		logger:          nopLogger{},
+		admittedKeySet:   ks,
+		forwardingTable:  make(map[[16]byte]map[[8]byte]*ForwardingEntry),
+		identityIfaceMap: make(map[[16]byte]map[[8]byte]InterfaceID),
+		logger:           nopLogger{},
 	}
 	for _, opt := range opts {
 		opt(r)
