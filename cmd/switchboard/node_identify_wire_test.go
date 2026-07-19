@@ -673,11 +673,12 @@ func TestNodeIdentifyHandshake_ErrNonceReplay_ConnectionClosed(t *testing.T) {
 	if res.err == nil {
 		t.Fatal("nodeIdentifyHandshake: want error (ErrNonceReplay), got nil")
 	}
-	// Accept ErrNonceReplay or ErrNotAdmitted (pre-AdmitNode may have set admitted=true
-	// before the handshake's own AdmitNode call).
-	if !errors.Is(res.err, admission.ErrNonceReplay) &&
-		!errors.Is(res.err, admission.ErrNotAdmitted) &&
-		!errors.Is(res.err, admission.ErrSignatureVerificationFailed) {
+	// The pre-consume records routerNonce in ks.nonces before the handshake's own
+	// AdmitNode call. AdmitNode calls recordNonceUnlocked(routerNonce) which finds
+	// the nonce already consumed and returns ErrNonceReplay — before reaching the
+	// signature check. ErrNotAdmitted and ErrSignatureVerificationFailed cannot
+	// occur on this path; the original disjunction was overly broad.
+	if !errors.Is(res.err, admission.ErrNonceReplay) {
 		t.Errorf("handshakeErr: want ErrNonceReplay (E-ADM-008), got %v", res.err)
 	}
 }
@@ -754,13 +755,20 @@ func TestNodeIdentifyHandshake_ErrSignatureVerificationFailed_ConnectionClosed(t
 // TestNodeIdentifyHandshake_Timeout_E_ADM_022 verifies that when the handshake
 // deadline fires, the connection is closed (E-ADM-022).
 //
-// We set a very tight deadline on routerConn before calling nodeIdentifyHandshake
-// so the first io.ReadFull returns immediately with a deadline error. The node
-// side sends nothing.
+// nodeIdentifyHandshakeTimeout is overridden to 50ms so the test completes in
+// well under a second. The node side sends nothing; the handshake's own
+// conn.SetDeadline(50ms) fires deterministically.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var; must run serially to avoid data races with other tests.
 //
 // Traces to BC-2.01.009 Precondition 4, EC-002, E-ADM-022; AC-009.
 func TestNodeIdentifyHandshake_Timeout_E_ADM_022(t *testing.T) {
-	t.Parallel()
+	// Override the production 10s deadline to 50ms so the test runs fast.
+	// Restore the original value on exit via t.Cleanup.
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
 
 	_, routerPriv := mustGenKeyHandshake(t)
 
@@ -770,16 +778,14 @@ func TestNodeIdentifyHandshake_Timeout_E_ADM_022(t *testing.T) {
 	routerConn, nodeConn := net.Pipe()
 	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
 
-	// Set an immediate deadline on the router side to force timeout.
-	_ = routerConn.SetDeadline(time.Now().Add(10 * time.Millisecond))
-
 	h := newTestHandle(45)
 	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
 
-	// Node side: do nothing (no frames sent) — let the deadline fire.
+	// Node side: do nothing (no frames sent). The handshake's own 50ms deadline
+	// fires; the router closes its end; the node-side read returns EOF.
 	go func() {
 		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
-		_, _ = io.ReadFull(nodeConn, make([]byte, 1)) // blocks until router closes conn
+		_, _ = io.ReadFull(nodeConn, make([]byte, 1)) // unblocks when router closes conn
 	}()
 
 	res := <-resCh
