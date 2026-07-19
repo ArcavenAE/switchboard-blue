@@ -623,9 +623,9 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 				// ServeConn starts; a NODE_IDENTIFY reaching route() means
 				// a duplicate NodeIdentify was sent after admission.
 				//
-				// S-BL.NODE-IDENTIFY-WIRE Task 19: log WARN + return error to
+				// S-BL.NODE-IDENTIFY-WIRE Task 19: WARN log + return error to
 				// cause connection teardown via netingress.ServeConn error path.
-				// todo: unimplemented — wire real WARN log + E-ADM-023 emission
+				routerLogger.Log("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
 				return errors.New("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
 			default:
 				// Unknown/forward-compat control_type (includes the
@@ -650,7 +650,23 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	// *nodeConn, stores it in the per-node send map, starts the sole
 	// writer goroutine for this connection, and returns a behavior-cleanup
 	// func() that deregisters the node when its connection closes.
+	//
+	// S-BL.NODE-IDENTIFY-WIRE Task 20: nodeIdentifyHandshake runs at the START
+	// of onAccept, BEFORE sendMap.Store. On handshake failure conn is already
+	// closed; return a no-op cleanup func so netingress.Serve does not try to
+	// re-close it. On success, the cleanup func also calls r.UnbindInterface
+	// with the stale-cleanup guard so identityIfaceMap stays consistent with
+	// sendMap (BC-2.01.010 PC-8; rulings §12).
 	onAccept := func(conn net.Conn, h netingress.NodeHandle) func() {
+		// Conduct NODE_IDENTIFY handshake before registering the connection.
+		// On failure, nodeIdentifyHandshake closes conn and returns a non-nil
+		// error; return a no-op cleanup func — there is nothing to deregister.
+		svtnID, nodeAddr, hsErr := nodeIdentifyHandshake(conn, router, daemonPriv, routerKS, h)
+		if hsErr != nil {
+			routerLogger.Log(fmt.Sprintf("runRouter: NODE_IDENTIFY handshake failed: %v", hsErr))
+			return func() {}
+		}
+
 		nc := &nodeConn{
 			send:         h.Send,
 			done:         h.Done,
@@ -700,6 +716,11 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 
 		return func() {
 			sendMap.Delete(h.IfaceID)
+			// Remove identity binding with stale-cleanup guard so that a LWW-
+			// overwritten binding (new connection, same identity) is not removed
+			// when this (stale) connection's cleanup fires (BC-2.01.010 PC-9;
+			// S-BL.NODE-IDENTIFY-WIRE rulings §12).
+			router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)
 			if nodeConnHook != nil {
 				nodeConnHook(nodeConnRemoved, h.IfaceID)
 			}
