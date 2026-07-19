@@ -6,7 +6,7 @@
 //
 // AdmitNode currently verifies against the frame-supplied `pubKey`:
 //
-//   if !ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig) {
+//	if !ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig) {
 //
 // The correct implementation must verify against `liveEntry.PublicKey` (the
 // stored key re-fetched under the write lock). This file provides:
