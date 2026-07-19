@@ -3,7 +3,7 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.11"
+version: "1.12"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: ready
 producer: story-writer
@@ -22,7 +22,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-01/BC-2.01.010.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.001.md'
   - 'specs/behavioral-contracts/ss-01/BC-2.01.008.md'
-input-hash: "91ce8f7"
+input-hash: "5a7f8c3"
 traces_to: "decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md"
 epic_id: E-7
 behavioral_contracts:
@@ -56,7 +56,7 @@ provenance:
   spec_annotation: "S-BL.DISCOVERY-WIRE-rulings.md v1.9, Ruling 3(f) subsection item (j) — the human gate disposition naming and scoping this story"
   adjudication: "S-BL.DISCOVERY-WIRE-fanout-options.md v1.1 Option 1 selected at the story-ready human gate — Option 1's NODE_IDENTIFY handshake mechanism delivered via Option 3's name-and-schedule-now shape"
 inputDocuments:
-  - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'   # v1.3 — BINDING. All obligations resolved. Wire format (§§2–9): control_type=0x04 with msg_kind sub-byte at payload[2]; NodeIdentify(80B)/Challenge(144B)/ChallengeResponse(112B) frame layouts; outer header fields; handshake sequence (§7); Router.BindInterface/LookupInterface/UnbindInterface signatures (§8); bounds guards (§9). Obligation 3 (§12): LWW overwrite on reconnect; prior connection self-removing via stale cleanup guard; second NodeIdentify on same connection = hard error E-ADM-023. Obligation 4 (§13): nodeIdentifyHandshakeTimeout=10s (conn.SetDeadline in onAccept); failure path table with E-ADM-022/-023 new codes; eventual-consistency race → ErrNotAdmitted+retry. Obligations 5/6 resolved-by-delivery (§14): PR #126 (admission-sync router keyset populated) + PR #125 (node keypair provisioned). O-1 (§15): AdmitNode MUST gain expiry check (Option A, mirrors ReAuthenticate); BC-2.05.001 amendment required; human-ratified 2026-07-18; v1.3 adds §17 (E-ADM-023 teardown, Option B — PerConnRoute per-conn route closure) implemented by Task 20a.
+  - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'   # v1.4 — BINDING. All obligations resolved. Wire format (§§2–9): control_type=0x04 with msg_kind sub-byte at payload[2]; NodeIdentify(80B)/Challenge(144B)/ChallengeResponse(112B) frame layouts; outer header fields; handshake sequence (§7); Router.BindInterface/LookupInterface/UnbindInterface signatures (§8); bounds guards (§9). Obligation 3 (§12): LWW overwrite on reconnect; prior connection self-removing via stale cleanup guard; second NodeIdentify on same connection = hard error E-ADM-023. Obligation 4 (§13): nodeIdentifyHandshakeTimeout=10s (conn.SetDeadline in onAccept); failure path table with E-ADM-022/-023 new codes; eventual-consistency race → ErrNotAdmitted+retry. Obligations 5/6 resolved-by-delivery (§14): PR #126 (admission-sync router keyset populated) + PR #125 (node keypair provisioned). O-1 (§15): AdmitNode MUST gain expiry check (Option A, mirrors ReAuthenticate); BC-2.05.001 amendment required; human-ratified 2026-07-18; v1.3 adds §17 (E-ADM-023 teardown, Option B — PerConnRoute per-conn route closure) implemented by Task 20a; v1.4 adds §18 (F-1 adjudication: AdmitNode verifies against STORED key liveEntry.PublicKey per BC-2.05.001 PC-3, not the frame pubkey; Verified-Premises corrected).
   - 'specs/behavioral-contracts/ss-01/BC-2.01.009.md'  # v1.2 — NODE_IDENTIFY three-message handshake wire protocol; all failure paths (PC/Invariants/Error Codes/Edge Cases/Test Vectors); single opcode/msg_kind model; zero HMACTag in all frames; SVTNID mandatory non-zero; exact payload lengths enforced; second NodeIdentify Invariant 7; eventual-consistency EC-001; Invariant 7 mechanism note (v1.2): teardown via conn.Close() in per-conn route closure, §17.
   - 'specs/behavioral-contracts/ss-01/BC-2.01.010.md'  # v1.3 — BindInterface binding lifecycle: BindInterface(LWW on reconnect, write-lock), LookupInterface((InterfaceID,bool) value return, read-lock), UnbindInterface(stale cleanup guard). identityIfaceMap field on Router. All three methods protected by r.mu. Prior connection NOT actively torn down on LWW overwrite; v1.3 corrects PC-2 dead type ref ConnHandle→NodeHandle.
   - 'specs/behavioral-contracts/ss-05/BC-2.05.001.md'  # v1.3 — AdmitNode admission postconditions including NEW Postcondition 6 (ErrKeyExpired/E-ADM-015 when expiry set and past) + Invariant 5 (symmetric expiry enforcement across AdmitNode and ReAuthenticate) + NEW Postcondition 7 (ErrKeyRevoked/E-ADM-005 when key revoked at initial admission). O-1 ruling human-ratified 2026-07-18. Implementation anchor: expiry check after snap.revoked read, before write-lock acquire, mirroring ReAuthenticate.
@@ -626,6 +626,7 @@ code until `go test ./...` shows compile errors or test failures for ALL ACs.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.12 | 2026-07-19 | Rulings input pin v1.3→v1.4 (§18 F-1 adjudication: AdmitNode verifies against STORED key liveEntry.PublicKey per BC-2.05.001 PC-3, not the frame pubkey; Verified-Premises corrected); input-hash resync 91ce8f7→5a7f8c3 (hash advanced because rulings v1.4 content changed — tool-authoritative); reason = F-1 fix governance cascade. |
 | 1.11 | 2026-07-19 | MED-1 (Step-4.5 adversarial): refresh two stale input annotations missed by the v1.10 partial sweep — rulings v1.2→v1.3 (§17 E-ADM-023 teardown, implemented by Task 20a) and BC-2.01.010 v1.2→v1.3 (PC-2 ConnHandle→NodeHandle). All three input pins now match on-disk versions. Citation-integrity fix. input-hash e252875→91ce8f7: the v1.11 annotation edit re-resolved BC-2.01.010's v1.3 content (whose PC-2 ConnHandle→NodeHandle fix landed after e252875 was computed), so the content-derived hash advanced — this also corrects a latent input-hash drift. |
 | 1.10 | 2026-07-19 | F-3 (Step-4.5 adversarial): refresh BC-2.05.001 input annotation v1.2→v1.3 (PC-7 ErrKeyRevoked-at-admission/E-ADM-005 added 2026-07-18, exercised by AC-005). Citation-integrity fix; other three input pins already correct. |
 | 1.9 | 2026-07-19 | §17 (E-ADM-023 teardown, Option B) cascade: Task 19 corrected — teardown is conn.Close() in the per-conn route closure, NOT the (dropped) route-error return; Task 20a added — PerConnRoute additive field on netingress.ServeConfig with zero-alloc-invariant constraint. ConnHandle→NodeHandle story/code drift fixed (Task 18). BC-2.01.009 re-pinned v1.1→v1.2; Invariant 7 mechanism note added. input-hash recomputed f32d7ee→e252875. |
