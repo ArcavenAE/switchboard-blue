@@ -216,6 +216,79 @@ func TestNodeIdentifyHandshake_Success_BindingRecorded(t *testing.T) {
 	}
 }
 
+// TestNodeIdentifyHandshake_Success_ServeConnBegins_FrameRouted verifies that
+// after a successful handshake ServeConn is actually running and processing
+// frames — not just that nodeIdentifyHandshake returned nil. It drives the full
+// daemon path (runRouter → onAccept → ServeConn) and sends a post-handshake
+// FrameTypeData frame after the nodeConnRegistered hook fires. The frame must be
+// consumed by the running ServeConn read loop; if ServeConn never started the
+// connection would be closed or the frame unread.
+//
+// Discriminating property: if the daemon's onAccept did not hand the connection
+// to ServeConn (i.e. the post-handshake hand-off were broken), the connection
+// would be closed from the router side and assertConnAlive's write would fail
+// or the subsequent read would return EOF/reset instead of a read timeout. The
+// read-timeout outcome uniquely proves ServeConn is reading frames — the router
+// never replies to FrameTypeData, so a timeout (not EOF, not data) is the only
+// proof the connection is alive and being read.
+//
+// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, overrides the
+// package-level nodeConnHook test hook (Q-AC002 test-isolation requirement
+// shared with router_drain_wire_test.go).
+//
+// Traces to BC-2.01.009 PC-6 (ServeConn begins), PC-7 (deadline cleared),
+// PC-8 (fully-bound state); AC-001; story test-plan line 233-234.
+func TestNodeIdentifyHandshake_Success_ServeConnBegins_FrameRouted(t *testing.T) {
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Pre-load an admission snapshot so the daemon admits the test node key.
+	info := makeAdmittedNode(t, cfg)
+
+	// Install the channel-backed nodeConnHook so we can synchronise on
+	// nodeConnRegistered (fires after sendMap.Store, i.e. after onAccept
+	// returns and ServeConn has started reading the per-conn data-plane loop).
+	events := setNodeConnHook(t)
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	// Dial and complete the NODE_IDENTIFY handshake. dialNodeAdmitted runs
+	// completeNodeHandshake under the hood; after it returns the conn is
+	// post-handshake (deadline cleared by the daemon's onAccept).
+	nodeConn := dialNodeAdmitted(t, cfg, info)
+
+	// Wait until onAccept has stored the node in sendMap and the
+	// nodeConnRegistered hook has fired. After this event, ServeConn is
+	// running and reading frames on nodeConn.
+	awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
+
+	// ASSERT ServeConn is running: send a FrameTypeData frame (router never
+	// replies) and confirm the connection stays alive by observing a read
+	// timeout rather than EOF/reset.
+	//
+	// Discriminating: if ServeConn were not started after onAccept (broken
+	// hand-off), the daemon would not be reading from nodeConn. The TCP
+	// socket would remain half-open from the daemon side; the write would
+	// still succeed (TCP buffers it) but the socket would not be actively
+	// drained. More crucially, any prior daemon-side Close would cause our
+	// read to return EOF/reset immediately — not a timeout — so the
+	// assertConnAlive timeout outcome is uniquely tied to ServeConn running.
+	assertConnAlive(t, nodeConn)
+}
+
 // TestNodeIdentifyHandshake_Success_ServeConnBegins verifies that after a
 // successful handshake the connection is left open (deadline cleared).
 //
@@ -322,6 +395,18 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongPayloadLen(t *testing.
 	}
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// AC-002 PC-4: the malformed-NodeIdentify path emits a WARN at the
+	// nodeIdentifyHandshake level (before onAccept's classification switch,
+	// which only runs for admission sentinels). The returned error must contain
+	// "malformed NodeIdentify" — the literal shared by all wrong-payload-len
+	// and wrong-field-value paths in node_identify_wire.go.
+	// Discriminating: changing that literal prefix in production fails this
+	// assertion while the nil-check above stays green.
+	const wantMalformed = "malformed NodeIdentify"
+	if !strings.Contains(res.err.Error(), wantMalformed) {
+		t.Errorf("AC-002 PC-4: error does not indicate malformed NodeIdentify; want substring %q, got: %q",
+			wantMalformed, res.err.Error())
 	}
 }
 
@@ -445,6 +530,15 @@ func TestNodeIdentifyHandshake_ZeroSVTNID_Rejected(t *testing.T) {
 	}
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real zero-SVTN-ID rejection error", res.err)
+	}
+	// AC-003 PC-2: the error message MUST contain the exact literal
+	// "node_identify: zero SVTN ID rejected" (node_identify_wire.go).
+	// Discriminating: renaming that literal in production fails this assertion
+	// while the nil-check above stays green — so this is the sole guard for
+	// the literal string postcondition.
+	const wantLiteral = "node_identify: zero SVTN ID rejected"
+	if !strings.Contains(res.err.Error(), wantLiteral) {
+		t.Errorf("AC-003 PC-2: error message does not contain literal %q; got: %q", wantLiteral, res.err.Error())
 	}
 }
 
@@ -914,6 +1008,17 @@ func TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023(t *testing.T) {
 	}
 	// Any non-timeout error (EOF, connection reset, closed pipe) means the
 	// router closed the connection — which is the required behavior.
+
+	// AC-011 PC-2: the router MUST emit a WARN log containing "E-ADM-023"
+	// (mgmt_wire.go:636: `routerLogger.Log("node_identify: duplicate NodeIdentify
+	// on established connection (E-ADM-023)")`).
+	// Discriminating: deleting that Log call (while keeping conn.Close()) leaves
+	// the connection-close assertion above passing but fails this one — so this
+	// is the sole discriminating guard for the WARN log postcondition.
+	if !scanForLine(&buf, "E-ADM-023", 2*time.Second) {
+		t.Errorf("AC-011 PC-2: daemon log does not contain \"E-ADM-023\" within 2s "+
+			"(mgmt_wire.go:636 routerLogger.Log must emit the code); log:\n%s", buf.String())
+	}
 }
 
 // ── AC-012: Cleanup func calls UnbindInterface ────────────────────────────────
