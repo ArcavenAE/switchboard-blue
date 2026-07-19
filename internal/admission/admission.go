@@ -442,13 +442,18 @@ func GenerateChallenge(routerPrivKey ed25519.PrivateKey) (Challenge, error) {
 // AdmitNode verifies a node's challenge-response and, on success, marks the
 // node as admitted in the AdmittedKeySet (BC-2.05.001 PC4).
 //
-// Per BC-2.05.001 postcondition 3: verifies resp.NonceSig using pubKey against
-// challenge.Nonce. On success (postcondition 4): records the nonce (replay
-// prevention) and sets entry.admitted = true atomically under the write lock.
+// Per BC-2.05.001 postcondition 3: verifies resp.NonceSig using the stored
+// public key from the admitted keyset (liveEntry.PublicKey) against
+// challenge.Nonce. The frame-supplied pubKey is used only to derive the
+// nodeAddr keyset lookup via frame.DeriveNodeAddress; it is NOT the
+// verification authority (BC-2.01.009 PC-5; rulings §18).
+// On success (postcondition 4): records the nonce (replay prevention) and
+// sets entry.admitted = true atomically under the write lock.
 //
 // Error returns:
 //   - ErrNotAdmitted  (E-ADM-003) if the key is not registered for this SVTN.
 //   - ErrKeyRevoked   (E-ADM-005) if the key is registered but revoked (EC-001).
+//   - ErrKeyExpired   (E-ADM-015) if the registered key has a non-zero expiry that is now past (BC-2.05.001 PC-6, O-1).
 //   - ErrNonceReplay  (E-ADM-008) if the nonce has already been consumed (invariant 3).
 //   - ErrSignatureVerificationFailed (E-ADM-001) if signature verification fails.
 //

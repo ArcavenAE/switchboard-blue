@@ -698,7 +698,7 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			case errors.Is(hsErr, os.ErrDeadlineExceeded):
 				// E-ADM-022: handshake deadline fired before exchange completed.
 				// "handshake timeout" literal included (AC-009 PC3).
-				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-022 key %x handshake timeout svtn=%x", [8]byte{}, svtnID))
+				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-022 handshake timeout svtn=%x", svtnID))
 			case errors.Is(hsErr, admission.ErrNotAdmitted):
 				// E-ADM-003: node's pubkey not registered for this SVTN (AC-004 PC2).
 				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-003 not admitted svtn=%x", svtnID))
