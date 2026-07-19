@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.009
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "929cfd4"
+input-hash: "af775b9"
 extracted_from: null
 bc_id: BC-2.01.009
 subsystem: session-networking
@@ -27,6 +27,15 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.2"
+    date: 2026-07-19
+    author: product-owner
+    change: >
+      Invariant 7 gains a mechanism note specifying HOW the connection is closed on a
+      duplicate NodeIdentify (E-ADM-023): conn.Close() in the per-conn route closure
+      for case 0x04 via the handle injected by runRouter, per
+      S-BL.NODE-IDENTIFY-WIRE-rulings.md §17 (Option B). No PC renumber; no AC
+      citation change — AC-011 cites Invariant 7 by number, not text body.
   - version: "1.1"
     date: 2026-07-18
     author: spec-steward
@@ -115,7 +124,7 @@ The three messages consume exactly one opcode registry entry: `NODE_IDENTIFY = 0
 
 6. **Handshake dispatcher is `onAccept`, not `route`:** The three messages are handled before `ServeConn` starts. The `route` closure (stateless frame dispatcher) does not see these messages. This is consistent with the `onAccept` architecture established by `netingress.Serve`.
 
-7. **Second `NodeIdentify` on the same connection is a hard error:** If an already-admitted connection sends a second `NODE_IDENTIFY` frame, the router closes the connection and logs E-ADM-023. A well-behaved node never does this; this is a fail-closed guard against application-layer protocol violations. This is distinct from the reconnect case (new TCP connection), which is governed by BC-2.01.010 LWW rebind semantics.
+7. **Second `NodeIdentify` on the same connection is a hard error:** If an already-admitted connection sends a second `NODE_IDENTIFY` frame, the router closes the connection and logs E-ADM-023. A well-behaved node never does this; this is a fail-closed guard against application-layer protocol violations. This is distinct from the reconnect case (new TCP connection), which is governed by BC-2.01.010 LWW rebind semantics. Implementation: `conn.Close()` is called directly in the per-conn `route` closure for `case 0x04`, via the per-conn close handle injected by `runRouter` (§17 of `S-BL.NODE-IDENTIFY-WIRE-rulings.md`). `ServeConn` does not need to be modified — the TCP close causes the next `ReadFrame` to return an error, which terminates `ServeConn` naturally and triggers the cleanup func (`sendMap.Delete` + `UnbindInterface` + `doneOnce`-guarded `close(nc.done)`).
 
 8. **Eventual-consistency race is not a protocol defect:** If a node connects before its `RegisterKey` push has been processed by the router (BC-2.05.009), `AdmitNode` returns `ErrNotAdmitted`. This is indistinguishable from any other not-admitted path. The correct disposition is connection closure; retry by the node after backoff resolves the race. No special handling is required in the handshake.
 
@@ -210,5 +219,6 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-19 | Invariant 7 gains a mechanism note specifying HOW the connection is closed on a duplicate NodeIdentify (E-ADM-023): `conn.Close()` in the per-conn `route` closure for `case 0x04` via the handle injected by `runRouter`, per S-BL.NODE-IDENTIFY-WIRE-rulings.md §17 (Option B). No PC renumber; no AC citation change — AC-011 cites Invariant 7 by number, not text body. |
 | 1.1 | 2026-07-18 | PC-5 cross-reference corrected from "BC-2.05.001 Postconditions 3–6" to "Postconditions 3–7" — the prior range under-claimed coverage (omitted the revoked-key path now documented at BC-2.05.001 PC-7). Citation-accuracy fix; no postcondition semantics changed (consistency-audit Finding 3 cascade). |
 | 1.0 | 2026-07-18 | Initial commission — NODE_IDENTIFY three-message handshake: wire format (§§2–9), handshake sequence (§7), failure paths (§13), timeout (§13), second-NodeIdentify hard error (§12), eventual-consistency race disposition (§13), `AdmitNode` expiry check (§15). All sourced from S-BL.NODE-IDENTIFY-WIRE-rulings.md v1.1. |
