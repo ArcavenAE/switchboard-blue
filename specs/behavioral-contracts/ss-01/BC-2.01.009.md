@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.009
 document_type: behavioral-contract
 level: L3
-version: "1.2"
+version: "1.3"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -14,7 +14,7 @@ inputs:
   - '_bmad-output/planning-artifacts/prd.md'
   - 'decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md'
   - 'decisions/identity-cluster-architecture.md'
-input-hash: "af775b9"
+input-hash: "7d17b06"
 extracted_from: null
 bc_id: BC-2.01.009
 subsystem: session-networking
@@ -27,6 +27,16 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.3"
+    date: 2026-07-19
+    author: product-owner
+    change: >
+      PC-5 verification-source corrected: the embedded expression now names the STORED
+      registered key as the verification authority, not the frame-supplied pubKey argument.
+      The frame-supplied pubKey is used only to derive the keyset lookup address via
+      frame.DeriveNodeAddress; the signature is verified against the stored key retrieved
+      from the admitted keyset. Cascade completion of the F-1 fix; aligns with rulings §18
+      and BC-2.05.001 PC-3.
   - version: "1.2"
     date: 2026-07-19
     author: product-owner
@@ -98,7 +108,7 @@ The three messages consume exactly one opcode registry entry: `NODE_IDENTIFY = 0
 
 4. **Message 3 — `ChallengeResponse` (node → router):** The router reads a 44-byte outer header + 68-byte payload. Outer header: `frame_type = 0x03`, `payload_len = 68`, `svtn_id` unchanged, `src_addr` and `dst_addr` are zero, `hmac_tag` is zero. Payload: `control_type = 0x04`, `version = 0x01`, `msg_kind = 0x03`, `reserved = 0x00`, `nonce_sig [64 bytes]` = `ed25519.Sign(nodePrivKey, challenge.Nonce[:])`. Total frame: 112 bytes.
 
-5. **`AdmitNode` called:** The router calls `admission.AdmitNode(challenge, resp, pubKey, hdr.SVTNID, ks)` which verifies `resp.NonceSig` = `ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig)` and checks that the key is registered, not revoked, and not expired (BC-2.05.001 Postconditions 3–7). On `nil` return, admission is granted.
+5. **`AdmitNode` called:** The router calls `admission.AdmitNode(challenge, resp, pubKey, hdr.SVTNID, ks)`. The frame-supplied `pubKey` is used only to derive the keyset lookup address (`frame.DeriveNodeAddress(svtnID, pubKey)`); the signature is then verified against the STORED registered public key from the admitted keyset (`ed25519.Verify(<stored key>, challenge.Nonce[:], resp.NonceSig)`), NOT the frame-supplied `pubKey`. `AdmitNode` also checks that the key is registered, not revoked, and not expired (BC-2.05.001 Postconditions 3–7). On `nil` return, admission is granted.
 
 6. **`Router.BindInterface` called:** On `AdmitNode` success, the `onAccept` closure calls `Router.BindInterface(hdr.SVTNID, nodeAddr, h.IfaceID)` (BC-2.01.010). The `(SVTNID, NodeAddr) → IfaceID` binding is recorded.
 
@@ -219,6 +229,7 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-19 | PC-5 verification-source corrected: the embedded expression now names the STORED registered key as the verification authority, not the frame-supplied `pubKey` argument. The frame-supplied `pubKey` is used only to derive the keyset lookup address via `frame.DeriveNodeAddress`; the signature is verified against the stored key retrieved from the admitted keyset. Cascade completion of the F-1 fix; aligns with rulings §18 and BC-2.05.001 PC-3. |
 | 1.2 | 2026-07-19 | Invariant 7 gains a mechanism note specifying HOW the connection is closed on a duplicate NodeIdentify (E-ADM-023): `conn.Close()` in the per-conn `route` closure for `case 0x04` via the handle injected by `runRouter`, per S-BL.NODE-IDENTIFY-WIRE-rulings.md §17 (Option B). No PC renumber; no AC citation change — AC-011 cites Invariant 7 by number, not text body. |
 | 1.1 | 2026-07-18 | PC-5 cross-reference corrected from "BC-2.05.001 Postconditions 3–6" to "Postconditions 3–7" — the prior range under-claimed coverage (omitted the revoked-key path now documented at BC-2.05.001 PC-7). Citation-accuracy fix; no postcondition semantics changed (consistency-audit Finding 3 cascade). |
 | 1.0 | 2026-07-18 | Initial commission — NODE_IDENTIFY three-message handshake: wire format (§§2–9), handshake sequence (§7), failure paths (§13), timeout (§13), second-NodeIdentify hard error (§12), eventual-consistency race disposition (§13), `AdmitNode` expiry check (§15). All sourced from S-BL.NODE-IDENTIFY-WIRE-rulings.md v1.1. |
