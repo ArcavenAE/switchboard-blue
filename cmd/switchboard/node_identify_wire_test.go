@@ -22,10 +22,12 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -916,60 +918,224 @@ func TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023(t *testing.T) {
 
 // ── AC-012: Cleanup func calls UnbindInterface ────────────────────────────────
 
-// TestNodeIdentifyHandshake_CleanupFunc_UnbindInterface_Called verifies that
-// after a successful handshake, calling r.UnbindInterface (simulating the
-// cleanup func) removes the binding.
+// TestNodeIdentifyHandshake_CleanupFunc_UnbindInterface_Called is a real
+// integration test that drives the production runRouter daemon, establishes an
+// admitted connection through the real onAccept path, closes the connection
+// from the client side, and asserts that the identity binding is removed once
+// the cleanup closure fires.
+//
+// Discriminating property: this test is the ONLY coverage for
+// mgmt_wire.go:778 (router.UnbindInterface in the cleanup closure). Disabling
+// that line leaves the binding in identityIfaceMap indefinitely, and
+// LookupInterface after nodeConnRemoved would still return (ifaceID, true) —
+// causing the post-cleanup assertion below to fail. The test is therefore
+// discriminating: removing mgmt_wire.go:778 flips it from PASS to FAIL.
+//
+// The router reference is captured through the nodeIdentifyHandshakeFn wrapper:
+// the wrapper calls the real handshake unchanged but stores the *routing.Router
+// pointer the daemon passes to it, making LookupInterface available without
+// any production-code change. The wrapper is restored via t.Cleanup.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeFn and
+// nodeConnHook vars; must run serially to avoid data races with other tests
+// that rely on the real handshake (same isolation rationale as the timeout and
+// E-ADM-008 tests).
 //
 // Traces to BC-2.01.010 PC-8; AC-012.
 func TestNodeIdentifyHandshake_CleanupFunc_UnbindInterface_Called(t *testing.T) {
-	t.Parallel()
+	// Capture the *routing.Router the daemon passes to the handshake function.
+	// The wrapper calls the real handshake unchanged; the only side effect is
+	// storing the router pointer for post-cleanup LookupInterface assertions.
+	// Synchronization: the wrapper runs on the onAccept goroutine; the test
+	// goroutine reads routerCapture after awaitNodeConnEvent(nodeConnRegistered),
+	// which happens-after the wrapper has stored the pointer (the hook fires
+	// after sendMap.Store, which follows the handshake return).
+	var routerCapture atomic.Pointer[routing.Router]
+	var svtnCapture atomic.Value     // stores [16]byte
+	var nodeAddrCapture atomic.Value // stores [8]byte
 
-	_, routerPriv := mustGenKeyHandshake(t)
-	nodePub, nodePriv := mustGenKeyHandshake(t)
-	svtnID := mustSVTNHandshake(0x40)
+	origFn := nodeIdentifyHandshakeFn
+	nodeIdentifyHandshakeFn = func(
+		conn net.Conn,
+		r *routing.Router,
+		priv ed25519.PrivateKey,
+		ks *admission.AdmittedKeySet,
+		h netingress.NodeHandle,
+	) ([16]byte, [8]byte, error) {
+		svtnID, nodeAddr, err := origFn(conn, r, priv, ks, h)
+		if err == nil {
+			routerCapture.Store(r)
+			svtnCapture.Store(svtnID)
+			nodeAddrCapture.Store(nodeAddr)
+		}
+		return svtnID, nodeAddr, err
+	}
+	t.Cleanup(func() { nodeIdentifyHandshakeFn = origFn })
 
-	ks := admission.NewAdmittedKeySet()
-	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
-	r := routing.NewRouter(ks)
-
-	routerConn, nodeConn := net.Pipe()
-	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
-
-	const ifaceID routing.InterfaceID = 60
-	h := newTestHandle(ifaceID)
-	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
-
-	var nodeWG sync.WaitGroup
-	nodeWG.Add(1)
-	go func() {
-		defer nodeWG.Done()
-		doFullNodeHandshake(nodeConn, svtnID, nodePub, nodePriv)
-	}()
-
-	res := <-resCh
-	nodeWG.Wait()
-
-	if res.err != nil {
-		t.Fatalf("handshake should succeed, got %v", res.err)
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
 	}
 
-	// Verify binding exists before cleanup.
-	got, ok := r.LookupInterface(res.svtnID, res.nodeAddr)
+	// Pre-load an admission snapshot so runRouter admits the test node key.
+	info := makeAdmittedNode(t, cfg)
+
+	events := setNodeConnHook(t)
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	// Dial and complete the NODE_IDENTIFY handshake. After this returns,
+	// the wrapper has stored the router pointer in routerCapture.
+	nodeConn := dialNodeAdmitted(t, cfg, info)
+
+	// Wait for onAccept to complete (handshake → sendMap.Store →
+	// nodeConnRegistered hook). After this point routerCapture is populated
+	// and the binding exists in identityIfaceMap.
+	registered := awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
+
+	r := routerCapture.Load()
+	if r == nil {
+		t.Fatal("AC-012: routerCapture is nil after nodeConnRegistered — wrapper did not fire")
+	}
+	svtnID, _ := svtnCapture.Load().([16]byte)
+	nodeAddr, _ := nodeAddrCapture.Load().([8]byte)
+
+	// ASSERT: binding is present while the connection is live.
+	got, ok := r.LookupInterface(svtnID, nodeAddr)
 	if !ok {
-		t.Fatal("LookupInterface before cleanup: want (ifaceID, true), got (_, false)")
+		t.Fatalf("AC-012: LookupInterface before conn close: want (ifaceID, true), got (0, false); "+
+			"registered ifaceID=%d svtnID=%x nodeAddr=%x", registered.ifaceID, svtnID, nodeAddr)
 	}
-	if got != ifaceID {
-		t.Errorf("LookupInterface before cleanup: want %d, got %d", ifaceID, got)
+	if got != registered.ifaceID {
+		t.Errorf("AC-012: LookupInterface before conn close: want ifaceID=%d, got %d",
+			registered.ifaceID, got)
 	}
 
-	// Simulate cleanup func: call UnbindInterface with matching ifaceID.
-	r.UnbindInterface(res.svtnID, res.nodeAddr, ifaceID)
+	// Close from the client side — triggers the daemon's per-conn ServeConn to
+	// return, which invokes the onAccept cleanup func:
+	//   sendMap.Delete(h.IfaceID)
+	//   router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)  ← line 778 under test
+	//   nodeConnHook(nodeConnRemoved, h.IfaceID)
+	_ = nodeConn.Close()
 
-	got, ok = r.LookupInterface(res.svtnID, res.nodeAddr)
+	// Wait for the cleanup closure to complete (bounded deadline).
+	// nodeConnRemoved fires synchronously at line 780, AFTER UnbindInterface
+	// at line 778 — so when this returns, the binding is already gone.
+	awaitNodeConnEvent(t, events, nodeConnRemoved, 2*time.Second)
+
+	// ASSERT: binding is removed after cleanup.
+	// Discriminating property: if mgmt_wire.go:778 is disabled, this assertion
+	// FAILS because identityIfaceMap still holds the entry.
+	got, ok = r.LookupInterface(svtnID, nodeAddr)
 	if ok {
-		t.Errorf("LookupInterface after cleanup: want (0, false), got (%d, true)", got)
+		t.Errorf("AC-012: LookupInterface after conn close: want (0, false), got (%d, true); "+
+			"router.UnbindInterface was NOT called by the cleanup func (mgmt_wire.go:778 missing)",
+			got)
 	}
 	if got != 0 {
-		t.Errorf("LookupInterface after cleanup: want InterfaceID=0, got %d", got)
+		t.Errorf("AC-012: LookupInterface after conn close: want InterfaceID=0, got %d", got)
+	}
+}
+
+// ── AC-007 PC2: E-ADM-008 nonce-replay WARN log ───────────────────────────────
+
+// TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged verifies that when
+// the handshake returns admission.ErrNonceReplay, onAccept's classification
+// switch emits a WARN log containing "E-ADM-008" and the SVTN ID in hex.
+//
+// The nonce-replay error cannot be induced over black-box TCP (the router
+// never reuses a nonce), so this test injects a deterministic stub via the
+// nodeIdentifyHandshakeFn package var added in commit 55c24af. The stub
+// returns a known non-zero SVTN ID alongside ErrNonceReplay, so the test can
+// assert both the error code and the SVTN ID appear in the daemon log.
+//
+// Discriminating property: changing the E-ADM-008 arm's code string, removing
+// the "svtn=%x" field, or deleting the arm (falling to default) all flip this
+// test from PASS to FAIL.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeFn var;
+// must run serially to avoid data races with tests relying on the real
+// handshake (same isolation as TestNodeIdentifyHandshake_Timeout_E_ADM_022).
+//
+// Traces to BC-2.01.009 error-path classification; AC-007 PC2.
+func TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged(t *testing.T) {
+	// knownSvtnID is a non-zero SVTN ID whose hex representation we assert
+	// appears in the log line so the test is discriminating on the svtn= field.
+	var knownSvtnID [16]byte
+	knownSvtnID[0] = 0xDE
+	knownSvtnID[1] = 0xAD
+	knownSvtnID[2] = 0xBE
+	knownSvtnID[3] = 0xEF
+	knownSvtnIDHex := fmt.Sprintf("%x", knownSvtnID)
+
+	orig := nodeIdentifyHandshakeFn
+	nodeIdentifyHandshakeFn = func(
+		conn net.Conn,
+		_ *routing.Router,
+		_ ed25519.PrivateKey,
+		_ *admission.AdmittedKeySet,
+		_ netingress.NodeHandle,
+	) ([16]byte, [8]byte, error) {
+		// Close the connection so the daemon goroutine doesn't leak waiting
+		// for I/O — mirrors what the real handshake does on error (it closes
+		// the conn before returning the non-nil error).
+		_ = conn.Close()
+		return knownSvtnID, [8]byte{}, admission.ErrNonceReplay
+	}
+	t.Cleanup(func() { nodeIdentifyHandshakeFn = orig })
+
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// No admitted-node snapshot needed: the stub returns an error before any
+	// admission check, so runRouter starts with an empty key set.
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	// Dial a connection — this triggers onAccept, which calls the stub, which
+	// returns ErrNonceReplay, which causes the E-ADM-008 arm to log.
+	conn, err := net.DialTimeout("tcp", cfg.ListenAddr, 2*time.Second)
+	if err != nil {
+		t.Fatalf("AC-007: dial %s: %v", cfg.ListenAddr, err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// ASSERT: the daemon log contains "E-ADM-008" within a bounded deadline.
+	// Discriminating property: removing/changing the code in mgmt_wire.go:712-713
+	// causes this assertion to fail.
+	if !scanForLine(&buf, "E-ADM-008", 2*time.Second) {
+		t.Errorf("AC-007 PC2: daemon log does not contain \"E-ADM-008\" within 2s; log:\n%s",
+			buf.String())
+	}
+
+	// ASSERT: the SVTN ID hex also appears in the same log buffer.
+	// Discriminating property: removing "svtn=%x" from mgmt_wire.go:713 causes
+	// this assertion to fail.
+	if !scanForLine(&buf, knownSvtnIDHex, 2*time.Second) {
+		t.Errorf("AC-007 PC2: daemon log does not contain SVTN ID %q within 2s; log:\n%s",
+			knownSvtnIDHex, buf.String())
 	}
 }
