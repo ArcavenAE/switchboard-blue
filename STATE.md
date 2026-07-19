@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-nap-reconciled-nidw-both-legs-unblocked
+phase_step: steady-state-nidw-elaboration-complete-tdd-starting
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,20 +42,20 @@ develop_head: 92a2c65
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "Both S-BL.NODE-ADMISSION-PROVISIONING (PR #125 @ ce06f6a, 2026-07-16) and S-BL.ADMISSION-SYNC-WIRE (PR #126 @ 92a2c65, 2026-07-18) DELIVERED — S-BL.NODE-IDENTIFY-WIRE UNBLOCKED (both depends_on prerequisites cleared). NODE-IDENTIFY-WIRE is NOT decomposition-ready: draft v1.4, 0 ACs, obligations 3/4 + O-1 open, architect elaboration required. Discovery-Wire AC-017/018/Task 6 gated on NODE-IDENTIFY-WIRE. Open: stash@{0} disposition (user). Parked: S-BL.LOOPBACK-FULLSTACK v1.1."
-current_step: "S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled 2026-07-18 — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); parallel session left bookkeeping unreconciled. S-BL.ADMISSION-SYNC-WIRE CLOSED 2026-07-18 — PR #126 @ 92a2c65; 13 ACs 12 pts. NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared (PR #125 + PR #126). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3; resume ready"
+awaiting: "S-BL.NODE-IDENTIFY-WIRE TDD delivery IN PROGRESS (human-approved 2026-07-18). Elaboration arc: rulings v1.1 (83db343), O-1 RATIFIED (AdmitNode expiry guard → ErrKeyExpired E-ADM-015, Task 16/AC-013), Obligations 3/4 resolved, 5/6 resolved-by-delivery; BCs v3.8 (BC-2.01.009/010 v1.1, BC-2.05.001 v1.3, E-ADM-022/023); story v1.7 13 ACs 10 pts (1f22de1); 2× consistency audits clean. feature/S-BL.NODE-IDENTIFY-WIRE worktree mounting (devops parallel). Open: stash@{0} (user). Parked: S-BL.LOOPBACK-FULLSTACK v1.1."
+current_step: "NODE-IDENTIFY-WIRE elaboration COMPLETE 2026-07-18 — rulings v1.1 (83db343), BCs v3.8 (7480e64 + e6d547c + e466866), story v1.7 13 ACs 10 pts (1f22de1). O-1 RATIFIED: AdmitNode expiry guard at both lock levels → ErrKeyExpired E-ADM-015 (Task 16/AC-013). TDD delivery STARTING — feature/S-BL.NODE-IDENTIFY-WIRE worktree mounting (devops parallel). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-18T23:30:00Z
+timestamp: 2026-07-19T03:42:13Z
 last_update: 2026-07-18
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 199 = 301 (D-446(c) dual-margin form). 199 lines (wc-l).
+  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 200 = 300 (D-446(c) dual-margin form). 200 lines (wc-l).
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-18 — S-BL.NODE-ADMISSION-PROVISIONING reconciled; both identity-cluster legs cleared; trajectory-tail →21→7→4→3; resume ready |
+| **Last Updated** | 2026-07-18 — S-BL.NODE-IDENTIFY-WIRE elaboration complete; O-1 RATIFIED; story v1.7 13 ACs; TDD delivery starting; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-18
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-18 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | S-BL.NODE-ADMISSION-PROVISIONING reconciled; NODE-IDENTIFY-WIRE both legs unblocked |
+| **Current Step** | NODE-IDENTIFY-WIRE elaborated; O-1 RATIFIED; TDD delivery starting |
 
 ## Phase Progress
 
@@ -103,11 +103,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-15 | **S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED — PR #123 merged @ d249f88; step-4.5 impl-diff converged 3/3 @ pass 6 (4 fix-bursts); AC-017/018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE.** | completed | PR #123 MERGED. develop @ d249f88. |
 | 2026-07-13 | **S-BL.CLI-SURFACE-COMPLETION DELIVERED — PR #122 merged @ 1f25677; both adversarial arcs converged (spec 3/3@9, impl 3/3@7); 16 ACs.** | completed | PR #122 MERGED. develop @ 1f25677. |
-| 2026-07-12 | **Board close — VP-042 STOP (PAT-03 instance 2); lower-bound bench migrated PR #121 @ 4c276d9; HS-006 holdout re-eval 0.895 PASS; POL-005 registered; S-BL.LOOPBACK-FULLSTACK authored.** | completed | Board CLOSED 2026-07-12. develop @ 4c276d9. |
-| 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts; demo evidence d9a4f46; worktree removed.** | completed | PR #126 MERGED. develop @ 92a2c65. S-BL.NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
-| 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); parallel session left bookkeeping unreconciled; factory records corrected 2026-07-18. NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
+| 2026-07-15 | **S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED — PR #123 merged @ d249f88; step-4.5 impl-diff converged 3/3 @ pass 6 (4 fix-bursts); AC-017/018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE.** | completed | PR #123 MERGED. develop @ d249f88. |
+| 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts.** | completed | PR #126 MERGED. develop @ 92a2c65. NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
+| 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
+| 2026-07-18 | **S-BL.NODE-IDENTIFY-WIRE elaboration arc COMPLETE — rulings v1.1 (83db343), O-1 RATIFIED, BCs v3.8 (7480e64/e6d547c/e466866), story v1.7 13 ACs 10 pts (1f22de1); 2× consistency audits clean. TDD delivery STARTING.** | in-progress | Elaboration COMPLETE. TDD delivery → feature/S-BL.NODE-IDENTIFY-WIRE (worktree mounting). |
 
 ## Wave 6 Story Status
 
@@ -135,8 +135,8 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | WAVE-GATE-DISPATCH-INTEGRITY | HIGH | HEAD-SHA tuple absent from adversary dispatch. POL-005 local mitigation. Upstream: drbothen/vsdd-factory#448. | orchestrator | mitigated-local |
 | F-DW-IMPL-001 | HIGH | execute-against-baseline premise-tracing gap. Upstream: drbothen/vsdd-factory#620. | orchestrator | filed upstream |
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* cite log_level but config.Config rejects it (E-CFG-005). | technical-writer | open |
-| O-1 (NODE-IDENTIFY-WIRE FWD) | MED | AdmitNode does NOT check expiry — only ReAuthenticate does. Past-expiry key whose push SUCCEEDS remains admissible at initial handshake. NODE-IDENTIFY-WIRE MUST decide expiry enforcement at initial handshake. **Hard input to NODE-IDENTIFY-WIRE.** | architect | forward-obligation |
-| CI-FLAKE-DISCOVERY-HEARTBEAT | LOW | develop tip 92a2c65 post-merge push run (#29659181289) failed on TestDiscovery_Advertise_PeriodicHeartbeat (0.03s) — timing-based flake under loaded harden-runner. Dispositioned FLAKE: internal/discovery untouched by #126; prior tip green; PR-merge run passed; local 20/20 + 10x -race pass. Same class as switchboard-blue#124. Candidate: widen tolerance or add to known-flake exclusion set. NOT a merge-blocker. | orchestrator | known-flake |
+| O-1 (NODE-IDENTIFY-WIRE FWD) | MED | AdmitNode expiry enforcement — O-1 RATIFIED 2026-07-18: enforce at both lock levels → ErrKeyExpired (E-ADM-015). **IN-DELIVERY via Task 16/AC-013 of S-BL.NODE-IDENTIFY-WIRE.** | architect | in-delivery |
+| CI-FLAKE-DISCOVERY-HEARTBEAT | LOW | develop tip 92a2c65 post-merge push run (#29659181289) failed on TestDiscovery_Advertise_PeriodicHeartbeat (0.03s) — timing-based flake under loaded harden-runner. Dispositioned FLAKE; prior tip green; PR-merge run passed; local 20/20 + 10x -race pass. NOT a merge-blocker. | orchestrator | known-flake |
 
 Additional drift items: `cycles/cycle-1/closed-drift.md`.
 
@@ -152,6 +152,7 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED | PR #123 @ d249f88; step-4.5 3/3@pass 6 | 2026-07-15 |
 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED** | PR #126 @ 92a2c65; step-4.5 3/3 NITPICK_ONLY; 13 ACs, 12 pts; Rulings 12–15; BC-2.05.009 v1.6; NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED | 2026-07-18 |
 | **S-BL.NODE-ADMISSION-PROVISIONING DELIVERED** | PR #125 @ ce06f6a (mergedAt 2026-07-16); retroactively reconciled 2026-07-18; 8 ACs, 5 pts; both identity-cluster legs cleared; NODE-IDENTIFY-WIRE UNBLOCKED | 2026-07-18 |
+| **S-BL.NODE-IDENTIFY-WIRE elaboration COMPLETE** | Rulings v1.1 (83db343): O-1 RATIFIED (AdmitNode expiry → ErrKeyExpired E-ADM-015, Task 16/AC-013); Obligations 3/4 resolved; 5/6 resolved-by-delivery. BCs v3.8: BC-2.01.009/010 v1.1, BC-2.05.001 v1.3, E-ADM-022/023. Story v1.7 13 ACs 10 pts (1f22de1); 2× audits clean. TDD delivery STARTING on feature/S-BL.NODE-IDENTIFY-WIRE. | 2026-07-18 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -180,17 +181,17 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.NODE-ADMISSION-PROVISIONING DELIVERED (PR #125 @ ce06f6a, mergedAt 2026-07-16; retroactively reconciled 2026-07-18). S-BL.ADMISSION-SYNC-WIRE DELIVERED (PR #126 @ 92a2c65, 2026-07-18). Both identity-cluster prerequisites cleared. trajectory-tail →21→7→4→3; resume ready
+**Position:** S-BL.NODE-IDENTIFY-WIRE elaboration COMPLETE (2026-07-18); TDD delivery STARTING. Elaboration arc: rulings v1.1 (83db343), O-1 RATIFIED, BCs v3.8 (7480e64/e6d547c/e466866), story v1.7 13 ACs 10 pts (1f22de1). trajectory-tail →21→7→4→3
 
-**S-BL.NODE-IDENTIFY-WIRE status:** UNBLOCKED — both depends_on prerequisites cleared (leg-1 S-BL.NODE-ADMISSION-PROVISIONING PR #125, leg-2 S-BL.ADMISSION-SYNC-WIRE PR #126). NOT decomposition-ready: draft v1.4, 0 ACs, obligations 3/4 open, architect elaboration required before decomposition.
+**S-BL.NODE-IDENTIFY-WIRE status:** DECOMPOSITION-READY — 13 ACs, 10 pts; story v1.7; all obligations resolved (O-1 RATIFIED → Task 16/AC-013; 3/4 in rulings v1.1; 5/6 resolved-by-delivery). TDD delivery STARTING on feature/S-BL.NODE-IDENTIFY-WIRE (worktree mounting via devops-engineer in parallel). PR targets develop.
 
-**Forward obligation O-1 for NODE-IDENTIFY-WIRE:** `admission.AdmitNode` does NOT check expiry — only `ReAuthenticate` does. A past-expiry key whose internal.admission.expire push SUCCEEDS is still admissible at initial handshake. NODE-IDENTIFY-WIRE MUST decide whether `AdmitNode` enforces expiry at initial handshake. Hard design input — fold into architect elaboration.
+**O-1 disposition:** RATIFIED 2026-07-18 — `admission.AdmitNode` MUST enforce expiry at both lock levels → `ErrKeyExpired` (E-ADM-015). Implemented as Task 16/AC-013 in S-BL.NODE-IDENTIFY-WIRE. O-1 drift item marked IN-DELIVERY.
 
-**Next-story options (human decision):** (i) advance S-BL.NODE-IDENTIFY-WIRE toward decomposition-readiness via architect elaboration (obligations 3/4 + O-1); (ii) S-BL.LOOPBACK-FULLSTACK (P2, draft v1.1, unscheduled); (iii) S-BL.RESYNC-FRAME (BLOCKED-BY-DECISION: auth-threading required first).
+**Discovery-Wire gating:** S-BL.DISCOVERY-WIRE AC-017/018/Task 6 gated on NODE-IDENTIFY-WIRE delivery.
 
 **Held:** stash@{0} (WIP lookup_convention_test.go) — do NOT drop without inspection.
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) human selects next story direction.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) confirm feature/S-BL.NODE-IDENTIFY-WIRE worktree mounted; (4) proceed with TDD delivery.
 
 ## Concurrent Cycles
 
