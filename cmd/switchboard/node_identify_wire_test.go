@@ -1499,3 +1499,183 @@ func TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged(t *testing.T) {
 			knownSvtnIDHex, buf.String())
 	}
 }
+
+// ── Defense-in-depth: FrameTypeCtl decoder-precondition guards (rulings §4/§6) ─
+
+// TestNodeIdentifyHandshake_WrongOuterFrameType_Rejected verifies that a
+// NodeIdentify outer header carrying FrameTypeData (0x01) instead of
+// FrameTypeCtl (0x03) is rejected with an error that names "frame_type".
+//
+// The decoder precondition guard is at node_identify_wire.go:285-288. Every
+// other existing test sends its outer header via encodeCtlHeaderRaw, which
+// hardcodes 0x03, so no existing test can detect removal of this guard.
+//
+// Discriminating property: deleting the guard at 285-288 allows the frame to
+// proceed into decodeNodeIdentify. Because the outer PayloadLen is set to
+// nodeIdentifyPayloadSize (36), payload is 36 bytes. decodeNodeIdentify then
+// checks payload[0] for the NodeIdentify control_type discriminator. The
+// payload bytes in this test carry a zero slice, so payload[0]==0x00, causing
+// decodeNodeIdentify to return an error containing "control_type" — NOT
+// "frame_type". The substring assertion below ("frame_type") therefore fails
+// immediately, proving the guard must be present.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
+//
+// Traces to BC-2.01.009 Invariant 5; rulings §4 (FrameType precondition).
+func TestNodeIdentifyHandshake_WrongOuterFrameType_Rejected(t *testing.T) {
+	// 200ms timeout: if the guard is removed the driver blocks waiting for the
+	// next read. The deadline fires, but the resulting timeout error does NOT
+	// contain "frame_type" — the substring assertion below then fails, giving a
+	// clear red rather than the 10s production hang.
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
+
+	_, routerPriv := mustGenKeyHandshake(t)
+	nodePub, _ := mustGenKeyHandshake(t)
+	svtnID := mustSVTNHandshake(0x30)
+
+	ks := admission.NewAdmittedKeySet()
+	r := routing.NewRouter(ks)
+
+	routerConn, nodeConn := net.Pipe()
+	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
+
+	h := newTestHandle(50)
+	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
+
+	go func() {
+		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
+
+		// Build a 44-byte outer header with FrameTypeData (0x01) instead of
+		// FrameTypeCtl (0x03). encodeCtlHeaderRaw always writes 0x03, so we
+		// hand-construct the header here.
+		hdr := make([]byte, 44)
+		hdr[0] = 0x01                                                         // version = VersionByte
+		hdr[1] = byte(frame.FrameTypeData)                                    // 0x01 — NOT FrameTypeCtl
+		binary.BigEndian.PutUint16(hdr[2:4], uint16(nodeIdentifyPayloadSize)) // payloadLen = 36
+		copy(hdr[4:20], svtnID[:])
+		// src_addr[8], dst_addr[8], hmac_tag[8] remain zero
+
+		// Payload: 36 zero bytes (a well-formed size but wrong outer frame_type).
+		// The FrameType guard fires before the payload is decoded.
+		payload := make([]byte, nodeIdentifyPayloadSize)
+		copy(payload[4:36], nodePub) // include the pubkey for realism; guard fires first
+
+		_, _ = nodeConn.Write(append(hdr, payload...))
+		// Drain to avoid blocking the router's conn.Close.
+		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
+	}()
+
+	res := <-resCh
+	if res.err == nil {
+		t.Fatal("nodeIdentifyHandshake: want error for wrong outer frame_type, got nil")
+	}
+	if strings.Contains(res.err.Error(), "unimplemented") {
+		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// Discriminating assertion: the guard at node_identify_wire.go:285-288 emits
+	// "frame_type" in the error. If the guard is deleted, the driver proceeds into
+	// decodeNodeIdentify, which checks payload[0]; our zero payload causes it to
+	// emit "control_type" instead — NOT "frame_type". So this assertion fails
+	// immediately (no timeout required) when the guard is absent.
+	if !strings.Contains(res.err.Error(), "frame_type") {
+		t.Errorf("rulings §4: error does not name the offending field; want substring %q, got: %q",
+			"frame_type", res.err.Error())
+	}
+}
+
+// ── Defense-in-depth: ChallengeResponse payload-length guard (rulings §6) ────
+
+// TestNodeIdentifyHandshake_MalformedChallengeResponse_WrongPayloadLen verifies
+// that a ChallengeResponse outer header with PayloadLen != 68 is rejected with
+// an error that names "payload_len" and the size violation.
+//
+// The payload-length guard is at node_identify_wire.go:344-347. The existing
+// TestNodeIdentifyHandshake_MalformedChallengeResponse_ConnectionClosed tests a
+// wrong msg_kind at a CORRECT payload_len=68 — it never exercises the
+// payload-length path.
+//
+// Discriminating property: deleting the guard at 344-347 means the driver calls
+// frame.ReadOuterFrame, which reads the outer header and then tries to read
+// crHdr.PayloadLen bytes (40 in this test) as the payload. decodeChallengeResponse
+// is then called with a 40-byte slice; its first check `len(payload) !=
+// challengeResponsePayloadSize` emits "payload size 40 != 68" — a "payload size"
+// message that does NOT contain the "payload_len" substring the guard at 344-347
+// emits. The substring assertion below therefore fails immediately when the guard
+// is removed, confirming the outer-header length check is distinct from the
+// inner-payload size check.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
+//
+// Traces to BC-2.01.009 Invariant 5; rulings §6 (ChallengeResponse PayloadLen).
+func TestNodeIdentifyHandshake_MalformedChallengeResponse_WrongPayloadLen(t *testing.T) {
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
+
+	_, routerPriv := mustGenKeyHandshake(t)
+	nodePub, _ := mustGenKeyHandshake(t)
+	svtnID := mustSVTNHandshake(0x31)
+
+	// Empty keyset: AdmitNode (only reached if the CR payload-len guard is
+	// deleted) returns ErrNotAdmitted, whose message does NOT contain
+	// "payload_len" — so removing the guard fails the substring assertion below.
+	ks := admission.NewAdmittedKeySet()
+	r := routing.NewRouter(ks)
+
+	routerConn, nodeConn := net.Pipe()
+	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
+
+	h := newTestHandle(51)
+	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
+
+	go func() {
+		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
+
+		// Message 1: send a valid NodeIdentify so the router proceeds to Message 2.
+		niFrame := buildNodeIdentifyFrame(svtnID, nodePub)
+		if _, err := nodeConn.Write(niFrame); err != nil {
+			return
+		}
+
+		// Message 2: read and drain the 144-byte Challenge so the router's
+		// net.Pipe write unblocks and it proceeds to read Message 3.
+		if _, err := io.ReadFull(nodeConn, make([]byte, 144)); err != nil {
+			return
+		}
+
+		// Message 3: send a ChallengeResponse outer header with PayloadLen=40
+		// (NOT 68). The outer PayloadLen guard at node_identify_wire.go:344-347
+		// must reject this before decodeChallengeResponse is ever called.
+		//
+		// Use encodeCtlHeaderRaw (which writes FrameTypeCtl=0x03) so only the
+		// PayloadLen is wrong — isolating the payload-length guard from the
+		// frame-type guard.
+		const wrongPayloadLen = 40
+		hdr := encodeCtlHeaderRaw(wrongPayloadLen, svtnID)
+		payload := make([]byte, wrongPayloadLen) // matching bytes so the read succeeds
+		_, _ = nodeConn.Write(append(hdr, payload...))
+		// Drain to avoid blocking the router's conn.Close.
+		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
+	}()
+
+	res := <-resCh
+	if res.err == nil {
+		t.Fatal("nodeIdentifyHandshake: want error for ChallengeResponse with wrong PayloadLen, got nil")
+	}
+	if strings.Contains(res.err.Error(), "unimplemented") {
+		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// Discriminating assertion: the guard at node_identify_wire.go:344-347 emits
+	// "payload_len" in the error. If the guard is deleted, decodeChallengeResponse
+	// is called with a 40-byte slice and emits "payload size 40 != 68" — which
+	// does NOT contain "payload_len". So this assertion fails immediately (no
+	// timeout required) when the outer-header payload-length guard is absent.
+	if !strings.Contains(res.err.Error(), "payload_len") {
+		t.Errorf("rulings §6: error does not name the offending field; want substring %q, got: %q",
+			"payload_len", res.err.Error())
+	}
+}
