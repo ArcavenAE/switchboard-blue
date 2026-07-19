@@ -533,6 +533,223 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte(t *test
 	}
 }
 
+// TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongControlType verifies that
+// a NodeIdentify frame with control_type != 0x04 causes the connection to close
+// with a decode error that names the offending field.
+//
+// Traces to BC-2.01.009 Invariant 5; AC-002 PC-2 (control_type guard).
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
+func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongControlType(t *testing.T) {
+	// Override timeout to 200ms: if the control_type guard (node_identify_wire.go:189)
+	// is accidentally removed, the frame decodes successfully and the driver blocks
+	// waiting for a ChallengeResponse. The 200ms deadline fires fast, but the
+	// resulting deadline error does NOT contain "control_type" — the new substring
+	// assertion below then fails immediately, giving a clear red rather than a
+	// 10s hang.
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
+
+	_, routerPriv := mustGenKeyHandshake(t)
+	nodePub, _ := mustGenKeyHandshake(t)
+	svtnID := mustSVTNHandshake(0x13)
+
+	ks := admission.NewAdmittedKeySet()
+	r := routing.NewRouter(ks)
+
+	routerConn, nodeConn := net.Pipe()
+	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
+
+	h := newTestHandle(23)
+	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
+
+	go func() {
+		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
+		payload := make([]byte, 36)
+		payload[0] = 0x03 // wrong control_type — should be 0x04
+		payload[1] = 0x01
+		payload[2] = 0x01
+		payload[3] = 0x00
+		copy(payload[4:36], nodePub)
+		hdr := encodeCtlHeaderRaw(36, svtnID)
+		_, _ = nodeConn.Write(append(hdr, payload...))
+		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
+	}()
+
+	res := <-resCh
+	if res.err == nil {
+		t.Fatal("nodeIdentifyHandshake: want error for wrong control_type, got nil")
+	}
+	if strings.Contains(res.err.Error(), "unimplemented") {
+		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// Discriminating assertion: the decode guard at node_identify_wire.go:189
+	// emits "control_type" in the error string. A deadline error (the fallback if
+	// the guard is removed) does NOT contain this substring — so removing the
+	// guard will fail this assertion quickly within the 200ms window.
+	if !strings.Contains(res.err.Error(), "control_type") {
+		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
+			"control_type", res.err.Error())
+	}
+}
+
+// TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongVersion verifies that
+// a NodeIdentify frame with version != 0x01 causes the connection to close
+// with a decode error that names the offending field.
+//
+// Traces to BC-2.01.009 Invariant 5; AC-002 PC-2 (version guard).
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
+func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongVersion(t *testing.T) {
+	// Override timeout to 200ms: if the version guard (node_identify_wire.go:192)
+	// is accidentally removed, the frame decodes successfully and the driver blocks
+	// waiting for a ChallengeResponse. The 200ms deadline fires fast, but the
+	// resulting deadline error does NOT contain "version" — the new substring
+	// assertion below then fails immediately, giving a clear red rather than a
+	// 10s hang.
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
+
+	_, routerPriv := mustGenKeyHandshake(t)
+	nodePub, _ := mustGenKeyHandshake(t)
+	svtnID := mustSVTNHandshake(0x14)
+
+	ks := admission.NewAdmittedKeySet()
+	r := routing.NewRouter(ks)
+
+	routerConn, nodeConn := net.Pipe()
+	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
+
+	h := newTestHandle(24)
+	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
+
+	go func() {
+		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
+		payload := make([]byte, 36)
+		payload[0] = 0x04
+		payload[1] = 0x02 // wrong version — should be 0x01
+		payload[2] = 0x01
+		payload[3] = 0x00
+		copy(payload[4:36], nodePub)
+		hdr := encodeCtlHeaderRaw(36, svtnID)
+		_, _ = nodeConn.Write(append(hdr, payload...))
+		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
+	}()
+
+	res := <-resCh
+	if res.err == nil {
+		t.Fatal("nodeIdentifyHandshake: want error for wrong version, got nil")
+	}
+	if strings.Contains(res.err.Error(), "unimplemented") {
+		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// Discriminating assertion: the decode guard at node_identify_wire.go:192
+	// emits "version" in the error string. A deadline error (the fallback if
+	// the guard is removed) does NOT contain this substring — so removing the
+	// guard will fail this assertion quickly within the 200ms window.
+	if !strings.Contains(res.err.Error(), "version") {
+		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
+			"version", res.err.Error())
+	}
+}
+
+// ── BC-2.01.009: Malformed ChallengeResponse (Message 3) ─────────────────────
+
+// TestNodeIdentifyHandshake_MalformedChallengeResponse_ConnectionClosed verifies
+// that a ChallengeResponse frame with a wrong inner discriminator (msg_kind != 0x03)
+// causes the connection to close with a decode error naming "ChallengeResponse".
+//
+// BC-2.01.009 Error-Codes table: "malformed ChallengeResponse frame
+// (hdr.PayloadLen != 68, wrong discriminators at ChallengeResponse receipt) →
+// Close immediately."
+//
+// The node side sends a valid NodeIdentify, reads the 144-byte Challenge to
+// unblock the router's write on net.Pipe, then sends a ChallengeResponse frame
+// whose inner payload carries msg_kind=0xFF instead of 0x03.
+// decodeChallengeResponse (node_identify_wire.go:228) returns an error containing
+// "ChallengeResponse" before AdmitNode is ever reached.
+//
+// Discriminating requirement: deleting the msg_kind guard at line 228 allows the
+// decode to succeed; AdmitNode is then called with a zero NonceSig against an
+// unregistered key, returning admission.ErrNotAdmitted whose message does NOT
+// contain "ChallengeResponse" — so the substring assertion below fails immediately
+// without any timeout hang (AdmitNode returns synchronously).
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
+//
+// Traces to BC-2.01.009 Error-Codes table (malformed ChallengeResponse); AC-002.
+func TestNodeIdentifyHandshake_MalformedChallengeResponse_ConnectionClosed(t *testing.T) {
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
+
+	_, routerPriv := mustGenKeyHandshake(t)
+	nodePub, _ := mustGenKeyHandshake(t)
+	svtnID := mustSVTNHandshake(0x25)
+
+	// Empty keyset: AdmitNode (only reached if the CR decode guard is deleted)
+	// returns ErrNotAdmitted, whose message does not contain "ChallengeResponse".
+	ks := admission.NewAdmittedKeySet()
+	r := routing.NewRouter(ks)
+
+	routerConn, nodeConn := net.Pipe()
+	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
+
+	h := newTestHandle(47)
+	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
+
+	go func() {
+		_ = nodeConn.SetDeadline(time.Now().Add(3 * time.Second))
+
+		// Send valid NodeIdentify (Message 1) so the router proceeds to Message 2.
+		niFrame := buildNodeIdentifyFrame(svtnID, nodePub)
+		if _, err := nodeConn.Write(niFrame); err != nil {
+			return
+		}
+
+		// Read the 144-byte Challenge (Message 2) to unblock the router's write
+		// on net.Pipe; the router cannot proceed to reading Message 3 until we
+		// drain its write.
+		if _, err := io.ReadFull(nodeConn, make([]byte, 144)); err != nil {
+			return
+		}
+
+		// Send malformed ChallengeResponse (Message 3): correct outer frame
+		// (FrameTypeCtl, payloadLen=68) but payload[2]=0xFF instead of 0x03
+		// (wrong msg_kind). decodeChallengeResponse checks payload[2] first.
+		crPayload := make([]byte, challengeResponsePayloadSize)
+		crPayload[0] = 0x04 // control_type correct
+		crPayload[1] = 0x01 // version correct
+		crPayload[2] = 0xFF // msg_kind WRONG — decodeChallengeResponse expects 0x03
+		crPayload[3] = 0x00 // reserved correct
+		// crPayload[4:68] = zero bytes (NonceSig; decode fails before reading them)
+		hdr := encodeCtlHeaderRaw(uint16(challengeResponsePayloadSize), svtnID)
+		_, _ = nodeConn.Write(append(hdr, crPayload...))
+		_, _ = io.ReadFull(nodeConn, make([]byte, 1))
+	}()
+
+	res := <-resCh
+	if res.err == nil {
+		t.Fatal("nodeIdentifyHandshake: want error for malformed ChallengeResponse, got nil")
+	}
+	if strings.Contains(res.err.Error(), "unimplemented") {
+		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// Discriminating assertion: decodeChallengeResponse at node_identify_wire.go:228
+	// emits "ChallengeResponse" in the error string. An admission error (the fallback
+	// if the guard is removed) does NOT contain this substring — so removing the
+	// guard fails this assertion immediately (no timeout required).
+	if !strings.Contains(res.err.Error(), "ChallengeResponse") {
+		t.Errorf("BC-2.01.009: error does not name the malformed message; want substring %q, got: %q",
+			"ChallengeResponse", res.err.Error())
+	}
+}
+
 // ── AC-003: Zero SVTN ID ──────────────────────────────────────────────────────
 
 // TestNodeIdentifyHandshake_ZeroSVTNID_Rejected verifies that a NodeIdentify
