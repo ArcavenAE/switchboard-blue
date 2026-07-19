@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.010
 document_type: behavioral-contract
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -27,6 +27,16 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.1"
+    date: 2026-07-18
+    author: product-owner
+    change: >
+      Consistency-audit Finding 2: fix duplicate Postcondition 4 numbering.
+      LookupInterface group was numbered 4/5/6 (duplicate leading 4), creating
+      two items labeled "4." The correct global sequence is 1-10: BindInterface
+      1-4, LookupInterface 5-7, UnbindInterface 8-10. Renumbered LookupInterface
+      group 4→5, 5→6, 6→7 and UnbindInterface group 7→8, 8→9, 9→10.
+      Story S-BL.NODE-IDENTIFY-WIRE citations updated accordingly (v1.6).
   - version: "1.0"
     date: 2026-07-18
     author: product-owner
@@ -72,7 +82,7 @@ After a successful NODE_IDENTIFY handshake (BC-2.01.009), the router records a `
 
 1. **Binding created:** `Router.identityIfaceMap[svtnID][nodeAddr] = ifaceID`. A nested map for `svtnID` is allocated if absent.
 
-2. **Last-writer-wins (LWW) on reconnect:** If a binding for `(svtnID, nodeAddr)` already exists (from a prior TCP connection that has not yet closed), the new `ifaceID` overwrites it. The prior TCP connection is NOT actively torn down. It self-removes when it eventually closes, via its cleanup func calling `UnbindInterface` (Postcondition 5). This LWW overwrite is consistent with ADR-003 and the existing `forwardingTable` mutation semantics.
+2. **Last-writer-wins (LWW) on reconnect:** If a binding for `(svtnID, nodeAddr)` already exists (from a prior TCP connection that has not yet closed), the new `ifaceID` overwrites it. The prior TCP connection is NOT actively torn down. It self-removes when it eventually closes, via its cleanup func calling `UnbindInterface` (Postcondition 8). This LWW overwrite is consistent with ADR-003 and the existing `forwardingTable` mutation semantics.
 
 3. **Security: rebind requires full re-handshake:** A LWW overwrite is only possible after `AdmitNode` returns `nil`, which requires the connecting node to prove possession of the registered private key. A different public key that does not match the registered key for this `(svtnID, nodeAddr)` will fail `AdmitNode` with `ErrNotAdmitted` before reaching `BindInterface`. Binding hijack by a different identity is cryptographically prevented.
 
@@ -80,19 +90,19 @@ After a successful NODE_IDENTIFY handshake (BC-2.01.009), the router records a `
 
 ### LookupInterface
 
-4. **Lookup returns binding if present:** `Router.LookupInterface(svtnID, nodeAddr)` returns `(ifaceID, true)` if a binding exists for `(svtnID, nodeAddr)`. Returns `(0, false)` if no binding exists. Callers must test the `bool` flag before using the `InterfaceID`.
+5. **Lookup returns binding if present:** `Router.LookupInterface(svtnID, nodeAddr)` returns `(ifaceID, true)` if a binding exists for `(svtnID, nodeAddr)`. Returns `(0, false)` if no binding exists. Callers must test the `bool` flag before using the `InterfaceID`.
 
-5. **Read lock held:** `LookupInterface` acquires `r.mu` read lock. Concurrent reads are permitted; no mutation occurs during lookup.
+6. **Read lock held:** `LookupInterface` acquires `r.mu` read lock. Concurrent reads are permitted; no mutation occurs during lookup.
 
-6. **Return type is value, not pointer:** Per `go.md` rule 12 (return value copies from locked accessors), `LookupInterface` returns `(InterfaceID, bool)` — a value type, not a pointer into internal state.
+7. **Return type is value, not pointer:** Per `go.md` rule 12 (return value copies from locked accessors), `LookupInterface` returns `(InterfaceID, bool)` — a value type, not a pointer into internal state.
 
 ### UnbindInterface
 
-7. **Binding removed on connection close:** The `onAccept` cleanup func (the `func()` returned by `onAccept` to `netingress.Serve`) MUST call `Router.UnbindInterface(svtnID, nodeAddr)` in addition to `sendMap.Delete(h.IfaceID)`. This is the only teardown required — no additional connection-lifecycle plumbing is needed.
+8. **Binding removed on connection close:** The `onAccept` cleanup func (the `func()` returned by `onAccept` to `netingress.Serve`) MUST call `Router.UnbindInterface(svtnID, nodeAddr)` in addition to `sendMap.Delete(h.IfaceID)`. This is the only teardown required — no additional connection-lifecycle plumbing is needed.
 
-8. **Stale cleanup guard:** If `UnbindInterface` is called for a `(svtnID, nodeAddr)` pair whose current binding maps to a DIFFERENT `ifaceID` (i.e., a LWW overwrite occurred and the prior connection's cleanup func fires after the new binding was installed), `UnbindInterface` MUST NOT remove the new binding. Implementation: check `identityIfaceMap[svtnID][nodeAddr] == myIfaceID` under write lock before deleting. Only delete if the stored `ifaceID` matches the caller's own `ifaceID`.
+9. **Stale cleanup guard:** If `UnbindInterface` is called for a `(svtnID, nodeAddr)` pair whose current binding maps to a DIFFERENT `ifaceID` (i.e., a LWW overwrite occurred and the prior connection's cleanup func fires after the new binding was installed), `UnbindInterface` MUST NOT remove the new binding. Implementation: check `identityIfaceMap[svtnID][nodeAddr] == myIfaceID` under write lock before deleting. Only delete if the stored `ifaceID` matches the caller's own `ifaceID`.
 
-9. **Write lock held:** `UnbindInterface` acquires `r.mu` write lock.
+10. **Write lock held:** `UnbindInterface` acquires `r.mu` write lock.
 
 ## Invariants
 
@@ -117,7 +127,7 @@ After a successful NODE_IDENTIFY handshake (BC-2.01.009), the router records a `
 | ID | Description | Expected Behavior |
 |----|-------------|-------------------|
 | EC-001 | LWW overwrite: node reconnects (new TCP) before prior connection closes | `BindInterface` overwrites with new `ifaceID`. Prior connection's cleanup func fires `UnbindInterface` with old `ifaceID`, which detects `identityIfaceMap[svtnID][nodeAddr] != oldIfaceID` (stale cleanup guard) and does NOT remove the new binding. |
-| EC-002 | `UnbindInterface` called for a binding that was already overwritten by LWW | Stale cleanup guard fires (PC-8): stored `ifaceID` does not match caller's `ifaceID`; delete skipped. No error. |
+| EC-002 | `UnbindInterface` called for a binding that was already overwritten by LWW | Stale cleanup guard fires (PC-9): stored `ifaceID` does not match caller's `ifaceID`; delete skipped. No error. |
 | EC-003 | `LookupInterface` called for a `(svtnID, nodeAddr)` with no binding (node not yet admitted or already unbound) | Returns `(0, false)`. Caller MUST check the `bool` flag; a zero `InterfaceID` is not a valid send-map key. |
 | EC-004 | SVTN removed (`RemoveSVTN` / `admin.svtn.destroy`) while bindings exist for that SVTN | Out of scope for this BC — `UnbindInterface` is the cleanup mechanism for per-connection teardown. SVTN-wide cleanup on destroy is a separate concern (tracked by S-BL.SVTN-DESTROY or equivalent). |
 | EC-005 | `BindInterface` called for a node whose prior binding was removed by `UnbindInterface` (clean reconnect) | Normal case: nested map entry for `nodeAddr` was deleted by `UnbindInterface`; `BindInterface` re-inserts it. Behavior is identical to the first-bind case. |
@@ -171,4 +181,5 @@ After a successful NODE_IDENTIFY handshake (BC-2.01.009), the router records a `
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-07-18 | Consistency-audit Finding 2: fix duplicate Postcondition 4 numbering. The LookupInterface group was numbered 4/5/6 (duplicate leading "4."), creating two items labeled "4." in a single Postconditions section. Correct global sequence is 1–10: BindInterface PCs 1–4 (unchanged), LookupInterface PCs 5–7 (was 4–6), UnbindInterface PCs 8–10 (was 7–9). Also updated EC-002 reference from PC-8→PC-9. Story S-BL.NODE-IDENTIFY-WIRE v1.6 citations updated: AC-010 PC-8→PC-9 (stale cleanup guard), AC-012 PC-7→PC-8 (binding removed on close), Prev-Story-Intel PC-7→PC-8/PC-8→PC-9, Task 15 PC-7/PC-8→PC-8/PC-9, Task 20 PC-7→PC-8. |
 | 1.0 | 2026-07-18 | Initial commission — `(SVTNID, NodeAddr) → IfaceID` binding lifecycle: `BindInterface` (LWW on reconnect), `LookupInterface` (read-lock value return), `UnbindInterface` (stale-cleanup guard). Sourced from S-BL.NODE-IDENTIFY-WIRE-rulings.md §8 and §12. |

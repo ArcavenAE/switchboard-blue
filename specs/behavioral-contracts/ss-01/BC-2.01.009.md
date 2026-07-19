@@ -81,7 +81,7 @@ The three messages consume exactly one opcode registry entry: `NODE_IDENTIFY = 0
 
 4. **Message 3 — `ChallengeResponse` (node → router):** The router reads a 44-byte outer header + 68-byte payload. Outer header: `frame_type = 0x03`, `payload_len = 68`, `svtn_id` unchanged, `src_addr` and `dst_addr` are zero, `hmac_tag` is zero. Payload: `control_type = 0x04`, `version = 0x01`, `msg_kind = 0x03`, `reserved = 0x00`, `nonce_sig [64 bytes]` = `ed25519.Sign(nodePrivKey, challenge.Nonce[:])`. Total frame: 112 bytes.
 
-5. **`AdmitNode` called:** The router calls `admission.AdmitNode(challenge, resp, pubKey, hdr.SVTNID, ks)` which verifies `resp.NonceSig` = `ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig)` and checks that the key is registered, not revoked, and not expired (BC-2.05.001 Postconditions 3–6). On `nil` return, admission is granted.
+5. **`AdmitNode` called:** The router calls `admission.AdmitNode(challenge, resp, pubKey, hdr.SVTNID, ks)` which verifies `resp.NonceSig` = `ed25519.Verify(pubKey, challenge.Nonce[:], resp.NonceSig)` and checks that the key is registered, not revoked, and not expired (BC-2.05.001 Postconditions 3–7). On `nil` return, admission is granted.
 
 6. **`Router.BindInterface` called:** On `AdmitNode` success, the `onAccept` closure calls `Router.BindInterface(hdr.SVTNID, nodeAddr, h.IfaceID)` (BC-2.01.010). The `(SVTNID, NodeAddr) → IfaceID` binding is recorded.
 

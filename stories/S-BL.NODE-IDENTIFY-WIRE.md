@@ -3,7 +3,7 @@ artifact_id: S-BL.NODE-IDENTIFY-WIRE
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-WIRE
-version: "1.5"
+version: "1.6"
 title: "NODE_IDENTIFY wire: connect-time identify handshake binding (SVTNID, NodeAddr) → IfaceID for hop-2 fan-out target resolution"
 status: ready
 producer: story-writer
@@ -22,7 +22,7 @@ inputs:
   - 'specs/behavioral-contracts/ss-01/BC-2.01.010.md'
   - 'specs/behavioral-contracts/ss-05/BC-2.05.001.md'
   - 'specs/behavioral-contracts/ss-01/BC-2.01.008.md'
-input-hash: "4e07248"
+input-hash: "a252659"
 traces_to: "decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md"
 epic_id: E-7
 behavioral_contracts:
@@ -124,7 +124,7 @@ by `S-BL.ADMISSION-SYNC-WIRE` (delivered); the node's signing key is provisioned
 | `S-BL.NODE-ADMISSION-PROVISIONING` (PR #125 @ ce06f6a) | `loadOrGenerateAdmissionKeypair` generates/loads the access node's stable Ed25519 private key at `cfg.AdmissionKeyFile`; public key in `discovery.Config.LocalNodeAdmissionPubkey` | PKCS#8 PEM load/generate pattern in `cmd/switchboard/access.go`; `runAccessWithConnector` calls `d.Run(runCtx)` in a goroutine | The connecting node's `ChallengeResponse` signing key is the private key loaded by `loadOrGenerateAdmissionKeypair`. On the router side, the challenge is verified against the public key retrieved from the admitted keyset (not the pubkey in the NodeIdentify frame — that is derived, not trusted directly). |
 | `S-BL.ADMISSION-SYNC-WIRE` (PR #126 @ 92a2c65) | `wireAdmissionSyncHandlers` populates the router's `AdmittedKeySet` via four `internal.admission.*` push RPCs from control; `routerPersister` persists VLR-local JSON snapshot | `wireAdmissionSyncHandlers` called after `newMgmtServer`, before `serveMgmtServer` (F-P2L1-001 register-before-serve invariant) | The router's `AdmittedKeySet` is now non-empty after admission pushes land. `AdmitNode` will succeed when the node's key is registered for the SVTN. The eventual-consistency race (node connects before push arrives) is `ErrNotAdmitted` → close → retry; no special handling needed. |
 | `S-BL.DISCOVERY-WIRE` (PR #123 @ d249f88) | `control_type=0x03` DISCOVERY_RELAY precedent; zero-HMACTag connection-trust boundary; `wireXHandlers` registration pattern | `sendMap` is `routing.InterfaceID → *nodeConn`; SVTNID is set in ctl outer headers for SVTN-scoped operations | AC-017/AC-018/Task 6 in `S-BL.DISCOVERY-WIRE` gate on `LookupInterface` being available from this story. The `sendMap.Store` call in `onAccept` must be preceded by a successful handshake — do not store an unverified node in the routing map. |
-| `S-7.04-FU-DRAIN-WIRE` (PR #120 @ f73676d) | Per-node observer registration pattern; `onAccept` cleanup func is `func()` returned to `netingress.Serve`; cleanup does `sendMap.Delete(h.IfaceID)` + drain-done close | `onAccept` fires as FIRST ACT of per-conn goroutine, before `ServeConn` | The cleanup func must NOW ALSO call `r.UnbindInterface(svtnID, nodeAddr)` (BC-2.01.010 PC-7). The stale cleanup guard (PC-8: check `identityIfaceMap[svtnID][nodeAddr] == myIfaceID` before deleting) prevents a LWW-overwritten binding from being removed by the prior connection's cleanup. |
+| `S-7.04-FU-DRAIN-WIRE` (PR #120 @ f73676d) | Per-node observer registration pattern; `onAccept` cleanup func is `func()` returned to `netingress.Serve`; cleanup does `sendMap.Delete(h.IfaceID)` + drain-done close | `onAccept` fires as FIRST ACT of per-conn goroutine, before `ServeConn` | The cleanup func must NOW ALSO call `r.UnbindInterface(svtnID, nodeAddr)` (BC-2.01.010 PC-8). The stale cleanup guard (PC-9: check `identityIfaceMap[svtnID][nodeAddr] == myIfaceID` before deleting) prevents a LWW-overwritten binding from being removed by the prior connection's cleanup. |
 
 ## Adjudicated Design Decisions
 
@@ -374,9 +374,9 @@ via `conn.SetDeadline` before first read); Error Code E-ADM-022 (timeout → clo
 
 ---
 
-### AC-010 — LWW rebind: reconnecting node overwrites prior binding; stale cleanup guard protects new binding (BC-2.01.010 PC-2; BC-2.01.010 PC-8)
+### AC-010 — LWW rebind: reconnecting node overwrites prior binding; stale cleanup guard protects new binding (BC-2.01.010 PC-2; BC-2.01.010 PC-9)
 
-**BC Anchor:** BC-2.01.010 Postcondition 2 (LWW overwrite on reconnect); BC-2.01.010 Postcondition 8 (stale cleanup guard). Traces to BC-2.01.010 Invariant 1 (r.mu governs all three methods).
+**BC Anchor:** BC-2.01.010 Postcondition 2 (LWW overwrite on reconnect); BC-2.01.010 Postcondition 9 (stale cleanup guard). Traces to BC-2.01.010 Invariant 1 (r.mu governs all three methods).
 
 **Postconditions:**
 1. When a node completes a successful handshake on a second TCP connection (same admitted identity,
@@ -422,9 +422,9 @@ Error Code E-ADM-023 (duplicate NodeIdentify → close immediately).
 
 ---
 
-### AC-012 — Cleanup func calls UnbindInterface on connection close; binding removed (BC-2.01.010 PC-7)
+### AC-012 — Cleanup func calls UnbindInterface on connection close; binding removed (BC-2.01.010 PC-8)
 
-**BC Anchor:** BC-2.01.010 Postcondition 7 (binding removed on connection close via cleanup func).
+**BC Anchor:** BC-2.01.010 Postcondition 8 (binding removed on connection close via cleanup func).
 
 **Postconditions:**
 1. The `func()` returned by `onAccept` to `netingress.Serve` (the per-connection cleanup func)
@@ -553,12 +553,12 @@ code until `go test ./...` shows compile errors or test failures for ALL ACs.
 12. [ ] Write failing tests for AC-012 (cleanup func calls UnbindInterface; binding removed) — test-writer
 13. [ ] Write failing tests for AC-013 (AdmitNode expiry check: ErrKeyExpired for past-expiry key; FutureExpiry_Succeeds; NoExpiry_Succeeds) — test-writer [in `internal/admission/*_test.go`]
 14. [ ] Verify Red Gate: `go test ./...` fails with compile or test failures for all 13 ACs
-15. [ ] Add `identityIfaceMap map[[16]byte]map[[8]byte]InterfaceID` field to `Router` struct in `internal/routing/routing.go` (initialized in `NewRouter`); implement `BindInterface`, `LookupInterface`, `UnbindInterface` in `internal/routing/identity.go` with `r.mu` write/read lock discipline; stale cleanup guard in `UnbindInterface` (check `identityIfaceMap[svtnID][nodeAddr] == callerIfaceID` before deleting) — implementer [BC-2.01.010 PC-1/PC-4/PC-7/PC-8; §8 ruling]
+15. [ ] Add `identityIfaceMap map[[16]byte]map[[8]byte]InterfaceID` field to `Router` struct in `internal/routing/routing.go` (initialized in `NewRouter`); implement `BindInterface`, `LookupInterface`, `UnbindInterface` in `internal/routing/identity.go` with `r.mu` write/read lock discipline; stale cleanup guard in `UnbindInterface` (check `identityIfaceMap[svtnID][nodeAddr] == callerIfaceID` before deleting) — implementer [BC-2.01.010 PC-1/PC-4/PC-8/PC-9; §8 ruling]
 16. [ ] Add expiry check to `admission.AdmitNode` in `internal/admission/admission.go`: after `snap.revoked` check, before write-lock acquire — `if !snap.expiry.IsZero() && time.Now().UTC().After(snap.expiry) { return ErrKeyExpired }` — mirrors `ReAuthenticate` expiry-check pattern at `reauth.go:196`; re-check under write lock following the same two-step pattern — implementer [O-1 ruling §15; BC-2.05.001 PC-6 / Invariant 5]
 17. [ ] Implement `const nodeIdentifyHandshakeTimeout = 10 * time.Second` and NODE_IDENTIFY frame codec in `cmd/switchboard/node_identify_wire.go`: `encodeNodeIdentify`, `encodeChallenge`, `encodeChallengeResponse` (pure encode functions); `decodeNodeIdentify`, `decodeChallengeResponse` (pure decode functions with all per-message size guards and reserved-byte check); all fixed sizes enforced (36/100/68 bytes) — implementer [BC-2.01.009 Postconditions 1/3/4; Invariant 5; §§4–6 of rulings]
 18. [ ] Implement `nodeIdentifyHandshake(conn net.Conn, r *routing.Router, routerPrivKey ed25519.PrivateKey, ks *admission.AdmittedKeySet, h netingress.ConnHandle) (svtnID [16]byte, nodeAddr [8]byte, err error)` in `cmd/switchboard/node_identify_wire.go`: `conn.SetDeadline(time.Now().Add(nodeIdentifyHandshakeTimeout))` on entry; `io.ReadFull` outer header + payload for NodeIdentify; validate SVTNID non-zero; decode NodeIdentify; derive `nodeAddr = frame.DeriveNodeAddress(hdr.SVTNID, pubkey)`; call `GenerateChallenge(routerPrivKey)`; encode + write Challenge; `io.ReadFull` outer header + payload for ChallengeResponse; decode ChallengeResponse; call `AdmitNode`; on success call `r.BindInterface(hdr.SVTNID, nodeAddr, h.IfaceID)` then `conn.SetDeadline(time.Time{})`; on any error path close conn and return error — implementer [BC-2.01.009 PC-1 through PC-8; §7 of rulings; failure table §13]
 19. [ ] Add `case 0x04:` to `route()` switch in `cmd/switchboard/mgmt_wire.go`: log WARN `"node_identify: duplicate NodeIdentify on established connection"` (E-ADM-023) and return non-nil error to cause connection teardown via `netingress.ServeConn` error path — implementer [BC-2.01.009 Invariant 7; §12 of rulings; AC-011]
-20. [ ] Wire `nodeIdentifyHandshake` into `onAccept` in `runRouter` (`cmd/switchboard/mgmt_wire.go`): call `nodeIdentifyHandshake(conn, r, routerPrivKey, ks, h)` at the start of the per-conn goroutine BEFORE `sendMap.Store`; on failure return a no-op cleanup func (connection already closed by handshake driver); on success proceed with `sendMap.Store(h.IfaceID, ...)` and existing drain setup; extend cleanup func to also call `r.UnbindInterface(svtnID, nodeAddr)` — the stale cleanup guard in `UnbindInterface` safely suppresses the delete if a LWW overwrite occurred — implementer [BC-2.01.009 PC-6; BC-2.01.010 PC-7; §7 and §12 of rulings]
+20. [ ] Wire `nodeIdentifyHandshake` into `onAccept` in `runRouter` (`cmd/switchboard/mgmt_wire.go`): call `nodeIdentifyHandshake(conn, r, routerPrivKey, ks, h)` at the start of the per-conn goroutine BEFORE `sendMap.Store`; on failure return a no-op cleanup func (connection already closed by handshake driver); on success proceed with `sendMap.Store(h.IfaceID, ...)` and existing drain setup; extend cleanup func to also call `r.UnbindInterface(svtnID, nodeAddr)` — the stale cleanup guard in `UnbindInterface` safely suppresses the delete if a LWW overwrite occurred — implementer [BC-2.01.009 PC-6; BC-2.01.010 PC-8; §7 and §12 of rulings]
 21. [ ] Run `go test ./... -race`; confirm all 13 AC test functions pass
 22. [ ] Update STATE.md (state-manager)
 
@@ -625,6 +625,7 @@ code until `go test ./...` shows compile errors or test failures for ALL ACs.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.6 | 2026-07-18 | Consistency-audit Finding 2 cascade: BC-2.01.010 PC renumber (duplicate PC-4 fixed; LookupInterface 4→5/5→6/6→7, UnbindInterface 7→8/8→9/9→10). Citations updated: AC-010 heading/BC Anchor PC-8→PC-9 (stale cleanup guard); AC-012 heading/BC Anchor PC-7→PC-8 (binding removed on close); Prev-Story-Intel S-7.04 row PC-7→PC-8 / PC-8→PC-9; Task 15 PC-7/PC-8→PC-8/PC-9; Task 20 PC-7→PC-8. input-hash recomputed. |
 | 1.5 | 2026-07-18 | Full decomposition: 13 ACs covering all §15 AC areas + wire-format error paths; frontmatter updated (`behavioral_contracts`, `bc_traces`, `inputs`, `points=10`, `status=ready`); all [TODO] sections populated; O-1 AdmitNode expiry check added to scope (supersedes "zero changes to internal/admission" claim); BC-2.01.009, BC-2.01.010, BC-2.05.001 added to bc_traces; File-Change List corrected (BC-2.01.008 edit is DONE — removed from list); Previous Story Intelligence populated with #125/#126 lessons; Architecture Compliance Rules expanded; `inputDocuments:` added; stale claim superseded. input-hash updated to reflect new inputs list. |
 | 1.4 | 2026-07-15 | `depends_on` updated from `[]` to `[S-BL.ADMISSION-SYNC-WIRE, S-BL.NODE-ADMISSION-PROVISIONING]` — both prerequisite stories now exist. Template conformance scaffolding added. |
 | 1.3 | 2026-07-15 | Obligations 1+2 RESOLVED — wire format in `decisions/S-BL.NODE-IDENTIFY-WIRE-rulings.md` v1.0. `rulings_doc` frontmatter added. |

@@ -5,7 +5,7 @@ level: L3
 version: "3.7"
 status: draft
 producer: product-owner
-timestamp: 2026-07-12T00:00:00
+timestamp: 2026-07-18T00:00:00
 phase: 1a
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
