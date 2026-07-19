@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "3.7"
+version: "3.8"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00
@@ -133,6 +133,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.8 | 2026-07-18 | Spec-hygiene audit residuals (NEW-A/CHK6): **1 amended BC** — BC-2.05.001 v1.2→v1.3 (consistency-audit F3: added Postcondition 7 — AdmitNode returns ErrKeyRevoked/E-ADM-005 at initial admission, documenting existing `internal/admission/admission.go` behavior; F4: corrected PC-5 label from "key not admitted" to "signature verification failed (E-ADM-001)"). Also registers taxonomy note: E-ADM-022/E-ADM-023 added to error-taxonomy.md v5.0 (F1). **BC-2.01.009 v1.0→v1.1** (citation-accuracy fix: PC-5 cross-reference "BC-2.05.001 Postconditions 3–6" → "Postconditions 3–7" — omitted revoked-key path now documented at BC-2.05.001 PC-7; no postcondition semantics changed; consistency-audit Finding 3 cascade). BC count unchanged at 53. |
 | 3.7 | 2026-07-18 | S-BL.NODE-IDENTIFY-WIRE BC batch (rulings v1.1): **2 new BCs** — BC-2.01.009 v1.0 (`NODE_IDENTIFY` three-message handshake wire protocol, session-networking / CAP-003, `cmd/switchboard`); BC-2.01.010 v1.0 (`BindInterface` binding lifecycle `(SVTNID, NodeAddr) → IfaceID`, session-networking / CAP-003, `internal/routing`). **1 amended BC** — BC-2.05.001 v1.1→v1.2 (O-1 ruling: `AdmitNode` expiry enforcement, Postcondition 6 + Invariant 5; status reverted to active as implementation now requires `S-BL.NODE-IDENTIFY-WIRE` changes). session-networking count 8→10, Scope-E count 43→45, total 51→53. CAP-003 coverage row updated. |
 | 3.6 | 2026-07-15 | Identity-cluster BC groundwork batch: **4 new BCs** — BC-2.03.001 v1.6→v1.7 (N4 audit: PC-4 `LocalNodeAdmissionPubkey` precondition annotation, traceability update, template conformance); BC-2.04.008 v1.0 commissioned (`Discovery.Run()` daemon-lifecycle wiring, session-access / CAP-013); BC-2.05.004 v1.14→v1.15 (A5: push-failure postcondition added to PC-1/PC-2/PC-3, template conformance); BC-2.05.009 v1.0 commissioned (admission-state-sync push RPC, admission-security / CAP-019); BC-2.05.010 v1.0 commissioned (admission-state-snapshot VLR-local, admission-security / CAP-019); BC-2.07.001 v1.15→v1.16 (A6: PC-3 Destroy push postcondition added, template conformance); BC-2.09.003 v2.0→v2.1 (N3+A3+A4 consolidated: PC-12 `admission_key_file` E-CFG-014, PC-13 `admission_state_file` E-CFG-015, PC-14 `router_management_endpoints` E-CFG-016, template conformance); BC-2.09.004 v1.0 commissioned (`admission_key_file` provisioning, deployment-operations / CAP-028). BC count 47→51; session-access count 7→8, admission-security count 8→10, deployment-operations count 3→4. |
 | 3.5 | 2026-07-13 | FO(a) discharge (step-4.5 impl pass 2 remediation burst): BC-2.06.004 CAP column re-anchored CAP-022 → CAP-029 (BC-2.06.004.md v1.4→v1.5; capabilities.md v1.0→v1.1 mints CAP-029 "On-demand reachability and round-trip-latency probe via sbctl", quality-observability). CAP-022 coverage row now BC-2.06.003 only; new CAP-029 coverage row added (BC-2.06.004). Coverage Summary quality-observability CAPs-covered cell and Total CAP range updated to include CAP-029. BC count unchanged at 47; quality-observability BC count unchanged at 4. |

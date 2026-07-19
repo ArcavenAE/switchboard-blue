@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.009
 document_type: behavioral-contract
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -27,6 +27,14 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.1"
+    date: 2026-07-18
+    author: spec-steward
+    change: >
+      PC-5 cross-reference corrected from "BC-2.05.001 Postconditions 3–6" to
+      "Postconditions 3–7" — the prior range under-claimed coverage (omitted
+      the revoked-key path now documented at BC-2.05.001 PC-7). Citation-accuracy
+      fix; no postcondition semantics changed (consistency-audit Finding 3 cascade).
   - version: "1.0"
     date: 2026-07-18
     author: product-owner
@@ -202,4 +210,5 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-07-18 | PC-5 cross-reference corrected from "BC-2.05.001 Postconditions 3–6" to "Postconditions 3–7" — the prior range under-claimed coverage (omitted the revoked-key path now documented at BC-2.05.001 PC-7). Citation-accuracy fix; no postcondition semantics changed (consistency-audit Finding 3 cascade). |
 | 1.0 | 2026-07-18 | Initial commission — NODE_IDENTIFY three-message handshake: wire format (§§2–9), handshake sequence (§7), failure paths (§13), timeout (§13), second-NodeIdentify hard error (§12), eventual-consistency race disposition (§13), `AdmitNode` expiry check (§15). All sourced from S-BL.NODE-IDENTIFY-WIRE-rulings.md v1.1. |
