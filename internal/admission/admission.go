@@ -487,13 +487,15 @@ func AdmitNode(
 		return ErrKeyRevoked
 	}
 
-	// Step 2: snapshot the current time before acquiring the write lock.
-	// ed25519.Verify (~50μs) is held INSIDE the write lock by design (see
-	// Step 3) — it is part of the nonce-consume + verify + admit critical
-	// section. This preserves the invariant that a replay attempt cannot
-	// race a legitimate sig-verify on the same nonce. See inline comments
-	// at Step 3 for the order-of-operations rationale.
+	// Step 2 (expiry): check expiry under the RLock snapshot before acquiring the write lock.
+	// Mirrors ReAuthenticate reauth.go:195-197. The snapshot was taken under RLock so
+	// snap.expiry is a safe read (no torn access). A concurrent SetKeyExpiry racing between
+	// RUnlock and Lock is caught by the re-check under the write lock below (O-1; BC-2.05.001
+	// PC-6 / Invariant 5; S-BL.NODE-IDENTIFY-WIRE rulings §15).
 	now := time.Now().UTC()
+	if !snap.expiry.IsZero() && now.After(snap.expiry) {
+		return ErrKeyExpired
+	}
 
 	// Step 3: acquire write lock once — record nonce AND set admitted=true atomically (H-2).
 	// Re-checking revoked under the write lock defends against a concurrent RevokeKey
@@ -505,6 +507,10 @@ func AdmitNode(
 	liveEntry := ks.keys[svtnID][nodeAddr]
 	if liveEntry == nil || liveEntry.revoked {
 		return ErrKeyRevoked
+	}
+	// Re-check expiry under write lock in case SetKeyExpiry raced (mirrors reauth.go:219-222).
+	if !liveEntry.expiry.IsZero() && now.After(liveEntry.expiry) {
+		return ErrKeyExpired
 	}
 
 	// Inline nonce record (replaces recordNonce call — avoids double-lock and
