@@ -411,11 +411,22 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongPayloadLen(t *testing.
 }
 
 // TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongMsgKind verifies that
-// a NodeIdentify frame with msg_kind != 0x01 causes the connection to close.
+// a NodeIdentify frame with msg_kind != 0x01 causes the connection to close
+// with a decode error that names the offending field.
 //
 // Traces to BC-2.01.009 Invariant 5; AC-002.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
 func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongMsgKind(t *testing.T) {
-	t.Parallel()
+	// Override timeout to 200ms: if the msg_kind guard is accidentally removed,
+	// the frame decodes successfully and the driver blocks waiting for a
+	// ChallengeResponse. The 200ms deadline fires fast, but the resulting
+	// deadline error does NOT contain "msg_kind" — the new substring assertion
+	// below then fails immediately, giving a clear red rather than a 10s hang.
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
 
 	_, routerPriv := mustGenKeyHandshake(t)
 	nodePub, _ := mustGenKeyHandshake(t)
@@ -450,15 +461,34 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongMsgKind(t *testing.T) 
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
+	// Discriminating assertion: the decode guard at node_identify_wire.go:196
+	// emits "msg_kind" in the error string. A deadline error (the fallback if
+	// the guard is removed) does NOT contain this substring — so removing the
+	// guard will fail this assertion quickly within the 200ms window.
+	if !strings.Contains(res.err.Error(), "msg_kind") {
+		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
+			"msg_kind", res.err.Error())
+	}
 }
 
 // TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte verifies
 // that a NodeIdentify frame with reserved byte (payload[3]) != 0x00 causes the
-// connection to close.
+// connection to close with a decode error that names the offending field.
 //
 // Traces to BC-2.01.009 Invariant 5, EC-003; AC-002.
+//
+// NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
+// var — parallel execution would race other tests relying on the 10s default.
 func TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte(t *testing.T) {
-	t.Parallel()
+	// Override timeout to 200ms: if the reserved-byte guard is accidentally
+	// removed, the frame decodes successfully and the driver blocks waiting for a
+	// ChallengeResponse. The 200ms deadline fires fast, but the resulting
+	// deadline error does NOT contain "reserved byte" — the new substring
+	// assertion below then fails immediately, giving a clear red rather than a
+	// 10s hang.
+	orig := nodeIdentifyHandshakeTimeout
+	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
 
 	_, routerPriv := mustGenKeyHandshake(t)
 	nodePub, _ := mustGenKeyHandshake(t)
@@ -492,6 +522,14 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte(t *test
 	}
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
+	}
+	// Discriminating assertion: the decode guard at node_identify_wire.go:199
+	// emits "reserved byte" in the error string. A deadline error (the fallback
+	// if the guard is removed) does NOT contain this substring — so removing the
+	// guard will fail this assertion quickly within the 200ms window.
+	if !strings.Contains(res.err.Error(), "reserved byte") {
+		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
+			"reserved byte", res.err.Error())
 	}
 }
 
