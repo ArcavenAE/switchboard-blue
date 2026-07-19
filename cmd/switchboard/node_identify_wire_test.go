@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/arcavenae/switchboard/internal/admission"
+	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/netingress"
 	"github.com/arcavenae/switchboard/internal/routing"
 )
@@ -794,121 +796,116 @@ func TestNodeIdentifyHandshake_Timeout_E_ADM_022(t *testing.T) {
 
 // ── AC-011: Duplicate NodeIdentify (E-ADM-023) ────────────────────────────────
 
-// TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023 verifies that the
-// route() stub correctly returns an error for a second NODE_IDENTIFY frame on
-// an established connection. This test exercises the case 0x04 stub in
-// mgmt_wire.go that already returns the E-ADM-023 error string.
+// TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023 verifies that a
+// second NODE_IDENTIFY control frame (control_type=0x04) arriving on an
+// already-admitted connection closes that connection (BC-2.01.009 Invariant 7;
+// E-ADM-023; rulings §17 Option B).
+//
+// Discriminating-property: the test drives the production route closure inside
+// runRouter (not a test-local copy). The §17 fix makes case 0x04 call
+// conn.Close() directly; without it ServeConn drops the error and the
+// connection stays open. Only that one change toggles this test.
+//
+// Test structure (mirrors TestRouter_CtlFrame_ShortPayload_NoConnClose):
+//  1. Start runRouter with an admitted node key loaded from a snapshot file.
+//  2. Dial a TCP node connection, complete the NODE_IDENTIFY handshake.
+//  3. Wait for nodeConnRegistered to confirm onAccept completed and ServeConn
+//     is reading the per-conn data-plane loop.
+//  4. Send a well-formed duplicate NODE_IDENTIFY ctl frame on the same conn.
+//  5. ASSERT: the router closes the connection — a read on the node side
+//     returns a non-timeout net error or EOF within a bounded deadline.
+//
+// Red Gate: currently FAILS because mgmt_wire.go case 0x04 returns an error
+// but netingress.ServeConn drops it (continue); the connection stays open;
+// the deadline read returns a timeout error → the test fatal-logs
+// "duplicate NODE_IDENTIFY did not close the connection".
 //
 // Traces to BC-2.01.009 Invariant 7, EC-004, E-ADM-023; AC-011.
+//
+// NOT t.Parallel(): binds ephemeral TCP + filesystem socket, mutates the
+// package-level nodeConnHook test hook (Q-AC002 test-isolation requirement
+// shared with router_drain_wire_test.go).
 func TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023(t *testing.T) {
-	t.Parallel()
-
-	_, routerPriv := mustGenKeyHandshake(t)
-	nodePub, nodePriv := mustGenKeyHandshake(t)
-	svtnID := mustSVTNHandshake(0x30)
-
-	ks := admission.NewAdmittedKeySet()
-	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
-	r := routing.NewRouter(ks)
-
-	routerConn, nodeConn := net.Pipe()
-	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
-
-	h := newTestHandle(50)
-
-	// Run the successful handshake.
-	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
-
-	var nodeWG sync.WaitGroup
-	nodeWG.Add(1)
-	go func() {
-		defer nodeWG.Done()
-		doFullNodeHandshake(nodeConn, svtnID, nodePub, nodePriv)
-	}()
-
-	res := <-resCh
-	nodeWG.Wait()
-
-	if res.err != nil {
-		t.Fatalf("first handshake should succeed, got %v", res.err)
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
 	}
 
-	// After successful handshake, the connection is fully bound.
-	// Verify the binding exists.
-	got, ok := r.LookupInterface(res.svtnID, res.nodeAddr)
-	if !ok {
-		t.Fatalf("LookupInterface after success: want (ifaceID, true), got (_, false)")
+	// Pre-load an admission snapshot so runRouter admits the test node key.
+	info := makeAdmittedNode(t, cfg)
+
+	// Install a channel-backed nodeConnHook so we know when onAccept finishes
+	// and ServeConn has started reading the per-conn data-plane loop.
+	events := setNodeConnHook(t)
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	// Dial and complete the NODE_IDENTIFY handshake; this advances the connection
+	// through onAccept (handshake → sendMap.Store → nodeConnRegistered hook).
+	nodeConn := dialNodeAdmitted(t, cfg, info)
+
+	// Wait until onAccept has stored the node in sendMap (nodeConnRegistered event)
+	// so ServeConn is reading the per-conn loop before we send the duplicate frame.
+	awaitNodeConnEvent(t, events, nodeConnRegistered, 4*time.Second)
+
+	// Build the duplicate NODE_IDENTIFY payload: the same wire layout as a
+	// NodeIdentify message (control_type=0x04, version=0x01, msg_kind=0x01,
+	// reserved=0x00, pubkey[32]=zeros — exact field values are irrelevant; the
+	// router closes on control_type=0x04 regardless of the payload contents).
+	dupPayload := make([]byte, nodeIdentifyPayloadSize)
+	dupPayload[0] = nodeIdentifyControlType // 0x04
+	dupPayload[1] = frame.VersionByte       // 0x01
+	dupPayload[2] = msgKindNodeIdentify     // 0x01
+	// dupPayload[3] = 0x00 already — reserved byte
+	// dupPayload[4:36] = zero bytes — pubkey (irrelevant; router does not decode past control_type)
+
+	writeRawFrame(t, nodeConn, frame.OuterHeader{
+		Version:   frame.VersionByte,
+		FrameType: frame.FrameTypeCtl,
+		SVTNID:    info.svtnID,
+	}, dupPayload)
+
+	// ASSERT: the router closes the connection — a read returns a non-timeout
+	// error (EOF or connection reset) within the deadline.
+	//
+	// Correct (§17 Option B): case 0x04 calls conn.Close() directly;
+	// ServeConn's next ReadFrame returns a net error; nodeConn read returns
+	// EOF/reset within the deadline → test PASSES.
+	//
+	// Broken (current): case 0x04 returns an error but ServeConn drops it
+	// (continue); the connection stays open; the deadline read returns a
+	// timeout error → test FAILS.
+	const closedDeadline = 2 * time.Second
+	_ = nodeConn.SetReadDeadline(time.Now().Add(closedDeadline))
+	rbuf := make([]byte, 1)
+	_, readErr := nodeConn.Read(rbuf)
+	_ = nodeConn.SetReadDeadline(time.Time{})
+
+	if readErr == nil {
+		t.Fatal("AC-011: duplicate NODE_IDENTIFY did not close the connection: " +
+			"read returned nil error (unexpected data from router)")
 	}
-	_ = got
-
-	// Now send a second NodeIdentify on the same connection.
-	// The route() stub has `case 0x04:` that returns an error with "E-ADM-023".
-	// Since we are not running a full netingress.Serve here, we simulate the
-	// duplicate-NodeIdentify path by verifying that the stub error message exists.
-	//
-	// The actual test of the route() path is an integration test; for Red Gate
-	// purposes we verify that:
-	// 1. The stub case 0x04 in route() returns a non-nil error.
-	// 2. nodeIdentifyHandshake correctly returns error for the second call.
-	//
-	// We simulate by calling nodeIdentifyHandshake a SECOND time on the same
-	// connection. This should fail because there is already a binding for this
-	// (svtnID, nodeAddr) pair — the handler must detect the duplicate.
-	//
-	// Red Gate: nodeIdentifyHandshake stub always returns "unimplemented", so
-	// the second call returns an error too (but for the wrong reason until implemented).
-	// The test verifies the stub correctly causes connection close.
-	routerConn2, nodeConn2 := net.Pipe()
-	t.Cleanup(func() { _ = routerConn2.Close(); _ = nodeConn2.Close() })
-	h2 := newTestHandle(51)
-
-	resCh2 := runRouterSide(routerConn2, r, routerPriv, ks, h2)
-
-	var nodeWG2 sync.WaitGroup
-	nodeWG2.Add(1)
-	go func() {
-		defer nodeWG2.Done()
-		doFullNodeHandshake(nodeConn2, svtnID, nodePub, nodePriv)
-	}()
-
-	res2 := <-resCh2
-	nodeWG2.Wait()
-
-	// The second handshake on the same (svtnID, nodeAddr) must either:
-	// a) Succeed (LWW rebind — OK per BC-2.01.010 PC-2) and update the binding, OR
-	// b) We test the case 0x04 duplicate path via a separate mechanism.
-	//
-	// The core AC-011 assertion: the `case 0x04:` in route() returns an error.
-	// We verify this works by checking that routerConn.Write a NodeIdentify frame
-	// to a connected client after admission causes connection teardown.
-	// Since we cannot drive the full netingress.ServeConn in a unit test here,
-	// we instead verify that the stub is wired in mgmt_wire.go by confirming
-	// that our test infrastructure correctly represents the story requirement.
-	//
-	// For the Red Gate: res2.err may be nil (successful re-handshake via LWW)
-	// which would FAIL this test — meaning the handshake doesn't yet handle
-	// the duplicate case. Since the stub always returns "unimplemented", res2.err != nil
-	// already, which passes the immediate assertion... but the real Red Gate
-	// for AC-011 is that the duplicate-NodeIdentify path in route() is tested.
-	_ = res2
-	_ = nodeConn2
-
-	// Direct verification: send a second NodeIdentify frame to the (now admitted)
-	// routerConn and verify it causes an error. We use the ORIGINAL connection
-	// that already completed the handshake.
-	//
-	// Since the original routerConn has already been closed by runRouterSide,
-	// we cannot send more frames on it. This test verifies the existence of
-	// the case 0x04 error by asserting the second handshake (new connection,
-	// same identity) returns a non-nil error.
-	// After correct implementation, res2.err may be nil (LWW rebind succeeds on a
-	// new TCP connection, BC-2.01.010 PC-2) or non-nil (if some other error occurs).
-	// The LWW overwrite is NOT a failure — it is required behavior per rulings §12.
-	// The duplicate-NodeIdentify-on-SAME-connection path (E-ADM-023) is exercised
-	// via the route() case 0x04 wiring, not via nodeIdentifyHandshake on a new conn.
-	if res2.err != nil {
-		t.Logf("second handshake (new conn, same identity): unexpected error: %v", res2.err)
+	var netErr net.Error
+	if errors.As(readErr, &netErr) && netErr.Timeout() {
+		// The read timed out — meaning the connection stayed open.
+		// This is the current (broken) behavior: ServeConn drops the route error.
+		t.Fatalf("AC-011: duplicate NODE_IDENTIFY did not close the connection within %v "+
+			"(ServeConn must not drop the E-ADM-023 error; case 0x04 must call conn.Close() "+
+			"directly per rulings §17 Option B)", closedDeadline)
 	}
+	// Any non-timeout error (EOF, connection reset, closed pipe) means the
+	// router closed the connection — which is the required behavior.
 }
 
 // ── AC-012: Cleanup func calls UnbindInterface ────────────────────────────────

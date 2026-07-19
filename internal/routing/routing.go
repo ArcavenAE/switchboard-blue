@@ -148,9 +148,9 @@ type ForwardingEntry struct {
 //
 // All exported methods are safe for concurrent use.
 type Router struct {
-	mu                  sync.RWMutex
-	admittedKeySet      *admission.AdmittedKeySet
-	forwardingTable     map[[16]byte]map[[8]byte]*ForwardingEntry
+	mu              sync.RWMutex
+	admittedKeySet  *admission.AdmittedKeySet
+	forwardingTable map[[16]byte]map[[8]byte]*ForwardingEntry
 	// identityIfaceMap maps (svtnID, nodeAddr) → InterfaceID for the
 	// DISCOVERY_RELAY fan-out path (S-BL.NODE-IDENTIFY-WIRE; unblocks
 	// S-BL.DISCOVERY-WIRE Task 6 / AC-017/AC-018).
