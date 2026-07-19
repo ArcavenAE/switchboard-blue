@@ -2,7 +2,7 @@
 artifact_id: BC-INDEX
 document_type: behavioral-contract-index
 level: L3
-version: "3.6"
+version: "3.7"
 status: draft
 producer: product-owner
 timestamp: 2026-07-12T00:00:00
@@ -32,6 +32,8 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.01.006 | Session identity is cryptographic: node address derived from hash(SVTN-ID, public-key) | session-networking | CAP-004 | P0 | E | active | ss-01/BC-2.01.006.md |
 | BC-2.01.007 | Session continuity survives IP address change via cryptographic re-authentication | session-networking | CAP-004 | P0 | E | implemented (S-1.03 / PR #7) | ss-01/BC-2.01.007.md |
 | BC-2.01.008 | Router-terminated control frame payload schema (control_type discriminator) | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.008.md |
+| BC-2.01.009 | NODE_IDENTIFY three-message handshake — wire protocol and failure paths | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.009.md |
+| BC-2.01.010 | BindInterface binding lifecycle — (SVTNID, NodeAddr) → IfaceID | session-networking | CAP-003 | P0 | E | active | ss-01/BC-2.01.010.md |
 | BC-2.02.001 | Duplicate-and-race: same frame sent on two fastest paths simultaneously | multipath-forwarding | CAP-005 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.001.md |
 | BC-2.02.002 | Receiver delivers first-arriving copy and silently discards subsequent duplicates | multipath-forwarding | CAP-005 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.002.md |
 | BC-2.02.003 | Per-path RTT and loss tracked via keep-alive probes; paths ranked by quality | multipath-forwarding | CAP-006 | P0 | E | implemented (S-4.01 / PR #24) | ss-02/BC-2.02.003.md |
@@ -52,7 +54,7 @@ traces_to: '.factory/specs/prd.md'
 | BC-2.04.006 | Two or more consoles may subscribe to the same session output simultaneously | session-access | CAP-016 | P0 | E | implemented (S-3.02 / PR #13) | ss-04/BC-2.04.006.md |
 | BC-2.04.007 | Access node daemon startup succeeds or exits non-zero; SIGTERM/SIGINT triggers clean shutdown | session-access | CAP-013 | P0 | E | implemented (S-W3.04 / PR #17) | ss-04/BC-2.04.007.md |
 | BC-2.04.008 | Discovery sender goroutine (`Discovery.Run`) wired into access daemon lifecycle — WG-tracked, ctx-driven shutdown | session-access | CAP-013 | P0 | PE | active | ss-04/BC-2.04.008.md |
-| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.001.md |
+| BC-2.05.001 | Tier 1 SVTN admission via signed key challenge | admission-security | CAP-017 | P0 | E | active | ss-05/BC-2.05.001.md |
 | BC-2.05.002 | Router rejects non-admitted nodes before forwarding — fail-closed | admission-security | CAP-017 | P0 | E | implemented (S-2.02 / PR #6) | ss-05/BC-2.05.002.md |
 | BC-2.05.003 | Per-session Tier 2 authorization enforced by access node, not router | admission-security | CAP-018 | P0 | E | implemented (S-3.03 / PR #14) | ss-05/BC-2.05.003.md |
 | BC-2.05.004 | Key lifecycle: register, revoke, and expire admission and session-authorization keys | admission-security | CAP-019 | P0 | E | active | ss-05/BC-2.05.004.md |
@@ -80,7 +82,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Subsystem | CAPs Covered | BC Count | Scope E | Scope PE | Scope P |
 |-----------|-------------|----------|---------|---------|---------|
-| session-networking | CAP-001–004 | 8 | 8 | 0 | 0 |
+| session-networking | CAP-001–004 | 10 | 10 | 0 | 0 |
 | multipath-forwarding | CAP-005–010 | 9 | 8 | 1 | 0 |
 | session-discovery | CAP-011–012 | 3 | 0 | 3 | 0 |
 | session-access | CAP-013–016 | 8 | 7 | 1 | 0 |
@@ -89,7 +91,7 @@ traces_to: '.factory/specs/prd.md'
 | network-management | CAP-023–024 | 4 | 4 | 0 | 0 |
 | console-operations | CAP-025 | 1 | 0 | 1 | 0 |
 | deployment-operations | CAP-026–028 | 4 | 2 | 2 | 0 |
-| **Total** | **CAP-001–029 + CAP-020a, CAP-020b** | **51** | **43** | **8** | **0** |
+| **Total** | **CAP-001–029 + CAP-020a, CAP-020b** | **53** | **45** | **8** | **0** |
 
 ## CAP Coverage Verification
 
@@ -97,7 +99,7 @@ traces_to: '.factory/specs/prd.md'
 |-----|--------------|--------|
 | CAP-001 | BC-2.01.001, BC-2.01.002 | covered |
 | CAP-002 | BC-2.01.003 | covered |
-| CAP-003 | BC-2.01.004, BC-2.01.005, BC-2.01.008 | covered |
+| CAP-003 | BC-2.01.004, BC-2.01.005, BC-2.01.008, BC-2.01.009, BC-2.01.010 | covered |
 | CAP-004 | BC-2.01.006, BC-2.01.007 | covered |
 | CAP-005 | BC-2.02.001, BC-2.02.002 | covered |
 | CAP-006 | BC-2.02.003 | covered |
@@ -131,6 +133,7 @@ traces_to: '.factory/specs/prd.md'
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.7 | 2026-07-18 | S-BL.NODE-IDENTIFY-WIRE BC batch (rulings v1.1): **2 new BCs** — BC-2.01.009 v1.0 (`NODE_IDENTIFY` three-message handshake wire protocol, session-networking / CAP-003, `cmd/switchboard`); BC-2.01.010 v1.0 (`BindInterface` binding lifecycle `(SVTNID, NodeAddr) → IfaceID`, session-networking / CAP-003, `internal/routing`). **1 amended BC** — BC-2.05.001 v1.1→v1.2 (O-1 ruling: `AdmitNode` expiry enforcement, Postcondition 6 + Invariant 5; status reverted to active as implementation now requires `S-BL.NODE-IDENTIFY-WIRE` changes). session-networking count 8→10, Scope-E count 43→45, total 51→53. CAP-003 coverage row updated. |
 | 3.6 | 2026-07-15 | Identity-cluster BC groundwork batch: **4 new BCs** — BC-2.03.001 v1.6→v1.7 (N4 audit: PC-4 `LocalNodeAdmissionPubkey` precondition annotation, traceability update, template conformance); BC-2.04.008 v1.0 commissioned (`Discovery.Run()` daemon-lifecycle wiring, session-access / CAP-013); BC-2.05.004 v1.14→v1.15 (A5: push-failure postcondition added to PC-1/PC-2/PC-3, template conformance); BC-2.05.009 v1.0 commissioned (admission-state-sync push RPC, admission-security / CAP-019); BC-2.05.010 v1.0 commissioned (admission-state-snapshot VLR-local, admission-security / CAP-019); BC-2.07.001 v1.15→v1.16 (A6: PC-3 Destroy push postcondition added, template conformance); BC-2.09.003 v2.0→v2.1 (N3+A3+A4 consolidated: PC-12 `admission_key_file` E-CFG-014, PC-13 `admission_state_file` E-CFG-015, PC-14 `router_management_endpoints` E-CFG-016, template conformance); BC-2.09.004 v1.0 commissioned (`admission_key_file` provisioning, deployment-operations / CAP-028). BC count 47→51; session-access count 7→8, admission-security count 8→10, deployment-operations count 3→4. |
 | 3.5 | 2026-07-13 | FO(a) discharge (step-4.5 impl pass 2 remediation burst): BC-2.06.004 CAP column re-anchored CAP-022 → CAP-029 (BC-2.06.004.md v1.4→v1.5; capabilities.md v1.0→v1.1 mints CAP-029 "On-demand reachability and round-trip-latency probe via sbctl", quality-observability). CAP-022 coverage row now BC-2.06.003 only; new CAP-029 coverage row added (BC-2.06.004). Coverage Summary quality-observability CAPs-covered cell and Total CAP range updated to include CAP-029. BC count unchanged at 47; quality-observability BC count unchanged at 4. |
 | 3.4 | 2026-07-12 | S-BL.CLI-SURFACE-COMPLETION architect rulings (`S-BL.CLI-SURFACE-COMPLETION-rulings.md`) executed: BC-2.06.004 commissioned (Ruling 1 — new BC, `paths.ping` one-shot RTT probe, quality-observability / CAP-022, not an extension of BC-2.06.003); BC-2.07.001 bumped v1.13→v1.14 (Ruling 2 — new Postcondition PC-4 `admin.svtn.status`, any-admitted-role authority via `resolveCallerAdmissionAnyRole`, 3 new test vectors, 2 new VP-048 rows); BC-2.09.001 bumped v1.1→v1.2 and BC-2.09.002 bumped v1.2→v1.3 (Ruling 4 — governance-only addenda naming the `router.reload`/`router.drain` wire verbs, both `[governance_leaf: true]`, no PC/AC change; resolves `DRIFT-HS006-DRAIN-CLI-MISSING`). Ruling 3 (`svtn destroy` top-level migration shim) required no BC change. BC count 46→47; quality-observability subsystem count 3→4, Scope-E count 39→40. |
