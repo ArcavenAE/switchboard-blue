@@ -24,6 +24,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -616,6 +617,16 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			switch controlType {
 			case 0x01: // DRAIN — router-originated broadcast (Q2-AMENDED);
 				// a router does not act on an inbound DRAIN byte from a node.
+			case 0x04: // NODE_IDENTIFY — second NodeIdentify on established
+				// connection is a protocol violation (BC-2.01.009 Invariant 7;
+				// E-ADM-023). The handshake is conducted in onAccept before
+				// ServeConn starts; a NODE_IDENTIFY reaching route() means
+				// a duplicate NodeIdentify was sent after admission.
+				//
+				// S-BL.NODE-IDENTIFY-WIRE Task 19: log WARN + return error to
+				// cause connection teardown via netingress.ServeConn error path.
+				// todo: unimplemented — wire real WARN log + E-ADM-023 emission
+				return errors.New("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")
 			default:
 				// Unknown/forward-compat control_type (includes the
 				// reserved-but-undispatched 0x02 RESYNC opcode until
