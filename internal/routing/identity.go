@@ -30,7 +30,15 @@ package routing
 // Traces to BC-2.01.010 PC-1 (binding created), PC-2 (LWW on reconnect),
 // PC-4 (write lock held); rulings §8 (method signature), §12 (LWW semantics).
 func (r *Router) BindInterface(svtnID [16]byte, nodeAddr [8]byte, ifaceID InterfaceID) {
-	// todo: unimplemented
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	inner, ok := r.identityIfaceMap[svtnID]
+	if !ok {
+		inner = make(map[[8]byte]InterfaceID)
+		r.identityIfaceMap[svtnID] = inner
+	}
+	inner[nodeAddr] = ifaceID
 }
 
 // LookupInterface returns the InterfaceID for (svtnID, nodeAddr), or 0 and
@@ -43,7 +51,15 @@ func (r *Router) BindInterface(svtnID [16]byte, nodeAddr [8]byte, ifaceID Interf
 // Traces to BC-2.01.010 PC-5 (lookup returns binding if present), PC-6
 // (read lock held), PC-7 (return type is value); rulings §8.
 func (r *Router) LookupInterface(svtnID [16]byte, nodeAddr [8]byte) (InterfaceID, bool) {
-	return 0, false
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	inner, ok := r.identityIfaceMap[svtnID]
+	if !ok {
+		return 0, false
+	}
+	id, ok := inner[nodeAddr]
+	return id, ok
 }
 
 // UnbindInterface removes the (svtnID, nodeAddr) binding. Called from the
@@ -60,16 +76,26 @@ func (r *Router) LookupInterface(svtnID [16]byte, nodeAddr [8]byte) (InterfaceID
 //
 // UnbindInterface acquires r.mu write lock.
 //
-// Signature note (discrepancy with rulings §8 signature): rulings §8 pins
-// UnbindInterface(svtnID [16]byte, nodeAddr [8]byte) with no ifaceID
-// parameter, but BC-2.01.010 PC-9 and the stale-cleanup guard semantics
-// (AC-010 test "call UnbindInterface with old ifaceID=1") require the
-// caller's ifaceID to implement the guard correctly. This stub uses the
-// three-argument form; the implementer must reconcile with rulings §8 or
-// the PO must confirm PC-9's guard requires the third parameter.
-//
 // Traces to BC-2.01.010 PC-8 (binding removed on close), PC-9 (stale
 // cleanup guard), PC-10 (write lock held); rulings §8, §12.
 func (r *Router) UnbindInterface(svtnID [16]byte, nodeAddr [8]byte, callerIfaceID InterfaceID) {
-	// todo: unimplemented
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	inner, ok := r.identityIfaceMap[svtnID]
+	if !ok {
+		return
+	}
+	// PC-9 stale-cleanup guard: only delete if the stored ifaceID matches the
+	// caller's own ifaceID. If a LWW overwrite installed a new binding
+	// (different ifaceID) between when this connection was active and when its
+	// cleanup fires, do NOT remove the new binding.
+	if inner[nodeAddr] != callerIfaceID {
+		return
+	}
+	delete(inner, nodeAddr)
+	// Optional: clean up empty nested map to avoid unbounded key accumulation.
+	if len(inner) == 0 {
+		delete(r.identityIfaceMap, svtnID)
+	}
 }
