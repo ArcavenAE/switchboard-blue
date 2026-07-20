@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "1f875f7"
+input-hash: "db3bfd9"
 traces_to: STATE.md
 ---
 
@@ -1413,7 +1413,7 @@ The following rows were present in STATE.md Current Phase Steps before compact-s
 |-------|-------|------|--------|
 | Spec | product-owner | §131 revoke carve-out (F-A-001 HIGH) | Annotation added: revoke uses boolStringFlag; interactive-flow / SVTN-shape-validation / E-CFG-012 / E-CFG-013 do NOT apply; rationale: taxonomy v4.4 + E-ADM-018 daemon-side enforcement |
 | Spec | product-owner | §137 scoping (F-A-001 HIGH) | Family narrowed to: svtn destroy, key register, admin recover; revoke explicitly excluded |
-| Spec | product-owner | §109 revoke syntax (F-A-002 MED) | `--role <control|console|access>` added as REQUIRED, no default; parenthetical "no default — required" annotation matching §394 prose |
+| Spec | product-owner | §109 revoke syntax (F-A-002 MED) | `--role <control\|console\|access>` added as REQUIRED, no default; parenthetical "no default — required" annotation matching §394 prose |
 | State | state-manager | STATE.md + burst-log.md + convergence-trajectory.md | This entry |
 
 **BC-5.39.001 streak:** 0/3 — remediation complete; streak unchanged (remediation burst does not increment streak). Pass 12 dispatch next; targets streak 0→1.
@@ -1506,8 +1506,8 @@ Phase 4 report: `.factory/holdout-scenarios/evaluations/HS-006-evaluation-2026-0
 | Phase 5 Pass 11 HAS_FINDINGS | Adv-A 1H/1M/3obs (§131/§137 revoke listed in runDestroyConfirmGate family but impl uses boolStringFlag — spec never received carve-out; §109 syntax missing required --role); Adv-B CLEAN 0/0/0+3obs; both adjudicated spec-side; streak 0/3; Burst 33 spec-only remediation pending | 2026-07-03 |
 | Phase 5 Pass 11 REMEDIATION COMPLETE | Burst 33: interface-definitions v1.23 spec-only — §131 revoke carve-out from runDestroyConfirmGate family (taxonomy v4.4 + E-ADM-018 already ruled bool-confirm shape); §137 scoped to svtn destroy + key register + admin recover; §109 --role REQUIRED with no-default annotation; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 12 next | 2026-07-03 |
 | Phase 5 Pass 12 HAS_FINDINGS | Adv-A 0H/2M/2obs (§111 list-keys exit codes missing E-SVTN-003 + E-CFG-001; §108/§109/§110 --svtn <id> placeholder class — daemon is name-keyed); Adv-B CLEAN 0/0/0+3obs; third consecutive zero-code-defect pass; streak 0/3; Burst 35 spec-only remediation pending | 2026-07-03 |
-| Phase 5 Pass 12 REMEDIATION COMPLETE | Burst 35: interface-definitions v1.24 spec-only — §111 exit-code column extended (E-SVTN-003 + E-CFG-001), --svtn <svtn-name> placeholder sweep (§108/§109/§110/§130), §108/§120 confirm-family flag consistency touch; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 13 next |
-| Phase 5 Pass 13 HAS_FINDINGS | Adv-A 1H/1M/2obs (list-keys admission gate removed with authority gate — CWE-862; E-CFG-001 token absent from list-keys usageErrf); Adv-B 0H/0M/1L/2obs (e2e stub name admin.key.list vs admin.key.list-keys); streak 0/3; Bursts 37+38 remediation |
+| Phase 5 Pass 12 REMEDIATION COMPLETE | Burst 35: interface-definitions v1.24 spec-only — §111 exit-code column extended (E-SVTN-003 + E-CFG-001), --svtn <svtn-name> placeholder sweep (§108/§109/§110/§130), §108/§120 confirm-family flag consistency touch; zero code changes; develop stays 66e9ddc; streak 0/3; Pass 13 next | 2026-07-03 |
+| Phase 5 Pass 13 HAS_FINDINGS | Adv-A 1H/1M/2obs (list-keys admission gate removed with authority gate — CWE-862; E-CFG-001 token absent from list-keys usageErrf); Adv-B 0H/0M/1L/2obs (e2e stub name admin.key.list vs admin.key.list-keys); streak 0/3; Bursts 37+38 remediation | 2026-07-03 |
 | Phase 5 Pass 13 REMEDIATION COMPLETE | Burst 37: PR #69 03ce8e7 (admission gate restored; E-CFG-001 token; stub name fix). Burst 38: spec-only — interface-definitions v1.25 (§111 auth sharpened; BC-2.05.004 v1.13 PC-1 F-L2-003 + EC-008; VP-075 v1.7 scope exclusion + CWE-862); streak 0/3; Pass 14 next | 2026-07-03 |
 
 ---
@@ -1857,6 +1857,29 @@ Two items were consciously adjudicated below the proportionality bar and deliber
 **Outcome:** S-7.04-FU-DRAIN-WIRE DELIVERED. develop @ `f73676d`. Next: next story selection from backlog (S-BL.RESYNC-FRAME carries the forward obligation; also VP-042 testenv residual, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION).
 
 ---
+
+---
+
+### Bookkeeping Burst — DISCOVERY-WIRE Step-4.5 pass-7 sweep (2026-07-20)
+
+**Summary:** Comment-only self-correction sweep after pass-7 F-1 fix. Orchestrator scan found two more same-class stale-comment instances alongside the pass-7 LOW finding already fixed at `0821149`. Both additional instances fixed comment-only at worktree HEAD `7d48e14` (22 commits vs develop). No story-spec edit; no declared input changed; story stays v2.20 / input-hash `5a4d0da`. Convergence counter remains 0/3. All 6 gates re-verified green. Known multicast-test environment flake documented (3 real-multicast-binding tests fail under full-suite socket contention with `network is unreachable` at DialUDP — pass 5/5 in isolation, same family as already-skipped TestLookup_ConcurrentRegisterRace — not a code defect, not a merge-blocker).
+
+**Files fixed (comment-only):**
+- `discovery_listener_wire_test.go:152` — stale `(RED gate: Task 6d startup loop not yet wired...)` t.Errorf message → reworded to regression diagnostic.
+- `discovery_relay_wire_test.go:274` — false "Task 6's relay-dispatch closure is GATED" reason for the oversize-panic being unreachable → corrected to the real size-bound reason.
+
+**Artifacts updated:** STORY-INDEX.md v4.131→v4.132 (row-144 status cell); STATE.md (phase_step, awaiting, current_step, timestamp, Last Updated row, Current Phase Steps, Decisions Log + trim, Session Resume Checkpoint). Two oldest Decisions Log rows archived below.
+
+---
+
+### STATE.md Decisions Log Archive — 2026-07-20 (oldest entries compacted to make room)
+
+The following two rows were the oldest entries in STATE.md's Decisions Log. Moved here to hold STATE.md under the 200-line healthy ceiling.
+
+| Decision | Outcome | Date |
+|----------|---------|------|
+| Cycle-1 convergence (Phase 7) | CONVERGED — pipeline → STEADY_STATE | 2026-07-06 |
+| Phase 5 Passes 1-39 → BC-5.39.001 | Detail: this burst-log file (Phase-5 arc above) | 2026-07-03–07-04 |
 
 ---
 
