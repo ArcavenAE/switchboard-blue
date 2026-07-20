@@ -480,10 +480,10 @@ func TestRouterIngest_LastSeen_LRU_EvictsLowestSequence(t *testing.T) {
 	// to reach exactly testLastSeenCapMax. Comment: avoids 65534 Ingest() calls.
 	ri.mu.Lock()
 	for i := 0; i < testLastSeenCapMax-2; i++ {
-		k := makeLastSeenKey(i + 1) // avoid index 0 which overlaps kLowKey if svtnA[0]==0
+		k := makeLastSeenKey(i + 1)       // avoid index 0 which overlaps kLowKey if svtnA[0]==0
 		ri.lastSeen[k] = uint64(1000 + i) // sequences 1000..65033 — all > 1
 	}
-	ri.lastSeen[kLowKey] = 1    // K_low: sequence 1 (minimum)
+	ri.lastSeen[kLowKey] = 1     // K_low: sequence 1 (minimum)
 	ri.lastSeen[kHighKey] = 9999 // K_high: sequence 9999
 	capSize := len(ri.lastSeen)
 	ri.mu.Unlock()
