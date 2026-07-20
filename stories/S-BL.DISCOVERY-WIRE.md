@@ -10,6 +10,21 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-20
+    version: "2.26"
+    change: >
+      Step-4.5 Pass-2 F-1 (MED) remediation — two declared-input BCs pinned stale in story
+      prose: BC-2.03.001 v1.6→v1.7 (10 spots: inputDocuments comment + 3 body + 7 Anchors
+      Consumed rows; v1.7 added PC-4 = LocalNodeAdmissionPubkey owned by
+      BC-2.09.004/S-BL.NODE-ADMISSION-PROVISIONING, annotated as out-of-scope; story consumes
+      PC-1/2/3+PC-5, unchanged substance) and BC-2.01.008 v1.2→v1.3 (inputDocuments comment
+      + 1 Anchors row; v1.3 added NODE_IDENTIFY=0x04 row). The 2026-07-15 BC bumps fell
+      through 10+ story-version re-cert sweeps because the sweep grep-set had narrowed to
+      rulings/VP patterns and dropped the BC-2.03.001/BC-2.01.008 patterns (process-gap).
+      Restored those patterns to the standing re-cert sweep set. Substance cited unchanged
+      between pinned and canonical versions — no AC/behavior affected. Body/metadata-only;
+      input-hash unchanged at def6b7b (declared-input bytes already captured). count 18,
+      points 8, status ready — unchanged.
+  - date: 2026-07-20
     version: "2.25"
     change: >
       Step-4.5 Pass-1 F-1 (MED) remediation — SEC-DW-10 body forward-advance clause still
@@ -493,7 +508,7 @@ modified:
       in shape"), now corrected. Architect adjudication: `Discovery.ReceiveAdvertisement` is RETIRED
       (deleted, not preserved) — it was one of THREE `advertisementKey` call sites (`Encode`,
       `Decode`, `ReceiveAdvertisement`), not the two this story's scoping implied, and a node
-      structurally has no key to derive for an arbitrary sender per BC-2.03.001 v1.6 Postcondition
+      structurally has no key to derive for an arbitrary sender per BC-2.03.001 v1.7 Postcondition
       5. Replaced by a new node-side relay-ingest function: decodes the hop-2 `DISCOVERY_RELAY`
       payload, no per-frame HMAC (trust = the admitted connection, AC-015), and relocates
       `ErrSVTNMismatch` to a direct `OuterHeader.SVTNID` vs. `d.cfg.LocalSVTNID` equality check;
@@ -604,7 +619,7 @@ modified:
       bits = the original counter) — self-contained at the sender, no router-side logic change,
       no dependency on the still-open fan-out target-resolution Forward Obligation. Authority: 
       rulings v1.6 (Ruling 1 "restart-liveness amendment" subsection + v1.6 precision-correction
-      Decision Log entry), BC-2.03.001 v1.6, VP-080 v1.3, VP-INDEX v2.43. Five architect
+      Decision Log entry), BC-2.03.001 v1.7, VP-080 v1.3, VP-INDEX v2.43. Five architect
       blockquotes applied verbatim: (1) AC-008 gained a scope-clarification note distinguishing
       fresh-cold-start from a stable-identity restart; (2) AC-009 gained a note characterizing
       its discard rule as correct for THREE triggers — genuine replay, the ≤1s
@@ -752,7 +767,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.25"
+version: "2.26"
 phase: 2
 epic: E-7
 wave: backlog
@@ -808,9 +823,9 @@ inputDocuments:
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md'   # v1.0 — BINDING. Five decisions for the Task 6d decision-threading seam: (1) `onRelay func(discovery.RouterIngestDecision)` as required 6th param of `wireDiscoveryListener`; (2) nil backward-compat = fail-safe discard (not a security perimeter); (3) `relayRateCap` constructed once in `runRouter`, captured by `onRelay` closure, must be mutex-guarded for concurrent per-SVTN callers; (4) new `var discoveryWG sync.WaitGroup` (not `writerWG`) + `ingressCtx` + placement after `connector.Start()` + `discoveryWG.Wait()` between `dataWG.Wait()`/`writerWG.Wait()`; (5) `AllSVTNEntries()` startup-snapshot only — dynamic post-startup SVTN join is new Forward Obligation (g), deferred.
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md'   # v1.2 — BINDING. Bounding decisions for the two per-`(SVTNID, NodeAddr)` process-lifetime maps: Decision 1 = `relayRateCap.last` prune-by-age (`maxRelayRateCapEntries = 65536`, amortized O(1) per `allow()` call, lossless per VP-B); Decision 2 = `RouterIngest.lastSeen` LRU-by-lowest-sequence eviction on insert (`maxLastSeenEntries = 65536`, one-heartbeat cold-start-window residual accepted per EC-006 + SEC-DW-07 Human Gate posture); Decision 8 (v1.1 new) = both-paths bound blessed (Option A) — cold-start AND forward-advance branches, watermark-first on forward-advance, forward-advance loop dead in production (cold-start cap ensures `len <= max` before any forward-advance can be called); Decision 3 = new SEC-DW-10 (LOW) clause, no new AC (`acceptance_criteria_count` stays 18); Decision 4 = 7 RED-first test obligations (3 in `relay_rate_cap_test.go`, 4 in `discovery_wire_map_bounding_test.go` — new file). Both fixes execute under existing mutex scope (VP-F/VP-G/VP-I). No new imports introduced in either file (Decision 7 / ARCH-08 compliance).
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'   # v1.11 — BINDING. All three rulings + Security Consult Addendum (SEC-DW-01..09) + Replay/freshness subsection (now incl. the F-DWSP4-001 restart-liveness amendment) + Decision Log (incl. the v1.6 precision-correction entry, the v1.7 one-token propagation fix to Ruling 3(c)'s trailing prose, the v1.8 Node-local ingest correction retiring `ReceiveAdvertisement`/`TestDiscovery_VP045_SVTNIsolation_MultipleScopes`, the v1.9 story-ready human gate disposition — Ruling 3(f)'s fan-out target resolution resolved to named companion story `S-BL.NODE-IDENTIFY-WIRE`, SEC-DW-07/discovery-port sign-off recorded, `sessions.list` Forward Obligation (d) resolved to `S-BL.SESSIONS-LIST-WIRE` — the v1.10 Ruling 4 (Task-3 router daemon-lifecycle wiring gap, new Forward Obligation (e), `S-BL.ADMISSION-SYNC-WIRE` named as a follow-on) plus a Ruling 2 addendum (sender-side multicast egress elaboration, sanctioned within Ruling 2's existing scope), and the v1.11 Ruling 5 (F-DWIP1-001 fix sanctioned as Ruling-1-faithful, new Forward Obligation (f), `S-BL.NODE-ADMISSION-PROVISIONING` named as a third identity-cluster leg). Where this story and the ruling appear to diverge, the ruling governs.
-  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'   # v1.6 — Preconditions 1-3, Postconditions 1-5, Invariants 1-3. Ruling 1/2 amendments already executed by product-owner (Precondition 3 address-derivation note, PC-1 relay-delivery note, PC-2 Sequence field, PC-5 DiscoveryAuthKey derivation); v1.6 carries the F-DWSP4-001 restart-liveness amendment to PC-2's Sequence-field description.
+  - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'   # v1.7 — Preconditions 1-4 (PC-4 = discovery.Config.LocalNodeAdmissionPubkey, populated by BC-2.09.004 / S-BL.NODE-ADMISSION-PROVISIONING — OUT OF THIS STORY'S SCOPE; this story consumes PC-1/2/3 + PC-5), Postconditions 1-5, Invariants 1-3. Ruling 1/2 amendments already executed by product-owner (Precondition 3 address-derivation note, PC-1 relay-delivery note, PC-2 Sequence field, PC-5 DiscoveryAuthKey derivation); v1.6 carries the F-DWSP4-001 restart-liveness amendment to PC-2's Sequence-field description.
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'   # v1.5 — PC-5 is the postcondition SEC-DW-07/VP-080 protects (staleness-expiry guarantee). PC-1's `sessions.list` RPC-exposure annotation is NOT adjudicated by any of the three rulings — flagged, not solved, in Non-Goals; v1.5 re-points the annotation from PENDING-S-BL.DISCOVERY-WIRE to PENDING-S-BL.SESSIONS-LIST-WIRE per Forward Obligation (d)'s resolution.
-  - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'   # v1.2 — DISCOVERY_RELAY=0x03 registry row (Ruling 3(g), already executed by product-owner); PC-3 4-byte control header + DISCOVERY_RELAY extension note; Invariant 3 (append-only) and Invariant 5/DI-007 (extend-beyond-byte-3 allowance) govern the hop-2 payload layout.
+  - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'   # v1.3 — DISCOVERY_RELAY=0x03 registry row (Ruling 3(g), already executed by product-owner); PC-3 4-byte control header + DISCOVERY_RELAY extension note; Invariant 3 (append-only) and Invariant 5/DI-007 (extend-beyond-byte-3 allowance) govern the hop-2 payload layout.
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'   # v1.8 — §Session Discovery. Router-relay model, address derivation, hop-2 relay-transport paragraph, and the superseded-language callout are all already executed (Ruling 2/3), not proposed.
   - '.factory/specs/verification-properties/VP-080.md'   # v1.7 — SEC-DW-07 replay-rejection property, draft lifecycle_status pending this story's wave scoping (draft→active transition is this elaboration's job per the VP's own Lifecycle section); v1.3 carried the restart-liveness Property 5 (forward-acceptance-on-restart) added alongside the F-DWSP4-001 fix, per VP-INDEX v2.43; v1.4 was a housekeeping bump alongside ARCH-07/ARCH-11 gaining the VP-078/079/080 rows; v1.5 was a citation re-pin + input-hash refresh alongside rulings v1.8 (F-DWSP9-001) — no property-substance change (Properties 1-5, Test Scenarios, thresholds all unchanged); v1.6 replaced two stale `TestDiscovery_VP045_SVTNIsolation_MultipleScopes`-as-extant-exemplar citations (Proof Method table, Feasibility Assessment) with the surviving router-side `DiscoveryAuthKeyFor`-admitted test lineage (F-DWSP10-001) — no property-substance change; v1.7 corrected the Source Contract's stale process-status paragraph (it had read "drafted, not yet executed" since the v1.0 mint even though the BC-2.03.001 PC-2 amendment landed at v1.5 and was superseded in place at v1.6) and confirmed textual alignment between the reproduced blockquote and the landed BC text (F-DWSP12-001) — no property-substance change, input-hash unchanged (`5d904d5`).
   - '.factory/specs/verification-properties/VP-044.md'   # v1.2 — PARTIAL (RULING-W6TB-D doctrine); multicast wire delivery (PC-1/PC-3/PC-4) is the gap this story closes.
@@ -950,7 +965,7 @@ dependency) is unchanged and shared by both call sites.
 - **`Discovery.ReceiveAdvertisement` is RETIRED (deleted), not preserved — corrected by F-DWSP8-001.**
   It cannot compile once `advertisementKey` is deleted (one of three call sites, not the one this
   AC's scoping implied), and even patched, a node has no key to derive for an arbitrary sender
-  (BC-2.03.001 v1.6 PC-5's own rule). A new node-side relay-ingest function replaces it on the
+  (BC-2.03.001 v1.7 PC-5's own rule). A new node-side relay-ingest function replaces it on the
   hop-2 path: no per-frame HMAC (trust = the admitted connection, AC-015), `ErrSVTNMismatch`
   relocated to a direct `OuterHeader.SVTNID` vs. `d.cfg.LocalSVTNID` equality check.
   `TestDiscovery_VP045_SVTNIsolation_MultipleScopes` is retired, not preserved — see AC-007 and the
@@ -2148,14 +2163,14 @@ pass result rather than reviewing stale state.
 
 | Anchor | Verbatim ID | Source | Disposition |
 |--------|-------------|--------|--------------|
-| Admitted-node HMAC key derivation (DRIFT-W6TBD-001) | BC-2.03.001 v1.6 Postcondition 5 | Ruling 1 | TO DISCHARGE — AC-004, AC-005, AC-006 |
-| SVTN-scoped multicast address derivation | BC-2.03.001 v1.6 Precondition 3 | Ruling 2 | TO DISCHARGE — AC-002 |
-| Router-relay delivery model (DI-004 compliance) | BC-2.03.001 v1.6 Postcondition 1, Invariant 1 | Ruling 2 | TO DISCHARGE — AC-001, AC-003 |
-| Replay/freshness (SEC-DW-07) | BC-2.03.001 v1.6 Postcondition 2; VP-080 | Ruling 1 | TO DISCHARGE — AC-008, AC-009, AC-010 |
-| Ingest resource/rate hardening (SEC-DW-01..05) | BC-2.03.001 v1.6 Postcondition 5 | Ruling 1 (Security Consult Addendum) | TO DISCHARGE — AC-005, AC-006, AC-011, AC-012, AC-013 |
-| Hop-2 relay transport, frame layout | BC-2.01.008 v1.2 Postcondition 2, Postcondition 3, Invariant 5 | Ruling 3(a)(c) | TO DISCHARGE — AC-014 |
-| Hop-2 connection-trust boundary | BC-2.03.001 v1.6 Postcondition 1 delivery-mechanism note | Ruling 3(b) | TO DISCHARGE — AC-015 |
-| Hop-2 fan-out semantics + rate cap | BC-2.03.001 v1.6 Postcondition 1 delivery-mechanism note; SEC-DW-09 | Ruling 3(d)(e) | TO DISCHARGE — AC-017, AC-018 (ungated — S-BL.NODE-IDENTIFY-WIRE merged PR #127) |
+| Admitted-node HMAC key derivation (DRIFT-W6TBD-001) | BC-2.03.001 v1.7 Postcondition 5 | Ruling 1 | TO DISCHARGE — AC-004, AC-005, AC-006 |
+| SVTN-scoped multicast address derivation | BC-2.03.001 v1.7 Precondition 3 | Ruling 2 | TO DISCHARGE — AC-002 |
+| Router-relay delivery model (DI-004 compliance) | BC-2.03.001 v1.7 Postcondition 1, Invariant 1 | Ruling 2 | TO DISCHARGE — AC-001, AC-003 |
+| Replay/freshness (SEC-DW-07) | BC-2.03.001 v1.7 Postcondition 2; VP-080 | Ruling 1 | TO DISCHARGE — AC-008, AC-009, AC-010 |
+| Ingest resource/rate hardening (SEC-DW-01..05) | BC-2.03.001 v1.7 Postcondition 5 | Ruling 1 (Security Consult Addendum) | TO DISCHARGE — AC-005, AC-006, AC-011, AC-012, AC-013 |
+| Hop-2 relay transport, frame layout | BC-2.01.008 v1.3 Postcondition 2, Postcondition 3, Invariant 5 | Ruling 3(a)(c) | TO DISCHARGE — AC-014 |
+| Hop-2 connection-trust boundary | BC-2.03.001 v1.7 Postcondition 1 delivery-mechanism note | Ruling 3(b) | TO DISCHARGE — AC-015 |
+| Hop-2 fan-out semantics + rate cap | BC-2.03.001 v1.7 Postcondition 1 delivery-mechanism note; SEC-DW-09 | Ruling 3(d)(e) | TO DISCHARGE — AC-017, AC-018 (ungated — S-BL.NODE-IDENTIFY-WIRE merged PR #127) |
 | Fan-out target resolution | Ruling 3(f); `decisions/S-BL.DISCOVERY-WIRE-fanout-resolution-ruling.md` v1.0 | Ruling 3 | TO DISCHARGE — `Router.InterfacesForSVTN` per fan-out-resolution ruling v1.0 (Forward Obligation (a) resolved) |
 | DRIFT-W6TBD-001 | drift item | `RULING-W6TB-D-discovery-scope.md` | RESOLVED by AC-004/AC-005/AC-006 — tag PR with `Resolves: DRIFT-W6TBD-001` per this repo's non-`closes`/`fixes` convention for prior-architect-note-reported items |
 
@@ -2179,6 +2194,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.26 | 2026-07-20 | **Step-4.5 Pass-2 F-1 (MED) remediation — two declared-input BCs pinned stale in story prose: BC-2.03.001 v1.6→v1.7 (10 spots: inputDocuments comment + 3 body + 7 Anchors Consumed rows; v1.7 added PC-4 = `discovery.Config.LocalNodeAdmissionPubkey`, populated by BC-2.09.004 / S-BL.NODE-ADMISSION-PROVISIONING — annotated as out-of-scope; story consumes PC-1/2/3+PC-5, unchanged substance) and BC-2.01.008 v1.2→v1.3 (inputDocuments comment + 1 Anchors row; v1.3 added NODE_IDENTIFY=0x04 row). The 2026-07-15 BC bumps fell through 10+ story-version re-cert sweeps because the sweep grep-set had narrowed to rulings/VP patterns and dropped the BC-2.03.001/BC-2.01.008 patterns (process-gap). Restored those patterns to the standing re-cert sweep set. Substance cited unchanged between pinned and canonical versions — no AC/behavior affected. Body/metadata-only; `input-hash` unchanged at `def6b7b` (declared-input bytes already captured). `count` 18, `points` 8, `status` ready — unchanged.** |
 | 2.25 | 2026-07-20 | **Step-4.5 Pass-1 F-1 (MED) remediation — SEC-DW-10 body forward-advance clause still asserted the pre-v1.2 absolute self-eviction guarantee ('k cannot be selected as its own LRU victim'); the v2.24 burst corrected this everywhere else (code comment, frontmatter, STORY-INDEX, ruling v1.2) but missed the story-body transcription. Corrected to 'improbable — not impossible; benign if evicted' matching ruling v1.2 Decision 8. Also disambiguated the sibling Decision-8 version pin (v1.1 provenance → 'introduced v1.1, rationale refined v1.2'). Body-only; `input-hash` unchanged at `def6b7b` (no `inputs:` file changed). `count` 18, `points` 8, `status` ready — unchanged.** |
 | 2.24 | 2026-07-20 | **Step-4.5 Pass-1/Pass-2 reconvergence remediation.** (F-1 MED) FCL row for `relay_rate_cap_test.go` corrected `modify`→`create` (file absent at develop `7fcf0cf`, added on feature branch at `5d7cdb1`, contains only the 3 map-bounding tests + `newFakeClock`/`makeRelayRateKey` helpers; sibling of the v2.22 `discovery_wire_map_bounding_test.go` correction). (F-2 MED) top-of-body Status note corrected — claimed `draft`/not-promoted, contradicting frontmatter `status: ready` (v2.12 promoted 2026-07-14). (F-3 LOW) Provenance Status bullet explicitly scoped as v2.0-era historical snapshot. Map-bounding-ruling v1.1→v1.2 citation sweep (Pass-2 F-1: ruling Decision 8 self-eviction guarantee corrected to improbable-not-impossible; benign if evicted). `input-hash` 7ff0732→def6b7b (ruling input bytes changed). `count` 18, `points` 8, `status` ready — unchanged. |
 | 2.23 | 2026-07-20 | **Pass-C F-1 fix** — corrected 2 File-Change-List rows citing `map-bounding-ruling.md` v1.0 → v1.1 (Decisions 1 & 4 are byte-identical v1.0→v1.1; content was accurate, version pin stale). Body-only; `input-hash` unchanged at `7ff0732` (no `inputs:` file changed). `acceptance_criteria_count` stays 18. `points` stay 8. `status` stays `ready`. |
