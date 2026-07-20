@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "db3bfd9"
+input-hash: "d8c98b0"
 traces_to: STATE.md
 ---
 
@@ -1894,3 +1894,61 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 | 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
 
 | 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged to develop @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 13 ACs, 10 pts; F-1 (HIGH verify-source) + MED-1 (AdmitNode godoc) + LOW-1 (E-ADM-022 log) + F-2 (log-coverage) fixed; post-merge sec review recorded. SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored.** | completed | PR #127 MERGED. develop @ 7fcf0cf. DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. |
+
+---
+
+### Step-4.5 Passes 8+9 — S-BL.DISCOVERY-WIRE (2026-07-20)
+
+**Context:** Concurrent diverse-lens adversarial review of worktree HEAD `7d48e14` (22 commits vs develop), story v2.20 (input-hash `5a4d0da`). Two fresh-context adversaries dispatched in parallel (different lens/approach).
+
+**Finding:** Both passes independently found the SAME MED: the prior pass-7 stale-comment sweep was INCOMPLETE — 3 more "Task 6, GATED"/"once Task 6c is ready" instances were missed:
+1. `internal/discovery/discovery_wire.go:11`
+2. `internal/discovery/discovery_wire.go:54`
+3. `cmd/switchboard/discovery_relay_wire_test.go` file-header (AC-018 "follow-on ... once ready")
+
+**Fix (comment-only):** All 3 fixed at worktree HEAD `f638535` (commit `docs(discovery): retire stale Task-6-GATED comments — Step-4.5 pass-8/9 sweep (3 instances)`). Class fully retired — orchestrator + implementer completeness-greps both confirm zero remaining (allowed survivors excluded).
+
+**Convergence:** Both passes ALSO confirmed clean (first-principles) on: concurrency/go.md-rule-12, decode/encode panic-seam (DecodeSessionList + decodeBody UTF-8 guards), rate-cap semantics, error-surfacing, test anti-vacuity, all four policies. One out-of-scope item noted (mgmt_wire.go:813-819 DRAIN-observer stale comment from PR #120 — NOT this story's diff, deferred, logged separately).
+
+**Gates:** All 6 green at `f638535`: full plain suite PASS; full race suite PASS 0 DATA RACE excluding #124 + 3 documented multicast env-flakes; multicast tests PASS 3/3 in isolation under -race.
+
+**Convergence counter:** 0/3 reset (BC-5.39.001: passes 5/6 reviewed pre-fix 1cd8457; passes 8/9 found the MED — neither banks; last edit is now f638535).
+
+**Worktree:** `f638535` (23 commits vs develop). Story stays v2.20 / input-hash `5a4d0da` (comment-only code, no story-spec edit).
+
+**Next:** Pass-10 (seeking 1st clean against `f638535`) → 3 consecutive NITPICK_ONLY → per-AC demos → PR → merge.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files, 1828 ins); all 6 gates green; story v2.17; task6d ruling v1.0; FO(g) deferred.** | code-complete | develop @ 7fcf0cf. |
+
+---
+
+### Step-4.5 Passes 8+9 — S-BL.DISCOVERY-WIRE (2026-07-20)
+
+**Context:** Concurrent diverse-lens adversarial review of worktree HEAD `7d48e14` (22 commits vs develop), story v2.20 (input-hash `5a4d0da`). Two fresh-context adversaries dispatched in parallel (different lens/approach).
+
+**Finding:** Both passes independently found the SAME MED: the prior pass-7 stale-comment sweep was INCOMPLETE — 3 more "Task 6, GATED"/"once Task 6c is ready" instances were missed:
+1. `internal/discovery/discovery_wire.go:11`
+2. `internal/discovery/discovery_wire.go:54`
+3. `cmd/switchboard/discovery_relay_wire_test.go` file-header (AC-018 "follow-on ... once ready")
+
+**Fix (comment-only):** All 3 fixed at worktree HEAD `f638535` (commit `docs(discovery): retire stale Task-6-GATED comments — Step-4.5 pass-8/9 sweep (3 instances)`). Class fully retired — orchestrator + implementer completeness-greps both confirm zero remaining (allowed survivors excluded).
+
+**Convergence:** Both passes ALSO confirmed clean (first-principles) on: concurrency/go.md-rule-12, decode/encode panic-seam (DecodeSessionList + decodeBody UTF-8 guards), rate-cap semantics, error-surfacing, test anti-vacuity, all four policies. One out-of-scope item noted (mgmt_wire.go:813-819 DRAIN-observer stale comment from PR #120 — NOT this story's diff, deferred, logged separately).
+
+**Gates:** All 6 green at `f638535`: full plain suite PASS; full race suite PASS 0 DATA RACE excluding #124 + 3 documented multicast env-flakes; multicast tests PASS 3/3 in isolation under -race.
+
+**Convergence counter:** 0/3 reset (BC-5.39.001: passes 5/6 reviewed pre-fix 1cd8457, passes 8/9 found the MED — neither banks; last edit was f638535).
+
+**Worktree:** `f638535` (23 commits vs develop). Story stays v2.20 / input-hash `5a4d0da` (comment-only, no story-spec edit).
+
+**Next:** Pass-10 (seeking 1st clean against `f638535`) → 3 consecutive NITPICK_ONLY → per-AC demos → PR → merge.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files, 1828 ins); all 6 gates green; story v2.17; task6d ruling v1.0; FO(g) deferred.** | code-complete | develop @ 7fcf0cf. |

@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-20T11:10:41Z","command":"go test ./... -race -count=1 -skip 'TestLookup_ConcurrentRegisterRace' 2>&1"}
+{"status":"pass","timestamp":"2026-07-20T12:52:43Z","command":"cd /Users/skippy/work/aae-orc/run/switchboard-blue/.worktrees/S-BL.DISCOVERY-WIRE-FANOUT && go test ./cmd/switchboard/ -race -count=1 -run 'TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs|TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly|TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue' 2>&1"}
