@@ -2,10 +2,11 @@
 artifact_id: S-BL.DISCOVERY-WIRE-map-bounding-ruling
 document_type: decision
 level: ops
-version: "1.0"
+version: "1.1"
 status: final
 producer: architect
 timestamp: 2026-07-20T00:00:00Z
+modified: 2026-07-20T00:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.DISCOVERY-WIRE]
 bc_traces:
@@ -14,6 +15,20 @@ related_docs:
   - decisions/S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md
   - decisions/S-BL.DISCOVERY-WIRE-fanout-resolution-ruling.md
   - stories/S-BL.DISCOVERY-WIRE.md
+changelog:
+  - version: "1.1"
+    date: 2026-07-20
+    author: architect
+    summary: >
+      Decision 2 adjudication: bless the implementer's defensive both-paths
+      bound (Option A). Forward-advance drain is a production-correct defensive
+      backstop; delivered code stands as-is. Decision 2 updated to reflect the
+      actual implementation contract. Decision 8 (new) documents the
+      adjudication rationale and confirms secondary assertions.
+  - version: "1.0"
+    date: 2026-07-20
+    author: architect
+    summary: Initial ruling — cold-start-only eviction design.
 ---
 
 # Ruling: S-BL.DISCOVERY-WIRE — Bounding the Two Unbounded Per-`(SVTNID, NodeAddr)` Maps
@@ -459,3 +474,123 @@ go.md rule 11 (timestamps in UTC): not applicable — `relayRateCap` already use
 `c.now()` (injectable, defaults to `time.Now` not `time.Now().UTC()`); this is consistent
 with the existing pattern in `tokenBucket.last` in the same file. No UTC change is required
 or introduced.
+
+---
+
+## Decision 8 — Adjudication: Implementer's Both-Paths Bound is Blessed (v1.1)
+
+### The Deviation
+
+Decision 2 v1.0 specified eviction on the cold-start path only (`!seen`). The implementer
+delivered eviction on BOTH branches:
+
+- **Cold-start** (`!seen`): `for len >= maxLastSeenEntries { evictLRULastSeen() }` then
+  insert. Matches the original ruling.
+- **Forward-advance** (`seen && sequence > last`): writes the watermark FIRST, then
+  `for len > maxLastSeenEntries { evictLRULastSeen() }` (strict `>`, not `>=`). Deviates
+  from the original ruling.
+
+The forward-advance drain is exercised only when the map is over-cap at the time of a
+forward-advance call. Under the cold-start-only path this cannot happen in production:
+the cold-start cap enforces `len <= maxLastSeenEntries` at every insert; the forward-advance
+path never grows the map. The forward-advance loop is therefore dead in production. It fires
+only via white-box test pre-loading (`TestRouterIngest_LastSeenMap_BoundedAtCap`'s direct
+`ri.lastSeen[phantomKey] = ...` assignments above cap).
+
+### Adjudication: Option A — Bless the defensive both-paths bound
+
+**The delivered code stands as-is. No code change is needed.**
+
+#### Rationale on the merits
+
+**1. The map-bound invariant is the security requirement; the path restriction was
+a performance optimization.** Decision 2 v1.0 said "Only check on a cold-start path
+to avoid O(N) scan on every Ingest call." That comment was an optimization rationale,
+not a security constraint. SEC-DW-10 requires the map to be bounded. The delivered code
+bounds the map on any over-cap state — a strictly stronger enforcement of SEC-DW-10.
+
+**2. The forward-advance drain is O(1) in production.** The loop body never executes:
+`len(ri.lastSeen) > maxLastSeenEntries` is false when the cold-start cap is active. The
+"avoid O(N) scan" performance goal is fully preserved — the condition check is one integer
+comparison and an immediate exit.
+
+**3. The watermark-first ordering in the forward-advance branch is correct.** Writing
+`ri.lastSeen[k] = sequence` before the eviction scan ensures the advancing key is not
+selected as its own LRU victim. Had the implementer checked first and then written, a
+map that was exactly-at-cap could (in the forward-advance case) evict the key being
+updated. Writing first is the correct defensive ordering.
+
+**4. The forward-advance branch is honestly documented.** The comment in `discovery_wire.go`
+at lines 378-391 explicitly states: "handles any over-cap map state inherited before this
+call (e.g. white-box preloaded in tests)." The code does not misrepresent its production
+behavior. Future readers understand exactly what the loop does and why.
+
+**5. Test 1 (`TestRouterIngest_LastSeenMap_BoundedAtCap`) is acceptable under the
+white-box pre-loading rationale.** The ruling authorized white-box direct manipulation to
+avoid 65533 HMAC-verified Ingest() calls. Test 1 pre-loads to `testLastSeenCapMax-1`,
+drives one real cold-start Ingest (cap-boundary test), then injects 2 phantoms above cap
+via white-box, then drives a forward-advance Ingest to verify the drain. The test
+accurately documents its intent. Tests 2/3/4 use the cleaner combo-AdmittedKeySet
+cold-start pattern and provide the primary correctness evidence for eviction semantics.
+
+**6. Option B's churn is not warranted.** Rewriting Test 1 to use a combo-AdmittedKeySet
+cold-start trigger would make it structurally identical to Tests 2/3, providing no
+additional coverage. Simplifying the implementation to cold-start-only removes the
+defensive backstop without any production benefit. The adjudication cost exceeds the
+value of the purity improvement.
+
+### Updated Decision 2 implementation contract
+
+The `RouterIngest.Ingest()` bounding block is defined as follows (v1.1):
+
+```go
+if !seen {
+    // Cold-start: new entry is about to be inserted (map grows by one).
+    // Evict before insert so the map stays at or below cap.
+    for len(ri.lastSeen) >= maxLastSeenEntries {
+        ri.evictLRULastSeen()
+    }
+    ri.lastSeen[k] = sequence
+} else {
+    // Forward-advance: write is an in-place update (map size unchanged).
+    // Write watermark first so k's sequence is raised before any eviction
+    // scan — prevents k from being selected as LRU victim if the map
+    // happens to be over-cap (e.g. white-box test pre-inflation).
+    // The len > maxLastSeenEntries loop is dead in production (cold-start
+    // cap ensures the map never exceeds cap outside of this branch).
+    ri.lastSeen[k] = sequence
+    for len(ri.lastSeen) > maxLastSeenEntries {
+        ri.evictLRULastSeen()
+    }
+}
+```
+
+Key properties that remain invariant from v1.0:
+
+- **Cold-start eviction uses `>= cap`** (not `>`): evict before insert so the post-insert
+  size is `<= cap`, not `cap+1`.
+- **Forward-advance eviction uses `> cap`** (strict): a map at exactly cap is untouched by
+  the forward-advance drain, consistent with the property that forward-advance does not
+  grow the map.
+- **Watermark is written first on forward-advance**: the advancing key cannot be its own
+  eviction victim.
+- **LRU-by-lowest-sequence** eviction strategy unchanged.
+- **All AC-008/AC-009/AC-010 semantics unchanged**: replay logic for resident keys (the
+  `!seen || sequence > last` guard and the `decision.Relay = true` assignment) is
+  unaffected.
+- **EC-006 and SEC-DW-07 trade-off unchanged**: eviction re-opens a one-heartbeat
+  cold-start window for the evicted key; this residual was accepted in v1.0 and remains
+  accepted.
+
+### Confirmation of secondary assertions
+
+1. **Cold-start eviction semantics correct:** LRU-by-lowest-sequence (`evictLRULastSeen()`
+   O(N) scan for minimum), evict BEFORE insert (`for len >= cap { evict }; lastSeen[k] = seq`).
+   AC-008 (cold-start accepted), AC-009 (non-increasing replay discarded), AC-010 (forward
+   advance accepted+relayed) semantics for RESIDENT keys are unchanged — the eviction only
+   affects the pre-insert cap check; the `!seen || sequence > last` gate is unmodified.
+
+2. **SEC-DW-07 / EC-006 trade-off unchanged and accepted:** Eviction-induced cold-start
+   has the same one-heartbeat replay window as router-restart cold-start. The Human Gate
+   acceptance of this residual (SEC-DW-07 disposition, story v2.20 rulings) continues to
+   apply. No new residual is introduced by the both-paths implementation.
