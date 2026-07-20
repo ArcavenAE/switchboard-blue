@@ -11,35 +11,14 @@ import (
 	"unicode/utf8"
 )
 
-// buildDecodeBody builds a raw body slice (without the HMAC tag prefix) for
-// use with decodeBody. Layout mirrors decodeBody's expected format:
+// buildDecodeBodyRawWithRawName builds a raw body slice (without the HMAC tag
+// prefix) with a single session whose name is given as raw bytes (possibly
+// non-UTF-8). This bypasses the []byte(string) conversion, which is necessary
+// to inject invalid UTF-8 sequences that cannot be constructed via the normal
+// SessionPresence path. Layout mirrors decodeBody's expected format:
 //
-//	[16]SVTNID | [8]NodeAddr | [8]Sequence | uint16 count |
-//	per-session: uint16 name_len | name_bytes | uint8 status | uint8 quality
-func buildDecodeBodyRaw(sessions []SessionPresence) []byte {
-	svtnID := [16]byte{0xDE, 0xAD}
-	nodeAddr := [8]byte{0x01}
-	const sequence = uint64(42)
-
-	body := make([]byte, 0, 34+64*len(sessions))
-	body = append(body, svtnID[:]...)
-	body = append(body, nodeAddr[:]...)
-	body = binary.BigEndian.AppendUint64(body, sequence)
-	body = binary.BigEndian.AppendUint16(body, uint16(len(sessions)))
-	for _, s := range sessions {
-		name := []byte(s.SessionName)
-		body = binary.BigEndian.AppendUint16(body, uint16(len(name)))
-		body = append(body, name...)
-		body = append(body, byte(s.Status))
-		body = append(body, byte(s.Quality))
-	}
-	return body
-}
-
-// buildDecodeBodyRawWithRawName builds a body like buildDecodeBodyRaw but
-// inserts raw (possibly non-UTF-8) bytes as the session name, bypassing the
-// []byte(string) conversion. This is necessary to inject invalid UTF-8
-// sequences that cannot be constructed via the normal SessionPresence path.
+//	[16]SVTNID | [8]NodeAddr | [8]Sequence | uint16 count=1 |
+//	uint16 name_len | name_bytes | uint8 status | uint8 quality
 func buildDecodeBodyRawWithRawName(nameBytes []byte, status AttachmentStatus, quality QualityIndicator) []byte {
 	svtnID := [16]byte{0xDE, 0xAD}
 	nodeAddr := [8]byte{0x01}
