@@ -182,7 +182,7 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 //
 //	if decision.Relay && onRelay != nil { onRelay(decision) }
 //
-// (discovery_wire.go:137-139) — the load-bearing seam that the orchestrator
+// (the `if decision.Relay && onRelay != nil { onRelay(decision) }` branch in wireDiscoveryListener) — the load-bearing seam that the orchestrator
 // flagged as inspection-only coverage before this test existed.
 //
 // Test strategy: REAL datagram path (preferred over any fallback). We admit a
@@ -329,7 +329,7 @@ func TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue(t *testing.T) {
 			"TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue: " +
 				"onRelay was NOT invoked after sending an HMAC-valid cold-start datagram — " +
 				"the decision.Relay && onRelay != nil branch was not reached " +
-				"(ruling RED checklist; wireDiscoveryListener discovery_wire.go:137-139)",
+				"(ruling RED checklist; the decision.Relay && onRelay != nil branch in wireDiscoveryListener)",
 		)
 	} else {
 		mu.Lock()

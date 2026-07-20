@@ -128,7 +128,7 @@ func assembleDiscoveryRelayFrame(svtnID [16]byte, nodeAddr [8]byte, sequence uin
 // unconditionally. The caller is responsible for gating on decision.Relay
 // before calling this function (Task 6d).
 //
-// Matches the DRAIN observer fan-out shape at mgmt_wire.go:842–849.
+// Matches the DRAIN observer fan-out shape in runRouter's drainCoord.RegisterObserver closure in mgmt_wire.go.
 // AC-017 / BC-2.03.001 Postcondition 1 delivery-mechanism note;
 // fanout-resolution-ruling.md v1.0 Decisions 1/2/3.
 func relayDispatch(router *routing.Router, sendMap *sync.Map, decision discovery.RouterIngestDecision) {
