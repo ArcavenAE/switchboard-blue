@@ -363,7 +363,8 @@ func buildRelayRouter(t *testing.T, bindings []struct {
 	svtnID   [16]byte
 	nodeAddr [8]byte
 	ifaceID  routing.InterfaceID
-}) *routing.Router {
+},
+) *routing.Router {
 	t.Helper()
 	ks := admission.NewAdmittedKeySet()
 	// Register a synthetic key for each distinct (svtnID, nodeAddr) so the
