@@ -774,6 +774,16 @@ func decodeBody(body []byte) (AdvertisementPayload, error) {
 		name := string(body[offset : offset+nameLen])
 		offset += nameLen
 
+		// Reject non-UTF-8 names: the encode path (encodedSessionName) requires
+		// valid UTF-8 (BC-2.03.003 Inv-1), so the decode-accept set must be a
+		// strict subset of the encode-valid set. A non-UTF-8 name accepted here
+		// would break the round-trip invariant (the decoded struct could not be
+		// re-encoded). Parity with DecodeSessionList's identical guard (Step-4.5
+		// pass-1 HIGH; Step-4.5 pass-4 F-3).
+		if !utf8.ValidString(name) {
+			return AdvertisementPayload{}, ErrInvalidSessionName
+		}
+
 		status := AttachmentStatus(body[offset])
 		quality := QualityIndicator(body[offset+1])
 		offset += 2
