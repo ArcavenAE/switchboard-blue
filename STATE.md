@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-discovery-wire-code-complete
+phase_step: steady-state-discovery-wire-pass1-fixed
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,20 +42,20 @@ develop_head: 7fcf0cf
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "Step-4.5 adversarial convergence: S-BL.DISCOVERY-WIRE Task 6a-6d code-complete @ af91335 (worktree feature/S-BL.DISCOVERY-WIRE-FANOUT); 12 commits, 9 files; all 6 gates green; pre-convergence. (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree feature/S-BL.DISCOVERY-WIRE-FANOUT @ af91335 (12 commits, 9 files, 1828 ins vs develop 7fcf0cf); story v2.17; task6d ruling v1.0; FO(g) open (dynamic-SVTN deferred). Awaiting Step-4.5 adversarial convergence → PR → merge. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "Step-4.5 adversarial convergence pass 2: S-BL.DISCOVERY-WIRE Task 6a-6d; worktree 1740b76 (15 commits); story v2.18; pass-1 ALL FIXED (2 HIGH + 2 MED). Convergence counter 0/3. (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "DISCOVERY-WIRE Step-4.5 pass-1 FIXED — worktree 1740b76 (15 commits); HIGH-1 decoder fix + HIGH-2 wiring test landed; story v2.18 (spec-drift fixes: AC-001 scope note + File-Change List); all 6 gates green; convergence counter 0/3 (need 3 NITPICK_ONLY). develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-20T07:00:00Z
+timestamp: 2026-07-20T07:30:30Z
 last_update: 2026-07-20
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 200 = 300 (D-446(c) dual-margin form). 200 lines (wc-l).
+  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 197 = 303 (D-446(c) dual-margin form). 197 lines (wc-l).
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Task 6a-6d code-complete (pre-Step-4.5): story v2.17; task6d ruling v1.0; worktree af91335 (12 commits, 9 files, 1828 ins vs develop 7fcf0cf); all 6 gates green; FO(g) drift row added; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 pass-1 ALL FIXED (2 HIGH + 2 MED): worktree 1740b76 (15 commits); story v2.18; convergence counter 0/3; awaiting pass 2; develop @ 7fcf0cf; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-20
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-20 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files); story v2.17; task6d ruling v1.0; FO(g) open. Awaiting Step-4.5 adversarial convergence → PR → merge. develop @ 7fcf0cf. |
+| **Current Step** | DISCOVERY-WIRE Step-4.5 pass-1 FIXED — worktree 1740b76 (15 commits); story v2.18; convergence counter 0/3. Awaiting pass 2. develop @ 7fcf0cf. |
 
 ## Phase Progress
 
@@ -100,11 +100,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts.** | completed | PR #126 MERGED. develop @ 92a2c65. NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
 | 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
-| 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged to develop @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 13 ACs, 10 pts; F-1 (HIGH verify-source) + MED-1 (AdmitNode godoc) + LOW-1 (E-ADM-022 log) + F-2 (log-coverage) fixed; post-merge sec review recorded. SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready).** | completed | PR #127 MERGED. develop @ 7fcf0cf. DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. |
-| 2026-07-19 | **S-BL.DISCOVERY-WIRE AC-017/018/Task 6 DELIVERY-READY — fan-out-resolution ruling v1.0 (f7959c4) applied; story v2.15→v2.16 (12 stale GATED refs swept); Task 6 decomposed 6a-6d; Router.InterfacesForSVTN primitive; AC-017/018 UNGATED; input-hash c8aaf9c→c8fe5f2.** | ready | develop @ 7fcf0cf. Next = TDD delivery of hop-2 fan-out delta (AC-017/018/Task 6a-6d). |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree feature/S-BL.DISCOVERY-WIRE-FANOUT @ af91335; 12 commits, 9 files, 1828 ins vs develop 7fcf0cf; all 6 gates green; story v2.17; task6d ruling v1.0 applied; FO(g) deferred.** | code-complete | develop @ 7fcf0cf (unchanged). Awaiting Step-4.5 adversarial convergence → PR. |
+| 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged to develop @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 13 ACs, 10 pts; F-1 (HIGH verify-source) + MED-1 (AdmitNode godoc) + LOW-1 (E-ADM-022 log) + F-2 (log-coverage) fixed; post-merge sec review recorded. SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored.** | completed | PR #127 MERGED. develop @ 7fcf0cf. DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. |
+| 2026-07-19 | **S-BL.DISCOVERY-WIRE AC-017/018/Task 6 DELIVERY-READY — fan-out-resolution ruling v1.0 (f7959c4) applied; story v2.16; Task 6→6a-6d; Router.InterfacesForSVTN; AC-017/018 UNGATED.** | ready | develop @ 7fcf0cf. Next = TDD delivery of hop-2 fan-out delta. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files, 1828 ins); all 6 gates green; story v2.17; task6d ruling v1.0; FO(g) deferred.** | code-complete | develop @ 7fcf0cf. Awaiting Step-4.5 adversarial convergence. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-1 ALL FIXED — HIGH-1 decoder fix + HIGH-2 wiring test; story v2.18 (MED-1 AC-001 scope + MED-2 File-Change List); worktree 1740b76 (15 commits); all 6 gates green; convergence counter 0/3.** | pass-1-fixed | develop @ 7fcf0cf. Awaiting Step-4.5 pass 2. |
 
 ## Wave 6 Story Status
 
@@ -132,13 +132,10 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | WAVE-GATE-DISPATCH-INTEGRITY | HIGH | HEAD-SHA tuple absent from adversary dispatch. POL-005 local mitigation. Upstream: drbothen/vsdd-factory#448. | orchestrator | mitigated-local |
 | F-DW-IMPL-001 | HIGH | execute-against-baseline premise-tracing gap. Upstream: drbothen/vsdd-factory#620. | orchestrator | filed upstream |
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* cite log_level but config.Config rejects it (E-CFG-005). | technical-writer | open |
-| O-1 (NODE-IDENTIFY-WIRE FWD) | MED | AdmitNode expiry enforcement — O-1 RATIFIED 2026-07-18. Delivered via AC-013 in PR #127. | architect | resolved |
-| CI-FLAKE-DISCOVERY-HEARTBEAT | LOW | develop tip 92a2c65 post-merge push run (#29659181289) failed on TestDiscovery_Advertise_PeriodicHeartbeat (timing flake). Dispositioned FLAKE; NOT a merge-blocker. | orchestrator | known-flake |
+| CI-FLAKE-DISCOVERY-HEARTBEAT | LOW | TestDiscovery_Advertise_PeriodicHeartbeat timing flake @ 92a2c65 (run #29659181289). Dispositioned FLAKE; NOT a merge-blocker. | orchestrator | known-flake |
 | NODEADDR-WIDTH-8B | OBS | 8-byte DeriveNodeAddress width ADR candidate. Anchor: rulings §18. | architect | deferred |
-| SEC-NIDW-SVTNID-CONSISTENCY | MED | ChallengeResponse outer-header SVTNID not validated vs NodeIdentify (msg-1) SVTNID. Fail-closed hygiene gap. Fix: guard + test + BC-2.01.009 postcondition. Post-merge sec review, PR #127. | security-reviewer | story-authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready) |
-| SEC-NIDW-READFRAME-PREALLOC | LOW | ReadOuterFrame preallocs ≤64KB before PayloadLen validated (pre-existing; mitigated by 128-conn sem + 10s deadline). | orchestrator | deferred |
-| SEC-NIDW-NO-RATELIMIT | LOW | No per-IP handshake-failure rate limit (mitigated by sem cap; not an auth vector). | orchestrator | deferred |
-| FO(g) — DISCOVERY-WIRE | LOW | Dynamic discovery-listener registration for post-startup-admitted SVTNs. Needs admission-event hook (nodeConnHook analog) wired into wireDiscoveryListener; deferred beyond S-BL.DISCOVERY-WIRE per task6d ruling v1.0 Decision 5. Target: future story. | architect | open (non-blocking) |
+| SEC-NIDW-SVTNID-CONSISTENCY | MED | ChallengeResponse outer-header SVTNID not validated vs NodeIdentify SVTNID. Post-merge sec review, PR #127. | security-reviewer | story-authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready) |
+| FO(g) — DISCOVERY-WIRE | LOW | Dynamic discovery-listener registration for post-startup SVTNs. Deferred per task6d ruling v1.0 Decision 5. Target: future story. | architect | open (non-blocking) |
 
 Additional drift items: `cycles/cycle-1/closed-drift.md`.
 
@@ -154,11 +151,11 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED | PR #123 @ d249f88; step-4.5 3/3@pass 6 | 2026-07-15 |
 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED** | PR #126 @ 92a2c65; step-4.5 3/3 NITPICK_ONLY; 13 ACs, 12 pts; Rulings 12–15; BC-2.05.009 v1.6 | 2026-07-18 |
 | **S-BL.NODE-ADMISSION-PROVISIONING DELIVERED** | PR #125 @ ce06f6a (mergedAt 2026-07-16); retroactively reconciled; 8 ACs, 5 pts | 2026-07-18 |
-| **S-BL.NODE-IDENTIFY-WIRE elaboration COMPLETE** | Rulings v1.1: O-1 RATIFIED; story v1.7 13 ACs 10 pts; 2× audits clean. TDD delivery started. | 2026-07-18 |
-| **S-BL.NODE-IDENTIFY-WIRE DELIVERED** | PR #127 @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY; F-1 stored-key verify + BC-2.01.009 PC-5 cascade + MED-1 godoc + LOW-1 log + F-2 log-coverage; 13 ACs, 10 pts; DISCOVERY-WIRE AC-017/018 unblocked | 2026-07-19 |
-| **S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY authored** | Story v1.0 ready; BC-2.01.009 PC-9 / E-ADM-024; closes SEC-NIDW-SVTNID-CONSISTENCY drift; input-hash 1f94fc2 | 2026-07-19 |
-| **DISCOVERY-WIRE fan-out-resolution ruling** | v1.0 (f7959c4): Router.InterfacesForSVTN primitive; resolver-closure-in-runRouter; Task 6→6a-6d; FO(e) infra-resolved / FO(f) closed. Story v2.16. AC-017/018 ungated. | 2026-07-19 |
-| **DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5)** | Worktree af91335 (12 commits, 9 files, 1828 ins); story v2.17; task6d ruling v1.0; FO(g) deferred; all 6 gates green. Awaiting Step-4.5 adversarial convergence. | 2026-07-20 |
+| **S-BL.NODE-IDENTIFY-WIRE DELIVERED** | PR #127 @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY; F-1 stored-key + BC-2.01.009 PC-5 + MED-1 + LOW-1 + F-2; 13 ACs, 10 pts | 2026-07-19 |
+| **S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY authored** | Story v1.0 ready; BC-2.01.009 PC-9 / E-ADM-024; input-hash 1f94fc2 | 2026-07-19 |
+| **DISCOVERY-WIRE fan-out-resolution ruling** | v1.0 (f7959c4): Router.InterfacesForSVTN; Task 6→6a-6d; FO(e) resolved / FO(f) closed; story v2.16 | 2026-07-19 |
+| **DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE** | Worktree af91335 (12 commits); story v2.17; task6d ruling v1.0; FO(g) deferred | 2026-07-20 |
+| **DISCOVERY-WIRE Step-4.5 pass-1 ALL FIXED** | 2 HIGH + 2 MED fixed; worktree 1740b76 (15 commits); story v2.18; convergence counter 0/3 | 2026-07-20 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -187,11 +184,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.DISCOVERY-WIRE Task 6a-6d code-complete (2026-07-20). Worktree feature/S-BL.DISCOVERY-WIRE-FANOUT @ af91335; story v2.17; task6d ruling v1.0 applied; all 6 gates green; FO(g) deferred. develop @ 7fcf0cf.
+**Position:** S-BL.DISCOVERY-WIRE Step-4.5 pass-1 fixed (2026-07-20). Worktree feature/S-BL.DISCOVERY-WIRE-FANOUT @ 1740b76 (15 commits); story v2.18; HIGH-1 decoder fix + HIGH-2 wiring test + MED-1 AC-001 scope + MED-2 File-Change List all remediated; all 6 gates green; convergence counter 0/3 (need 3 NITPICK_ONLY). develop @ 7fcf0cf.
 
-**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 adversarial convergence (code @ af91335, dispatch-ready); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
+**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 pass 2 (dispatch-ready; worktree 1740b76); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial review for S-BL.DISCOVERY-WIRE Task 6a-6d (worktree af91335) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial pass 2 for S-BL.DISCOVERY-WIRE (worktree 1740b76) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
 
 ## Concurrent Cycles
 

@@ -1857,3 +1857,14 @@ Two items were consciously adjudicated below the proportionality bar and deliber
 **Outcome:** S-7.04-FU-DRAIN-WIRE DELIVERED. develop @ `f73676d`. Next: next story selection from backlog (S-BL.RESYNC-FRAME carries the forward obligation; also VP-042 testenv residual, S-BL.POLICY-SCHEMA-VALIDATOR, S-BL.ADMIN-RECOVER-WIRE, S-BL.ADMINWIRE-EXTRACTION, S-BL.CLI-SURFACE-COMPLETION).
 
 ---
+
+---
+
+### STATE.md Row Archive — 2026-07-20 (compacted from Current Phase Steps)
+
+Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget).
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts.** | completed | PR #126 MERGED. develop @ 92a2c65. NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
+
