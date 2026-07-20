@@ -859,6 +859,17 @@ func DecodeSessionList(body []byte) ([]SessionPresence, error) {
 		name := string(body[offset : offset+nameLen])
 		offset += nameLen
 
+		// Reject non-UTF-8 names: the encode path (encodedSessionName) requires
+		// valid UTF-8 (BC-2.03.003 PC-2; VP-055), so the decode-accept set must
+		// be a strict subset of the encode-valid set. A non-UTF-8 name accepted
+		// here would reach assembleDiscoveryRelayFrame which panics on
+		// ErrInvalidSessionName — crashing the router daemon (Step-4.5 pass-1
+		// HIGH). Fail closed at the ingest boundary: the datagram is dropped as
+		// malformed or adversarial, consistent with the HMAC-first posture.
+		if !utf8.ValidString(name) {
+			return nil, ErrInvalidSessionName
+		}
+
 		status := AttachmentStatus(body[offset])
 		quality := QualityIndicator(body[offset+1])
 		offset += 2

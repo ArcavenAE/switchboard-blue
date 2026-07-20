@@ -2055,7 +2055,7 @@ func TestDecodeSessionList_RejectsNonUTF8Name(t *testing.T) {
 	//   uint8 status (Detached=0)
 	//   uint8 quality (QualityGreen=0)
 	body := make([]byte, 0, 2+2+3+1+1)
-	body = binary.BigEndian.AppendUint16(body, 1)                    // count=1
+	body = binary.BigEndian.AppendUint16(body, 1)                        // count=1
 	body = binary.BigEndian.AppendUint16(body, uint16(len(invalidUTF8))) // nameLen=3
 	body = append(body, invalidUTF8...)
 	body = append(body, byte(discovery.Detached), byte(discovery.QualityGreen))
