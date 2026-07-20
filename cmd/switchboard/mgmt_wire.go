@@ -974,10 +974,11 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			// wireDiscoveryListener manages discoveryWG.Done() via its own
 			// defer — discoveryWG.Add(1) happens here in the parent before
 			// `go`, per ARCH-01 §Goroutine WaitGroup Contract (F-DWIP3-001).
-			// A bind/join error is already reported via the w writer inside
-			// wireDiscoveryListener; no additional action is needed here on
-			// an early-return path (ctx cancellation returns nil; socket
-			// errors log and return a wrapped error).
+			// Both the bind/join-error path and the read-error path write to w
+			// before returning, so the operator sees the failure via the
+			// router's output writer. ctx cancellation returns nil (clean
+			// shutdown). The _ discard is safe because errors are surfaced
+			// via w, not swallowed.
 			_ = wireDiscoveryListener(ingressCtx, &discoveryWG, svtnID, ri, w, onRelay)
 		}()
 	}

@@ -107,6 +107,9 @@ func wireDiscoveryListener(
 
 	conn, err := net.ListenMulticastUDP("udp4", nil, listenAddr)
 	if err != nil {
+		// Mirror the read-error path: write to w before returning so the
+		// operator sees the failure (SOUL.md #4 — no silent failures).
+		_, _ = fmt.Fprintf(w, "discovery: multicast join error (svtn=%x, group=%s:%d): %v\n", svtnID, groupAddr, discovery.DiscoveryPort, err)
 		return fmt.Errorf("wireDiscoveryListener: join multicast group %s:%d: %w", groupAddr, discovery.DiscoveryPort, err)
 	}
 	defer func() { _ = conn.Close() }()
