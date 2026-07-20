@@ -226,70 +226,117 @@ func TestRouterIngest_LastSeenMap_BoundedAtCap(t *testing.T) {
 
 // TestRouterIngest_ReplayRejected_AfterCapEviction verifies that after cap
 // eviction, a NON-evicted key's replay (Sequence ≤ its watermark) is still
-// discarded (Relay=false). Proves eviction doesn't corrupt surviving keys.
+// discarded (Relay=false). Proves eviction does not corrupt surviving keys'
+// watermarks (map-bounding-ruling.md Decision 4, Test 2 obligation).
 //
-// RED-first: without eviction the map grows over cap, but replay protection
-// for K2 still works today (no eviction touches K2). This test would PASS
-// vacuously today. To make it discriminating we also assert len(ri.lastSeen)
-// ≤ testLastSeenCapMax, which FAILS today (no cap enforcement).
+// RED-first (Step 4.5): without eviction the map-bounded primary assertion
+// (len(ri.lastSeen) ≤ testLastSeenCapMax) FAILS today. Replay rejection for
+// K2 works vacuously today (K2 is still in the map, no eviction ran) — the
+// map-bounded assertion is what creates RED. With eviction: map stays bounded
+// AND the replay assertion confirms surviving-key watermarks are intact.
+//
+// Setup (mirrors TestRouterIngest_EvictedKey_ColdStartAccepted combo pattern):
+//   - K2    = admitted (svtnK2, nodeAddrK2), watermark=5000 (high, non-LRU)
+//   - K_lru = phantom makeLastSeenKey(1), seq=1 (lowest → LRU eviction victim)
+//   - K_new = admitted (svtnNew, nodeAddrNew), the cap-trigger cold-start
+//   - combo AdmittedKeySet admits both K2 and K_new for one RouterIngest
 func TestRouterIngest_ReplayRejected_AfterCapEviction(t *testing.T) {
 	t.Parallel()
 
-	// Pre-load testLastSeenCapMax entries: K1..KN with sequences 1000..1000+N-1.
-	// K1 (index 0) has the LOWEST sequence = 1000 → it is the LRU victim.
-	// K2 (index 1) has sequence = 1001.
-	ri := &RouterIngest{
-		lastSeen: make(map[lastSeenKey]uint64),
-	}
+	// Admit K2 (replay-verification key) and K_new (cap-trigger) in a single
+	// combo AdmittedKeySet so one RouterIngest can authenticate both Ingest() calls.
+	var svtnK2 [16]byte
+	svtnK2[0] = 0xE2
 
-	for i := 0; i < testLastSeenCapMax; i++ {
-		k := makeLastSeenKey(i)
-		ri.lastSeen[k] = uint64(1000 + i)
-	}
+	var svtnNew [16]byte
+	svtnNew[0] = 0xE3
 
-	// Add K_new (a new key not in the map) — this is the cold-start insertion
-	// that should trigger eviction of K1 (lowest sequence = 1000).
-	kNew := makeLastSeenKey(testLastSeenCapMax + 500)
+	_, pubK2, nodeAddrK2 := newAdmittedRouterInternal(t, svtnK2)
+	keyK2 := deriveDiscoveryKeyInternal([]byte(pubK2), svtnK2)
+
+	_, pubNew, nodeAddrNew := newAdmittedRouterInternal(t, svtnNew)
+	keyNew := deriveDiscoveryKeyInternal([]byte(pubNew), svtnNew)
+
+	ksCombo := admission.NewAdmittedKeySet()
+	ksCombo.RegisterKey(svtnK2, pubK2, admission.RoleAccess)
+	ksCombo.RegisterKey(svtnNew, pubNew, admission.RoleAccess)
+	routerCombo := routing.NewRouter(ksCombo)
+
+	ri := NewRouterIngest(RouterIngestConfig{Router: routerCombo})
+
+	k2Key := lastSeenKey{svtnID: svtnK2, nodeAddr: nodeAddrK2}
+
+	// White-box pre-loading: fill ri.lastSeen to exactly testLastSeenCapMax.
+	//   - k2Key:              seq=5000 (high, non-LRU → survives eviction)
+	//   - makeLastSeenKey(1): seq=1    (lowest → LRU victim, will be evicted)
+	//   - makeLastSeenKey(2..testLastSeenCapMax-1): seqs 1000..65533 (all > 1)
+	// Pre-load comment: avoids testLastSeenCapMax-1 full HMAC-verified Ingest()
+	// calls while still exercising the real eviction path at the boundary.
 	ri.mu.Lock()
-	ri.lastSeen[kNew] = uint64(9999)
+	ri.lastSeen[k2Key] = 5000
+	ri.lastSeen[makeLastSeenKey(1)] = 1 // K_lru: lowest seq, will be evicted
+	for i := 0; i < testLastSeenCapMax-2; i++ {
+		ri.lastSeen[makeLastSeenKey(i+2)] = uint64(1000 + i)
+	}
+	preloadSize := len(ri.lastSeen)
+	ri.mu.Unlock()
+
+	if preloadSize != testLastSeenCapMax {
+		t.Fatalf("test setup: ri.lastSeen pre-loaded to %d entries, want exactly %d", preloadSize, testLastSeenCapMax)
+	}
+
+	// Drive a real cold-start Ingest() for K_new to cross the cap boundary.
+	// With eviction: evicts makeLastSeenKey(1) (seq=1), inserts K_new →
+	//   map stays at testLastSeenCapMax.
+	// Without eviction: inserts K_new without eviction →
+	//   map grows to testLastSeenCapMax+1.
+	rawNew := buildHop1DatagramInternal(keyNew, svtnNew, nodeAddrNew, 9999)
+	dNew, errNew := ri.Ingest(rawNew)
+	if errNew != nil {
+		t.Fatalf("Ingest(K_new, seq=9999): unexpected error: %v", errNew)
+	}
+	if !dNew.Accept {
+		t.Fatalf("Ingest(K_new): Accept=false (test setup failure — K_new must be cold-start accepted)")
+	}
+
+	// RED assertion 1 (map bounded): without eviction, len = testLastSeenCapMax+1.
+	// With eviction (implementation): len stays at testLastSeenCapMax.
+	ri.mu.Lock()
 	sizeAfterInsert := len(ri.lastSeen)
 	ri.mu.Unlock()
 
-	// RED assertion 1: without eviction, the map has testLastSeenCapMax+1 entries.
 	if sizeAfterInsert > testLastSeenCapMax {
-		t.Errorf("len(ri.lastSeen) = %d after K_new insert, want ≤ %d (eviction not yet implemented)",
+		t.Errorf("len(ri.lastSeen) = %d after K_new cold-start insert, want ≤ %d (eviction not yet implemented)",
 			sizeAfterInsert, testLastSeenCapMax)
 	}
 
-	// K2 should NOT have been evicted (K1 = lowest sequence is the victim).
-	k2 := makeLastSeenKey(1)
+	// K2 must survive eviction (high watermark, not the LRU victim).
 	ri.mu.Lock()
-	k2Seq, k2Present := ri.lastSeen[k2]
+	k2SeqAfter, k2Present := ri.lastSeen[k2Key]
 	ri.mu.Unlock()
 
 	if !k2Present {
-		// If K2 was evicted, replay protection would be vacuously absent.
-		t.Skip("K2 was evicted (unexpected); replay test would be vacuous — eviction strategy is wrong")
+		t.Skip("K2 was evicted (unexpected — eviction must target lowest-sequence entry makeLastSeenKey(1), not K2 with seq=5000); replay assertion would be vacuous")
 	}
 
-	// Verify K2's watermark is 1001.
-	if k2Seq != 1001 {
-		t.Fatalf("K2 watermark = %d, want 1001 (test setup failure)", k2Seq)
+	if k2SeqAfter != 5000 {
+		t.Fatalf("K2 watermark = %d after eviction pressure, want 5000 (eviction corrupted surviving-key state)", k2SeqAfter)
 	}
 
-	// Replay for K2: a sequence ≤ 1001 must be discarded (Relay=false).
-	// We simulate this via white-box: check that the lastSeen watermark for K2
-	// is still ≥ the replay sequence (proving eviction did not reset K2's state).
-	replaySeq := uint64(1001)
-	ri.mu.Lock()
-	watermark, seen := ri.lastSeen[k2]
-	ri.mu.Unlock()
-
-	if !seen {
-		t.Error("K2 not present in lastSeen after eviction pressure — eviction incorrectly removed a non-LRU key")
-	} else if replaySeq > watermark {
-		t.Errorf("K2 watermark = %d, replaySeq = %d: watermark < replay sequence — replay would be accepted incorrectly (K2 state corrupted)",
-			watermark, replaySeq)
+	// Replay assertion: drive a REAL Ingest() for K2 with replaySeq=100 < 5000.
+	// K2 is admitted (in ksCombo) so HMAC verifies; seq=100 ≤ watermark=5000
+	// → Ingest fires the replay-discard path → Relay=false.
+	// Verifies eviction did not corrupt K2's watermark (Decision 4, Test 2).
+	rawReplay := buildHop1DatagramInternal(keyK2, svtnK2, nodeAddrK2, 100)
+	dReplay, errReplay := ri.Ingest(rawReplay)
+	if errReplay != nil {
+		t.Fatalf("Ingest(K2, replaySeq=100): unexpected error: %v", errReplay)
+	}
+	if !dReplay.Accept {
+		t.Errorf("Ingest(K2, replaySeq=100): Accept=false, want true (datagram is authentic; only Relay must be false for replay)")
+	}
+	if dReplay.Relay {
+		t.Errorf("Ingest(K2, replaySeq=100): Relay=true, want false (replay: seq=100 ≤ K2 watermark=5000; eviction must not corrupt surviving-key watermarks)")
 	}
 }
 
