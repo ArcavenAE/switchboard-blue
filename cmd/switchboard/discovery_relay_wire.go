@@ -133,7 +133,7 @@ func assembleDiscoveryRelayFrame(svtnID [16]byte, nodeAddr [8]byte, sequence uin
 // fanout-resolution-ruling.md v1.0 Decisions 1/2/3.
 func relayDispatch(router *routing.Router, sendMap *sync.Map, decision discovery.RouterIngestDecision) {
 	ifaceIDs := router.InterfacesForSVTN(decision.SVTNID, decision.NodeAddr)
-	frame := assembleDiscoveryRelayFrame(decision.SVTNID, decision.NodeAddr, decision.Sequence, decision.Sessions)
+	relayFrame := assembleDiscoveryRelayFrame(decision.SVTNID, decision.NodeAddr, decision.Sequence, decision.Sessions)
 	for _, ifaceID := range ifaceIDs {
 		val, ok := sendMap.Load(ifaceID)
 		if !ok {
@@ -141,7 +141,7 @@ func relayDispatch(router *routing.Router, sendMap *sync.Map, decision discovery
 		}
 		nc := val.(*nodeConn)
 		select {
-		case nc.send <- frame:
+		case nc.send <- relayFrame:
 		default:
 		}
 	}
