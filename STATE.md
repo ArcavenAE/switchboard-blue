@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-discovery-wire-reconverge-v2.25-5c8db39
+phase_step: steady-state-discovery-wire-reconverge-v2.26-5c8db39
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,20 +42,20 @@ develop_head: 7fcf0cf
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "Step-4.5 reconvergence for S-BL.DISCOVERY-WIRE — Pass-1 F-1 (MED) remediated at factory `68fb3fe` (story v2.25 / def6b7b; story-body SEC-DW-10 self-eviction guarantee corrected to 'improbable-not-impossible; benign if evicted' matching ruling v1.2 Decision 8); code `5c8db39` (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; fresh 3-pass NITPICK_ONLY reconvergence against 5c8db39 / v2.25 next (POL-005 HEAD-SHA tuple mandatory). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated at factory 68fb3fe (story v2.25 / def6b7b; input-hash UNCHANGED — body-only fix): SEC-DW-10 self-eviction guarantee corrected to 'improbable-not-impossible; benign if evicted' matching ruling v1.2 Decision 8; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "Step-4.5 reconvergence for S-BL.DISCOVERY-WIRE — Pass-2 traceability F-1 (MED) remediated at factory `43f2e47` (story v2.26 / def6b7b; declared-input BC pins re-synced BC-2.03.001 v1.7 / BC-2.01.008 v1.3); code `5c8db39` (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; fresh 3-pass NITPICK_ONLY reconvergence against 5c8db39 / v2.26 next (POL-005 HEAD-SHA tuple mandatory). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated at factory 43f2e47 (story v2.26 / def6b7b; input-hash UNCHANGED — prose/metadata-only; declared-input BC pins re-synced BC-2.03.001 v1.7 / BC-2.01.008 v1.3); code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-21T00:30:00Z
+timestamp: 2026-07-21T02:00:00Z
 last_update: 2026-07-20
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  Hard cap (500 lines) margin from soft-target = 500 - 194 = 306; margin from actual = 500 - 194 = 306 (D-446(c) dual-margin form). 194 lines (wc-l).
+  Hard cap (500 lines) margin from soft-target = 500 - 196 = 304; margin from actual = 500 - 196 = 304 (D-446(c) dual-margin form). 196 lines (wc-l).
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated at factory 68fb3fe: story v2.25 / def6b7b (input-hash unchanged — body-only fix); SEC-DW-10 self-eviction guarantee corrected to "improbable-not-impossible; benign if evicted" matching ruling v1.2 Decision 8; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated at factory 43f2e47: story v2.26 / def6b7b (input-hash unchanged — prose/metadata-only); declared-input BC pins re-synced BC-2.03.001 v1.6→v1.7 / BC-2.01.008 v1.2→v1.3; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-20
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-20 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated at factory 68fb3fe (story v2.25 / def6b7b; input-hash unchanged — body-only fix); SEC-DW-10 self-eviction guarantee corrected to match ruling v1.2 Decision 8; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET. Fresh 3-pass NITPICK_ONLY reconvergence against 5c8db39 / v2.25 next. develop @ 7fcf0cf. |
+| **Current Step** | DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated at factory 43f2e47 (story v2.26 / def6b7b; input-hash unchanged — prose/metadata-only); declared-input BC pins re-synced BC-2.03.001 v1.7 / BC-2.01.008 v1.3; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET. Fresh 3-pass NITPICK_ONLY reconvergence against 5c8db39 / v2.26 next. develop @ 7fcf0cf. |
 
 ## Phase Progress
 
@@ -104,6 +104,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 | 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 Pass-A/B reconvergence: Pass-A MED-1 (stale cold-start-only eviction comments, 2 instances in discovery_wire.go) + Pass-B N-1 (false tie-determinism claim) — fixed comment-only at dd7b821 (29 commits); class sweep confirms zero remaining; all 6 gates green; counter 0/3 RESET.** | pass-ab-comment-fix | develop @ 7fcf0cf. |
 | 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 second remediation burst: ruling v1.2 (Decision-8 self-eviction guarantee corrected); reconvergence F-1/F-2/F-3 + v1.1→v1.2 sweep applied; story v2.24 / def6b7b at factory 930f266; code 5c8db39 (26 commits); all 6 gates green; counter 0/3 RESET.** | remediation-burst-2 | develop @ 7fcf0cf. |
 | 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated: story-body SEC-DW-10 self-eviction guarantee corrected to "improbable-not-impossible; benign if evicted" matching ruling v1.2 Decision 8 (v2.24 burst missed this transcription); story v2.25 / def6b7b (input-hash unchanged); factory 68fb3fe; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | pass-1-f1-remediation | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated: declared-input BC pins re-synced to canonical (BC-2.03.001 v1.6→v1.7, BC-2.01.008 v1.2→v1.3; substance unchanged — prose-label drift from narrowed re-cert sweep-set); story v2.26 / def6b7b (input-hash unchanged); factory 43f2e47; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | pass-2-traceability-f1-remediation | develop @ 7fcf0cf. |
 
 ## Wave 6 Story Status
 
@@ -153,6 +154,7 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | **DISCOVERY-WIRE Step-4.5 Pass-C F-1 citation-drift fix at ddc9bf9** | 2 FCL rows + 2 code comments cited map-bounding-ruling v1.0 (Decisions 1 & 4 byte-identical v1.0→v1.1; version pin stale); fixed comment-only at ddc9bf9 (25 commits); story v2.23 / 7ff0732 at factory 1f40273; all 6 gates green; counter RESET 0/3 | 2026-07-20 |
 | **DISCOVERY-WIRE v2.24 second remediation burst at 930f266** | ruling v1.2 (Decision-8 self-eviction guarantee corrected — watermark-first makes advancing key improbable not impossible LRU victim; eviction benign per EC-006); reconvergence F-1/F-2/F-3 + v1.1→v1.2 sweep; story v2.24 / def6b7b; code 5c8db39 (26 commits); all 6 gates green; counter RESET 0/3 | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated at factory 68fb3fe** | story-body SEC-DW-10 self-eviction guarantee corrected to "improbable-not-impossible; benign if evicted" matching ruling v1.2 Decision 8 (v2.24 burst missed this transcription); story v2.25 / def6b7b (input-hash unchanged — body-only); code 5c8db39 + ruling v1.2 unchanged; counter 0/3 RESET | 2026-07-20 |
+| **DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated at factory 43f2e47** | declared-input BC pins re-synced to canonical: BC-2.03.001 v1.6→v1.7 (10 spots; v1.7 added PC-4=LocalNodeAdmissionPubkey, annotated out-of-scope) + BC-2.01.008 v1.2→v1.3 (2 spots; v1.3 added NODE_IDENTIFY=0x04 row); substance unchanged; story v2.26 / def6b7b (input-hash unchanged — prose/metadata-only); code 5c8db39 + ruling v1.2 unchanged; counter 0/3 RESET | 2026-07-20 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/state-history-discovery-wire.md` (9 older rows extracted 2026-07-20).
 
@@ -181,11 +183,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated (2026-07-20). Story bumped v2.24→v2.25 / input-hash def6b7b UNCHANGED (body-only fix) at factory `68fb3fe`. Fix: story-body SEC-DW-10 self-eviction guarantee clause corrected from the pre-ruling-v1.2 absolute guarantee to "improbable — not impossible; benign if evicted (EC-006 cold-start residual)" matching ruling v1.2 Decision 8; Decision-8 version pin disambiguated ("introduced v1.1, rationale refined v1.2"). Code HEAD `5c8db39` (26 commits vs develop). Ruling v1.2 UNCHANGED. All 6 gates green. BC-5.39.001 counter RESET 0/3. develop @ 7fcf0cf.
+**Position:** S-BL.DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated (2026-07-20). Story bumped v2.25→v2.26 / input-hash def6b7b UNCHANGED (prose/metadata-only fix) at factory `43f2e47`. Fix: two declared-input BCs had stale version pins — BC-2.03.001 v1.6→v1.7 (10 spots: inputDocuments comment + 3 body refs + 7 Anchors Consumed rows; v1.7 added PC-4=LocalNodeAdmissionPubkey owned by BC-2.09.004/S-BL.NODE-ADMISSION-PROVISIONING, annotated out-of-scope) and BC-2.01.008 v1.2→v1.3 (2 spots; v1.3 added NODE_IDENTIFY=0x04 row); substance cited unchanged between pinned and canonical versions — no AC/behavior affected. Code HEAD `5c8db39` (26 commits vs develop). Ruling v1.2 UNCHANGED. BC-5.39.001 counter RESET 0/3. develop @ 7fcf0cf.
 
-**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 fresh 3-pass NITPICK_ONLY reconvergence against `5c8db39` / story v2.25 (POL-005 HEAD-SHA tuple mandatory: factory HEAD at commit time + code worktree HEAD `5c8db39` both required in dispatch prompt); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
+**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 fresh 3-pass NITPICK_ONLY reconvergence against `5c8db39` / story v2.26 (POL-005 HEAD-SHA tuple mandatory: factory HEAD at commit time + code worktree HEAD `5c8db39` both required in dispatch prompt); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial reconvergence pass-1 for S-BL.DISCOVERY-WIRE (code worktree `5c8db39`, 26 commits, story v2.25 / def6b7b, POL-005 HEAD-SHA tuple mandatory) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial reconvergence pass-1 for S-BL.DISCOVERY-WIRE (code worktree `5c8db39`, 26 commits, story v2.26 / def6b7b, POL-005 HEAD-SHA tuple mandatory) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
 
 ## Concurrent Cycles
 
