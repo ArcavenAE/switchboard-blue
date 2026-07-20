@@ -2,11 +2,11 @@
 artifact_id: S-BL.DISCOVERY-WIRE-map-bounding-ruling
 document_type: decision
 level: ops
-version: "1.1"
+version: "1.2"
 status: final
 producer: architect
 timestamp: 2026-07-20T00:00:00Z
-modified: 2026-07-20T00:00:00Z
+modified: 2026-07-20T12:00:00Z
 cycle: cycle-1
 stories_in_scope: [S-BL.DISCOVERY-WIRE]
 bc_traces:
@@ -16,6 +16,16 @@ related_docs:
   - decisions/S-BL.DISCOVERY-WIRE-fanout-resolution-ruling.md
   - stories/S-BL.DISCOVERY-WIRE.md
 changelog:
+  - version: "1.2"
+    date: 2026-07-20
+    author: architect
+    summary: >
+      v1.2 — Decision 8 self-eviction guarantee corrected: watermark-first
+      ordering makes the advancing key an improbable (not impossible) LRU
+      victim; eviction of the advancing key is benign (reverts to accepted
+      EC-006 cold-start residual). Rationale-accuracy fix only; adjudication
+      (Option A both-paths bound) and delivered code unchanged.
+      Step-4.5 Pass-2 F-1 (LOW).
   - version: "1.1"
     date: 2026-07-20
     author: architect
@@ -515,10 +525,15 @@ bounds the map on any over-cap state — a strictly stronger enforcement of SEC-
 comparison and an immediate exit.
 
 **3. The watermark-first ordering in the forward-advance branch is correct.** Writing
-`ri.lastSeen[k] = sequence` before the eviction scan ensures the advancing key is not
-selected as its own LRU victim. Had the implementer checked first and then written, a
-map that was exactly-at-cap could (in the forward-advance case) evict the key being
-updated. Writing first is the correct defensive ordering.
+`ri.lastSeen[k] = sequence` before the eviction scan **raises k's watermark, making it
+improbable — though not guaranteed — that the advancing key is selected as its own LRU
+victim.** If k still holds the global-minimum Sequence after its update and the map is
+over-cap, k may be evicted; this is benign — k reverts to the accepted one-heartbeat
+cold-start residual (EC-006 / SEC-DW-07), the map stays bounded, and the datagram still
+relays (`decision.Relay = true` is already set). Had the implementer checked first and
+then written, a map that was exactly-at-cap could (in the forward-advance case) evict
+the key being updated with even greater probability. Writing first is the correct
+defensive ordering.
 
 **4. The forward-advance branch is honestly documented.** The comment in `discovery_wire.go`
 at lines 378-391 explicitly states: "handles any over-cap map state inherited before this
@@ -554,8 +569,8 @@ if !seen {
 } else {
     // Forward-advance: write is an in-place update (map size unchanged).
     // Write watermark first so k's sequence is raised before any eviction
-    // scan — prevents k from being selected as LRU victim if the map
-    // happens to be over-cap (e.g. white-box test pre-inflation).
+    // scan — lowers the chance k is selected as LRU victim; benign if it
+    // still is (reverts to accepted EC-006 cold-start residual).
     // The len > maxLastSeenEntries loop is dead in production (cold-start
     // cap ensures the map never exceeds cap outside of this branch).
     ri.lastSeen[k] = sequence
@@ -572,8 +587,9 @@ Key properties that remain invariant from v1.0:
 - **Forward-advance eviction uses `> cap`** (strict): a map at exactly cap is untouched by
   the forward-advance drain, consistent with the property that forward-advance does not
   grow the map.
-- **Watermark is written first on forward-advance**: the advancing key cannot be its own
-  eviction victim.
+- **Watermark is written first on forward-advance**: the advancing key **is unlikely to be**
+  its own LRU victim (and its eviction is benign if it is — reverts to accepted EC-006
+  cold-start residual).
 - **LRU-by-lowest-sequence** eviction strategy unchanged.
 - **All AC-008/AC-009/AC-010 semantics unchanged**: replay logic for resident keys (the
   `!seen || sequence > last` guard and the `decision.Relay = true` assignment) is
