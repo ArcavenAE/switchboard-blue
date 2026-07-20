@@ -10,6 +10,17 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-20
+    version: "2.25"
+    change: >
+      Step-4.5 Pass-1 F-1 (MED) remediation — SEC-DW-10 body forward-advance clause still
+      asserted the pre-v1.2 absolute self-eviction guarantee ('k cannot be selected as its own
+      LRU victim'); the v2.24 burst corrected this everywhere else (code comment, frontmatter,
+      STORY-INDEX, ruling v1.2) but missed the story-body transcription. Corrected to 'improbable
+      — not impossible; benign if evicted' matching ruling v1.2 Decision 8. Also disambiguated the
+      sibling Decision-8 version pin (v1.1 provenance → 'introduced v1.1, rationale refined v1.2').
+      Body-only; input-hash unchanged at def6b7b (no inputs: file changed). count 18, points 8,
+      status ready — unchanged.
+  - date: 2026-07-20
     version: "2.24"
     change: >
       Step-4.5 Pass-1/Pass-2 reconvergence remediation. (F-1 MED) FCL row for
@@ -741,7 +752,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.24"
+version: "2.25"
 phase: 2
 epic: E-7
 wave: backlog
@@ -1112,11 +1123,9 @@ semantics:
   the existing key-lookup/update logic. Delivered green at 52c422a. References: ruling Decision 1; AC-018; SEC-DW-09.
 
 - **`RouterIngest.lastSeen`** (`maxLastSeenEntries = 65536`): bounded via **LRU-by-lowest-sequence
-  eviction** enforced on both insertion paths, inside the existing `ri.mu.Lock()` scope (Decision 8,
-  v1.1 — both-paths bound blessed / Option A). **Cold-start** (`!seen`) branch: evict-before-insert
+  eviction** enforced on both insertion paths, inside the existing `ri.mu.Lock()` scope (Decision 8 — both-paths bound blessed / Option A, introduced v1.1, rationale refined v1.2). **Cold-start** (`!seen`) branch: evict-before-insert
   (`for len >= maxLastSeenEntries { evictLRULastSeen() }`) so post-insert size stays `<= max`.
-  **Forward-advance** (`seen && sequence > last`) branch: write watermark first (so `k` cannot be
-  selected as its own LRU victim), then drain with `for len > maxLastSeenEntries { evictLRULastSeen() }` — this loop is **dead in production** because the cold-start cap ensures `len <= max` before
+  **Forward-advance** (`seen && sequence > last`) branch: write watermark first (so `k`'s raised sequence makes it an **improbable — not impossible** — LRU victim; benign if evicted, reverting to the accepted one-heartbeat EC-006 cold-start residual), then drain with `for len > maxLastSeenEntries { evictLRULastSeen() }` — this loop is **dead in production** because the cold-start cap ensures `len <= max` before
   any forward-advance call; it fires only via white-box test pre-inflation.
   Prune-by-age is NOT safe here (VP-D): evicting an active node's entry re-opens a cold-start
   replay window. The LRU eviction's **accepted residual**: at the cap boundary (65536+ admitted
@@ -2170,6 +2179,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.25 | 2026-07-20 | **Step-4.5 Pass-1 F-1 (MED) remediation — SEC-DW-10 body forward-advance clause still asserted the pre-v1.2 absolute self-eviction guarantee ('k cannot be selected as its own LRU victim'); the v2.24 burst corrected this everywhere else (code comment, frontmatter, STORY-INDEX, ruling v1.2) but missed the story-body transcription. Corrected to 'improbable — not impossible; benign if evicted' matching ruling v1.2 Decision 8. Also disambiguated the sibling Decision-8 version pin (v1.1 provenance → 'introduced v1.1, rationale refined v1.2'). Body-only; `input-hash` unchanged at `def6b7b` (no `inputs:` file changed). `count` 18, `points` 8, `status` ready — unchanged.** |
 | 2.24 | 2026-07-20 | **Step-4.5 Pass-1/Pass-2 reconvergence remediation.** (F-1 MED) FCL row for `relay_rate_cap_test.go` corrected `modify`→`create` (file absent at develop `7fcf0cf`, added on feature branch at `5d7cdb1`, contains only the 3 map-bounding tests + `newFakeClock`/`makeRelayRateKey` helpers; sibling of the v2.22 `discovery_wire_map_bounding_test.go` correction). (F-2 MED) top-of-body Status note corrected — claimed `draft`/not-promoted, contradicting frontmatter `status: ready` (v2.12 promoted 2026-07-14). (F-3 LOW) Provenance Status bullet explicitly scoped as v2.0-era historical snapshot. Map-bounding-ruling v1.1→v1.2 citation sweep (Pass-2 F-1: ruling Decision 8 self-eviction guarantee corrected to improbable-not-impossible; benign if evicted). `input-hash` 7ff0732→def6b7b (ruling input bytes changed). `count` 18, `points` 8, `status` ready — unchanged. |
 | 2.23 | 2026-07-20 | **Pass-C F-1 fix** — corrected 2 File-Change-List rows citing `map-bounding-ruling.md` v1.0 → v1.1 (Decisions 1 & 4 are byte-identical v1.0→v1.1; content was accurate, version pin stale). Body-only; `input-hash` unchanged at `7ff0732` (no `inputs:` file changed). `acceptance_criteria_count` stays 18. `points` stay 8. `status` stays `ready`. |
 | 2.22 | 2026-07-20 | **Map-bounding ruling v1.0→v1.1 adjudication applied** — `.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md` v1.1. Decision 8 (new in v1.1): implementer's both-paths bound blessed (Option A) — cold-start AND forward-advance branches both enforce the `maxLastSeenEntries` cap; watermark written first on forward-advance branch (prevents k from being its own LRU victim); forward-advance eviction loop dead in production (cold-start cap ensures `len <= max` before any forward-advance call; the loop fires only via white-box test pre-inflation). Delivered code (`545429f`) stands as-is per Decision 8. **SEC-DW-10 clause updated** in story body to reflect the actual v1.1 implementation contract (both paths, watermark-first on forward-advance). **File-Change List FCL row corrected:** the v2.21 row for the 4 lastSeen RED-first tests named `internal/discovery/discovery_wire_test.go` (modify) — incorrect; delivered file is `internal/discovery/discovery_wire_map_bounding_test.go` (create), containing `TestRouterIngest_LastSeenMap_BoundedAtCap`, `TestRouterIngest_ReplayRejected_AfterCapEviction`, `TestRouterIngest_EvictedKey_ColdStartAccepted`, `TestRouterIngest_LastSeen_LRU_EvictsLowestSequence`. **inputDocuments ruling comment** updated v1.0→v1.1. **input-hash recomputed:** b868e80 → 7ff0732 (ruling bytes changed v1.0→v1.1). Both fixes delivered green: 52c422a (relay prune-by-age) + 545429f (lastSeen LRU both-paths bound). `acceptance_criteria_count` stays 18. `points` stay 8. `status` stays `ready`. |
