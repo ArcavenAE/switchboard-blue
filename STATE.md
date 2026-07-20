@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-discovery-wire-td031-fix-8058104
+phase_step: steady-state-discovery-wire-map-bounding-545429f
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,10 +42,10 @@ develop_head: 7fcf0cf
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "Step-4.5 reconvergence pass-13 (1st clean of new run after TD-031 fix): S-BL.DISCOVERY-WIRE Task 6a-6d; worktree 8058104 (24 commits); story v2.20 / input-hash 5a4d0da UNCHANGED; passes 10/11/12 reached NITPICK_ONLY 3/3 at f638535; user-approved TD-031 comment-only fix at 8058104 reset counter to 0/3; class fully retired (zero .go:NNN citations remain); all 6 gates green (multicast env-flake documented). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "DISCOVERY-WIRE Step-4.5 TD-031 NITPICK fix at 8058104 (24 commits): passes 10/11/12 hit NITPICK_ONLY 3/3 at f638535; per user decision the 3 residual volatile/drifted line-citation NITPICKs fixed comment-only at 8058104 — discovery_relay_wire.go:131 volatile, discovery_wire_test.go:185+:332 drifted (:137-139 cited, seam at :151-153); zero .go:NNN citations remain; all 6 gates green; story v2.20 / 5a4d0da UNCHANGED; counter RESET 0/3. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "Step-4.5 reconvergence: S-BL.DISCOVERY-WIRE map-bounding arc complete; worktree 545429f (28 commits); story v2.22 / input-hash 7ff0732; ruling v1.1; SEC-DW-10; 7 mutation-verified tests; all 6 gates green; counter 0/3 RESET (major code edit). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "DISCOVERY-WIRE Step-4.5 map-bounding arc at 545429f (28 commits): Pass-14 LOW (unbounded relayRateCap.last) escalated to fix both maps; ruling v1.1 (Option A); Fix 1 52c422a (relayRateCap.last prune-by-age) + Fix 2 545429f (RouterIngest.lastSeen LRU-lowest-seq cap); 7 mutation-verified tests; story v2.22 / 7ff0732; SEC-DW-10; all 6 gates green; counter RESET 0/3. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-20T14:33:00Z
+timestamp: 2026-07-20T18:04:28Z
 last_update: 2026-07-20
 ---
 
@@ -55,7 +55,7 @@ last_update: 2026-07-20
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 TD-031 fix: passes 10/11/12 NITPICK_ONLY 3/3 at f638535; user-approved comment-only fix at 8058104 (24 commits) retires volatile/drifted line-citation class; story v2.20 / 5a4d0da UNCHANGED; counter RESET 0/3; reconverge pass-13 next; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 map-bounding arc: Pass-14 LOW escalated to fix both maps; ruling v1.1 (Option A); Fix 1 52c422a + Fix 2 545429f (28 commits); story v2.22 / 7ff0732; SEC-DW-10; 7 mutation-verified tests; all 6 gates green; counter RESET 0/3; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-20
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-20 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | DISCOVERY-WIRE Step-4.5 TD-031 NITPICK fix at 8058104 (24 commits): passes 10/11/12 NITPICK_ONLY 3/3 at f638535; user-approved comment-only fix retires volatile/drifted line-citation class; story v2.20 / 5a4d0da UNCHANGED; counter RESET 0/3. Reconverge pass-13 next. develop @ 7fcf0cf. |
+| **Current Step** | DISCOVERY-WIRE Step-4.5 map-bounding arc at 545429f (28 commits): Pass-14 LOW (unbounded relayRateCap.last) → fix both maps; ruling v1.1 (Option A); Fix 1 52c422a + Fix 2 545429f; story v2.22 / 7ff0732; SEC-DW-10; 7 mutation-verified tests; all 6 gates green; counter RESET 0/3. Reconvergence pass-1 next. develop @ 7fcf0cf. |
 
 ## Phase Progress
 
@@ -100,11 +100,10 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-2 ALL FIXED — MED (POL-002 row 144) + LOW-1 + LOW-2; story v2.19; worktree de4d00c (16 commits); all 6 gates green; counter 0/3.** | pass-2-fixed | develop @ 7fcf0cf. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED — MED (bind/join-error-not-surfaced) + LOW-1 (test-name-ref sync) + LOW-2 (FO(g) materiality); story v2.20 (body-only, input-hash 5a4d0da); worktree 88d015e (17 commits); all 6 gates green; counter 0/3 (reset).** | pass-3-fixed | develop @ 7fcf0cf. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-7 LOW fixed comment-only 0821149 + 2 orchestrator same-class self-corrections fixed comment-only 7d48e14 (22 commits); story v2.20 / input-hash 5a4d0da unchanged; all 6 gates green (multicast env-flake documented); counter 0/3 RESET.** | pass-7-sweep | develop @ 7fcf0cf. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 passes 8+9 concurrent diverse-lens: prior pass-7 sweep was INCOMPLETE — 3 more stale-comment instances (discovery_wire.go:11, :54, discovery_relay_wire_test.go file-header) fixed comment-only at f638535 (23 commits); class fully retired; story v2.20 / input-hash 5a4d0da unchanged; all 6 gates green; counter 0/3 RESET. Awaiting pass-10.** | pass-8-9-sweep | develop @ 7fcf0cf. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 TD-031 NITPICK fix: passes 10/11/12 NITPICK_ONLY 3/3 at f638535 (23 commits); per user decision the 3 residual volatile/drifted line-citation NITPICKs fixed comment-only at 8058104 (24 commits) — discovery_relay_wire.go:131 volatile, discovery_wire_test.go:185+:332 drifted; zero .go:NNN citations remain; story v2.20 / 5a4d0da UNCHANGED; all 6 gates green; counter RESET 0/3. Reconverge pass-13 next.** | td031-nitpick-fix | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-7 LOW fixed comment-only 0821149 + 2 self-corrections 7d48e14 (22 commits); story v2.20 / 5a4d0da unchanged; all 6 gates green; counter 0/3 RESET.** | pass-7-sweep | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 passes 8+9 concurrent: prior sweep INCOMPLETE — 3 more stale-comment instances fixed comment-only at f638535 (23 commits); class fully retired; all 6 gates green; counter 0/3 RESET.** | pass-8-9-sweep | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 TD-031 NITPICK fix: passes 10/11/12 NITPICK_ONLY 3/3 at f638535; comment-only fix at 8058104 (24 commits) retires volatile/drifted line-citation class; story v2.20 / 5a4d0da UNCHANGED; all 6 gates green; counter RESET 0/3.** | td031-nitpick-fix | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 map-bounding arc: Pass-14 LOW (relayRateCap.last) → fix both maps; ruling v1.1 (Option A); 52c422a + 545429f (28 commits); story v2.22 / 7ff0732; SEC-DW-10; 7 tests; all 6 gates green; counter RESET 0/3 (major edit).** | map-bounding-arc | develop @ 7fcf0cf. |
 
 ## Wave 6 Story Status
 
@@ -158,6 +157,7 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | **DISCOVERY-WIRE Step-4.5 pass-7 LOW fixed + 2 self-corrections** | Comment-only fixes; worktree 0821149→7d48e14 (22 commits); story v2.20 / 5a4d0da unchanged; counter 0/3 reset | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 passes 8+9 concurrent — prior sweep incomplete** | 3 more stale-comment instances fixed comment-only at f638535 (23 commits); class fully retired; all 6 gates green; story v2.20 / 5a4d0da unchanged; counter 0/3 reset | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 TD-031 NITPICK fix at 8058104** | Passes 10/11/12 NITPICK_ONLY 3/3 at f638535; user-approved: volatile/drifted line-citation class fixed comment-only at 8058104 (24 commits); story v2.20 / 5a4d0da UNCHANGED; counter RESET 0/3; reconverge pass-13 next | 2026-07-20 |
+| **DISCOVERY-WIRE map-bounding arc at 545429f** | Pass-14 LOW (unbounded relayRateCap.last) escalated to fix both maps; ruling v1.1 (Option A); 52c422a + 545429f (28 commits); story v2.22 / 7ff0732; SEC-DW-10; 7 mutation-verified tests; all 6 gates green; counter RESET 0/3 | 2026-07-20 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -186,11 +186,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.DISCOVERY-WIRE Step-4.5 TD-031 NITPICK fix complete (2026-07-20). Passes 10/11/12 reached NITPICK_ONLY 3/3 at f638535 (23 commits); per user decision the 3 residual volatile/drifted line-citation NITPICKs fixed comment-only at worktree HEAD `8058104` (24 commits vs develop) — `docs(discovery): retire volatile line-number citations — per TD-031`; discovery_relay_wire.go:131 volatile, discovery_wire_test.go:185+:332 drifted (cited :137-139 for onRelay seam at :151-153); completeness-grep confirms zero `.go:NNN` comment-citations remain in the feature surface; class fully retired; all 6 gates green (multicast env-flake documented — not a defect, not a merge-blocker); story v2.20 (input-hash 5a4d0da UNCHANGED — story-spec not edited); BC-5.39.001 counter RESET 0/3 (new edit requires 3 fresh consecutive NITPICK_ONLY). develop @ 7fcf0cf.
+**Position:** S-BL.DISCOVERY-WIRE Step-4.5 map-bounding arc complete (2026-07-20). Pass-14 LOW (unbounded `relayRateCap.last`) escalated by user to fix both maps. Ruling `map-bounding-ruling.md` v1.1 (Option A). Two code fixes: `52c422a` (relayRateCap.last prune-by-age) + `545429f` (RouterIngest.lastSeen LRU-by-lowest-sequence cap); 7 new mutation-verified map-bounding tests; story v2.22 (SEC-DW-10 clause, input-hash 7ff0732); worktree HEAD `545429f` (28 commits vs develop); all 6 gates green; BC-5.39.001 counter RESET 0/3 (major code edit). develop @ 7fcf0cf.
 
-**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 reconverge pass-13 (dispatch-ready; worktree 8058104, 24 commits); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
+**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 reconvergence pass-1 against 545429f (POL-005 HEAD-SHA tuple mandatory); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial pass-13 for S-BL.DISCOVERY-WIRE (worktree 8058104, POL-005 HEAD-SHA tuple mandatory) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial reconvergence pass-1 for S-BL.DISCOVERY-WIRE (worktree 545429f, 28 commits, POL-005 HEAD-SHA tuple mandatory) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
 
 ## Concurrent Cycles
 
