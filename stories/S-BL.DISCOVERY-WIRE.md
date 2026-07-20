@@ -10,6 +10,19 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-20
+    version: "2.21"
+    change: >
+      Map-bounding ruling applied — `.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md`
+      v1.0 (committed 11baaef). Decision 1: `relayRateCap.last` bounded via prune-by-age sweep when
+      `len(c.last) > maxRelayRateCapEntries/2` inside `allow()`, constant `maxRelayRateCapEntries =
+      65536`; safe and lossless (VP-B). Decision 2: `RouterIngest.lastSeen` bounded via
+      LRU-by-lowest-sequence eviction on insert, constant `maxLastSeenEntries = 65536`; accepted
+      one-heartbeat cold-start-window residual (EC-006 / SEC-DW-07 posture). New SEC-DW-10 (LOW)
+      clause added to story body. File-Change List gains four rows for the two implementation files
+      and two test files (Decision 4). Ruling added to `inputs:` and `inputDocuments:`. `input-hash`
+      recomputed (5a4d0da → new value). `acceptance_criteria_count` stays 18 (Decision 3: no new
+      AC). `points` stay 8. `status` stays `ready`.
+  - date: 2026-07-20
     version: "2.20"
     change: >
       Step-4.5 pass-3 LOW-1 + LOW-2 body-only remediation. No AC postconditions,
@@ -698,7 +711,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.20"
+version: "2.21"
 phase: 2
 epic: E-7
 wave: backlog
@@ -710,11 +723,12 @@ inputs:
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-fanout-resolution-ruling.md'
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md'
+  - '.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md'
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'
   - '.factory/specs/behavioral-contracts/ss-01/BC-2.01.008.md'
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
-input-hash: "5a4d0da"
+input-hash: "b868e80"
 traces_to: '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'
 behavioral_contracts:
   - BC-2.03.001
@@ -751,6 +765,7 @@ acceptance_criteria_count: 18
 inputDocuments:
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-fanout-resolution-ruling.md'   # v1.0 — BINDING. Resolves five open implementation-design questions for Task 6 / AC-017 / AC-018: (1) `Router.InterfacesForSVTN` primitive signature + home (`internal/routing/identity.go`); (2) TOCTOU window + missing-entry semantics (silent skip, accepted); (3) resolver seam = direct closure in `runRouter` NOT a package var; (4) Task 6 decomposition into 6a/6b/6c/6d (not a separate story); (5) FO(e) INFRASTRUCTURE-RESOLVED, FO(f) CLOSED via PR #125.
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md'   # v1.0 — BINDING. Five decisions for the Task 6d decision-threading seam: (1) `onRelay func(discovery.RouterIngestDecision)` as required 6th param of `wireDiscoveryListener`; (2) nil backward-compat = fail-safe discard (not a security perimeter); (3) `relayRateCap` constructed once in `runRouter`, captured by `onRelay` closure, must be mutex-guarded for concurrent per-SVTN callers; (4) new `var discoveryWG sync.WaitGroup` (not `writerWG`) + `ingressCtx` + placement after `connector.Start()` + `discoveryWG.Wait()` between `dataWG.Wait()`/`writerWG.Wait()`; (5) `AllSVTNEntries()` startup-snapshot only — dynamic post-startup SVTN join is new Forward Obligation (g), deferred.
+  - '.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md'   # v1.0 — BINDING. Bounding decisions for the two per-`(SVTNID, NodeAddr)` process-lifetime maps: Decision 1 = `relayRateCap.last` prune-by-age (`maxRelayRateCapEntries = 65536`, amortized O(1) per `allow()` call, lossless per VP-B); Decision 2 = `RouterIngest.lastSeen` LRU-by-lowest-sequence eviction on insert (`maxLastSeenEntries = 65536`, one-heartbeat cold-start-window residual accepted per EC-006 + SEC-DW-07 Human Gate posture); Decision 3 = new SEC-DW-10 (LOW) clause, no new AC (`acceptance_criteria_count` stays 18); Decision 4 = 7 RED-first test obligations (3 in `relay_rate_cap_test.go`, 4 in `discovery_wire_test.go`). Both fixes execute under existing mutex scope (VP-F/VP-G/VP-I). No new imports introduced in either file (Decision 7 / ARCH-08 compliance).
   - '.factory/decisions/S-BL.DISCOVERY-WIRE-rulings.md'   # v1.11 — BINDING. All three rulings + Security Consult Addendum (SEC-DW-01..09) + Replay/freshness subsection (now incl. the F-DWSP4-001 restart-liveness amendment) + Decision Log (incl. the v1.6 precision-correction entry, the v1.7 one-token propagation fix to Ruling 3(c)'s trailing prose, the v1.8 Node-local ingest correction retiring `ReceiveAdvertisement`/`TestDiscovery_VP045_SVTNIsolation_MultipleScopes`, the v1.9 story-ready human gate disposition — Ruling 3(f)'s fan-out target resolution resolved to named companion story `S-BL.NODE-IDENTIFY-WIRE`, SEC-DW-07/discovery-port sign-off recorded, `sessions.list` Forward Obligation (d) resolved to `S-BL.SESSIONS-LIST-WIRE` — the v1.10 Ruling 4 (Task-3 router daemon-lifecycle wiring gap, new Forward Obligation (e), `S-BL.ADMISSION-SYNC-WIRE` named as a follow-on) plus a Ruling 2 addendum (sender-side multicast egress elaboration, sanctioned within Ruling 2's existing scope), and the v1.11 Ruling 5 (F-DWIP1-001 fix sanctioned as Ruling-1-faithful, new Forward Obligation (f), `S-BL.NODE-ADMISSION-PROVISIONING` named as a third identity-cluster leg). Where this story and the ruling appear to diverge, the ruling governs.
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.001.md'   # v1.6 — Preconditions 1-3, Postconditions 1-5, Invariants 1-3. Ruling 1/2 amendments already executed by product-owner (Precondition 3 address-derivation note, PC-1 relay-delivery note, PC-2 Sequence field, PC-5 DiscoveryAuthKey derivation); v1.6 carries the F-DWSP4-001 restart-liveness amendment to PC-2's Sequence-field description.
   - '.factory/specs/behavioral-contracts/ss-03/BC-2.03.002.md'   # v1.5 — PC-5 is the postcondition SEC-DW-07/VP-080 protects (staleness-expiry guarantee). PC-1's `sessions.list` RPC-exposure annotation is NOT adjudicated by any of the three rulings — flagged, not solved, in Non-Goals; v1.5 re-points the annotation from PENDING-S-BL.DISCOVERY-WIRE to PENDING-S-BL.SESSIONS-LIST-WIRE per Forward Obligation (d)'s resolution.
@@ -1047,6 +1062,36 @@ valid and sequence-increasing, passing every hop-1 check). Keyed by the *origina
 updates the router's own local registry/discard-map state (SEC-DW-07 correctness unaffected) but
 is NOT relayed on that excess arrival. Silent drop is the actual backstop; an optional
 `FailureCounter`-shaped counter is visibility-only, never a gate.
+
+**SEC-DW-10 (LOW) — Both per-`(SVTNID, NodeAddr)` process-lifetime maps MUST be bounded.
+Rationale and implementation decisions: `.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md` v1.0.**
+
+Both `relayRateCap.last` (`cmd/switchboard/relay_rate_cap.go`) and `RouterIngest.lastSeen`
+(`internal/discovery/discovery_wire.go`) are keyed on `(SVTNID, NodeAddr)` composite structs and
+grow with the admitted-node population over process lifetime with no cap absent this fix. Following
+the `maxTrackedSources = 65536` precedent in `internal/admission/failure_counter.go` (VP-E),
+both maps are bounded to 65536 entries via named constants. Bounding strategy differs by map
+semantics:
+
+- **`relayRateCap.last`** (`maxRelayRateCapEntries = 65536`): bounded via **prune-by-age** inside
+  `allow()`, under the existing `c.mu.Lock()`. When `len(c.last) > maxRelayRateCapEntries/2`,
+  every entry whose timestamp is older than `c.interval` is deleted before the key lookup. This is
+  **safe and lossless** (VP-B): a stale entry would be unconditionally overwritten by the next
+  `allow()` call regardless, so deleting it first produces identical behavior. Amortized O(1) per
+  call. `c.now()` is computed once at the top of `allow()` and reused in both the prune pass and
+  the existing key-lookup/update logic. References: ruling Decision 1; AC-018; SEC-DW-09.
+
+- **`RouterIngest.lastSeen`** (`maxLastSeenEntries = 65536`): bounded via **LRU-by-lowest-sequence
+  eviction on insert**, inside the existing `ri.mu.Lock()` scope. On a cold-start insertion (new
+  key, `!seen` branch) when `len(ri.lastSeen) >= maxLastSeenEntries`, the entry with the lowest
+  stored `Sequence` watermark is evicted via `evictLRULastSeen()` before inserting the new entry.
+  Prune-by-age is NOT safe here (VP-D): evicting an active node's entry re-opens a cold-start
+  replay window. The LRU eviction's **accepted residual**: at the cap boundary (65536+ admitted
+  nodes simultaneously active), the evicted LRU entry may be an active node whose cold-start
+  window opens on eviction — bounded to one heartbeat interval per EC-006, the same posture
+  accepted by the Human Gate's SEC-DW-07 residual sign-off. Insertion into `lastSeen` requires
+  HMAC verification, so an attacker cannot force targeted eviction without 65536+ compromised
+  admitted credentials. References: ruling Decision 2; AC-008/AC-009/AC-010; EC-006; SEC-DW-07.
 
 **(f) Fan-out TARGET RESOLUTION is a genuine, verified Forward Obligation — NOT resolved here.**
 Determining "which of the router's live connections currently belong to nodes admitted to SVTN X"
@@ -1831,6 +1876,10 @@ SOUL.md §7 (build the simplest thing that works)._
 | `cmd/switchboard/discovery_relay_wire.go` | create | `DISCOVERY_RELAY` frame assembly (AC-014/015/016, Task 6b); `relayDispatch(router, sendMap, decision)` stateless dispatch function — fan-out via `Router.InterfacesForSVTN` per fan-out-resolution ruling v1.0. File now holds both assembly AND stateless dispatch; the rate-cap check is owned by the `onRelay` closure in `runRouter`, not by `relayDispatch` (Task 6b/6c). |
 | `cmd/switchboard/discovery_relay_wire_test.go` | create | AC-014, AC-015, AC-016 tests; AC-017, AC-018 tests (written against `Router.InterfacesForSVTN` per fan-out-resolution ruling v1.0, Task 6b/6c). |
 | `cmd/switchboard/relay_rate_cap.go` | create | **NEW (Task 6c)** — `relayRateCap` type: per-`(SVTNID, NodeAddr)` ~1/sec rate cap (SEC-DW-09). `allow(svtnID [16]byte, nodeAddr [8]byte) bool` method; internal mutex-guarded bucket map (required for concurrent per-SVTN caller goroutines per task6d-wiring-seam-ruling.md v1.0 Decision 3). |
+| `cmd/switchboard/relay_rate_cap.go` | modify | **SEC-DW-10 map-bounding (map-bounding-ruling.md v1.0 Decision 1):** add `const maxRelayRateCapEntries = 65536`; restructure `allow()` to compute `now := c.now()` once at the top; add amortized prune-by-age sweep `if len(c.last) > maxRelayRateCapEntries/2` deleting all entries with `now.Sub(ts) >= c.interval` before the key lookup. No new imports. |
+| `cmd/switchboard/relay_rate_cap_test.go` | modify | **SEC-DW-10 RED-first tests (map-bounding-ruling.md v1.0 Decision 4):** add `TestRelayRateCap_MapBounded_AfterStaleEntries` (map size bounded after N distinct keys + clock advance), `TestRelayRateCap_StalePrunedKey_ReAllowed` (pruned key re-encountered returns true), `TestRelayRateCap_ActiveKeys_NotPruned` (fresh-timestamp keys are not pruned). All three must FAIL before the Decision 1 implementation is applied. |
+| `internal/discovery/discovery_wire.go` | modify | **SEC-DW-10 map-bounding (map-bounding-ruling.md v1.0 Decision 2):** add `const maxLastSeenEntries = 65536`; add `evictLRULastSeen()` helper method (O(N) scan, selects the key with lowest stored `Sequence` watermark, deletes it; must be called under `ri.mu`); add call site in `Ingest()` on the cold-start path (`!seen` branch) when `len(ri.lastSeen) >= maxLastSeenEntries`. No new imports. Note: this is `internal/discovery/discovery_wire.go` (RouterIngest), NOT `cmd/switchboard/discovery_wire.go`. |
+| `internal/discovery/discovery_wire_test.go` | modify | **SEC-DW-10 RED-first tests (map-bounding-ruling.md v1.0 Decision 4):** add `TestRouterIngest_LastSeenMap_BoundedAtCap` (map size bounded after cap insertions), `TestRouterIngest_ReplayRejected_AfterCapEviction` (non-evicted keys still reject replay), `TestRouterIngest_EvictedKey_ColdStartAccepted` (evicted key cold-start accepted — documents ACCEPTED behavior, not a regression test), `TestRouterIngest_LastSeen_LRU_EvictsLowestSequence` (LRU selection targets lowest Sequence). All four must FAIL before the Decision 2 implementation is applied. |
 | `cmd/switchboard/mgmt_wire.go` (`runRouter`) | modify | Task 6d: gained `internal/discovery` import (cmd/switchboard→internal/discovery is an already-legal ARCH-08 DAG edge; ruling's ARCH-08 note said "no new imports required" — factual slip in the ruling written against an earlier HEAD, no violation); `ri` (`discovery.NewRouterIngest`), `relayRateCap` (`newRelayRateCap()`), `onRelay` inline closure (captures `router`/`&sendMap`/`relayRateCap` — DRAIN-observer seam pattern), `var discoveryWG sync.WaitGroup`, startup loop iterating `routerKS.AllSVTNEntries()`, and `discoveryWG.Wait()` in shutdown block between `dataWG.Wait()` and `writerWG.Wait()`. |
 | `internal/testenv/multicast_loopback.go` | create | `MulticastLoopbackInterface(t testing.TB) *net.Interface` — new, purpose-built helper; explicitly NOT an extension of `NewLoopback` per Decision 2(e). |
 | `internal/testenv/multicast_loopback_test.go` | create | Self-test for the new helper. |
@@ -2087,6 +2136,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.21 | 2026-07-20 | **Map-bounding ruling applied** — `.factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md` v1.0 (committed 11baaef). Decision 1: `relayRateCap.last` bounded via prune-by-age sweep when `len(c.last) > maxRelayRateCapEntries/2` inside `allow()`, constant `maxRelayRateCapEntries = 65536`; safe and lossless (VP-B). Decision 2: `RouterIngest.lastSeen` bounded via LRU-by-lowest-sequence eviction on insert, constant `maxLastSeenEntries = 65536`; accepted one-heartbeat cold-start-window residual per EC-006 and Human Gate SEC-DW-07 residual acceptance (VP-D). New **SEC-DW-10 (LOW)** clause added to Adjudicated Design Decisions body (Decision 3). File-Change List gains four rows: `cmd/switchboard/relay_rate_cap.go` (add const + prune-by-age), `cmd/switchboard/relay_rate_cap_test.go` (3 new RED-first tests), `internal/discovery/discovery_wire.go` (add const + `evictLRULastSeen` + cold-start call site), `internal/discovery/discovery_wire_test.go` (4 new RED-first tests) — Decision 4. Ruling added to `inputs:` and `inputDocuments:`. `input-hash` recomputed via `compute-input-hash --update`: 5a4d0da → see frontmatter. `acceptance_criteria_count` stays 18 (Decision 3: no new AC). `points` stay 8. `status` stays `ready`. |
 | 2.20 | 2026-07-20 | **Step-4.5 pass-3 LOW-1 + LOW-2 body-only remediation.** No AC postconditions/test names/acceptance_criteria_count (stays 18) changed; points stay 8; status stays `ready`; `input-hash` stays `5a4d0da` (body-only edits — no declared `inputs:` file changed). **(1) LOW-1 — test-name refs synced to delivered name:** three live-body references to `TestRunRouter_RelayFanOut_EndToEnd` (old RED-phase placeholder name) updated to `TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly` (the name delivered in `cmd/switchboard/discovery_listener_wire_test.go` — a shutdown-teardown guard, NOT an e2e relay test; that gap is FO(h) itself). Locations changed: FO(h) body, FO summary paragraph, File-Change List row (d). v2.18 and v2.19 Changelog rows preserved as historical provenance with a parenthetical forward-pointer `(later renamed to TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly, see v2.20)` per this story's established historical-preservation convention. **(2) LOW-2 — FO(g) materiality sharpened:** FO(g) prose updated to state operational reality plainly — in the standard cold-start deployment (router up, then control pushes keys post-startup), `AllSVTNEntries()` startup snapshot is empty → ZERO `wireDiscoveryListener` goroutines spawned → the entire hop-2 discovery-relay feature this story delivers is inert until a router restart with a populated snapshot. FO(g) deferral status unchanged: OPEN, non-blocking, per `decisions/S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md` v1.0 Decision 5. |
 | 2.19 | 2026-07-20 | **Step-4.5 pass-2 MED (POL-002) + LOW-2 process-half remediation.** Two changes, no AC/test/point edits. **(1) FIX 1 (MED, POL-002) — STORY-INDEX.md row 144 col-3 synced** (separate file edit, noted here per POL-002): stale cell read "AC-017/018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE" — FALSE (gate SATISFIED PR #127; Task 6a-6d CODE-COMPLETE v2.18); cited v2.16/v2.17 not v2.18; contradicted col-4's CODE-COMPLETE/all-6-gates-green status. Replaced with accurate current-state summary reflecting v2.18/v2.19 state and Step-4.5 pass-2 convergence progress. **(2) FIX 2 (LOW-2 process-half) — Forward Obligations table gained row (h):** full-daemon end-to-end relay fan-out integration test. The runtime chain `runRouter → wireDiscoveryListener → RouterIngest.Ingest → onRelay → relayRateCap.allow → relayDispatch → peer node's nc.send` is unit-covered per link (`TestRelayDispatch_*` 6b/6c, `onRelay`-seam test 6d, daemon-level join oracle) but NOT by a single e2e integration test sending a real HMAC-authenticated multicast advertisement and observing `DISCOVERY_RELAY` on a live TCP connection (originator excluded). Deferred as too flaky/heavy for a deterministic per-story gate (real multicast + real TCP + NODE_IDENTIFY handshake + goroutine timing). Formalizes the gap `TestRunRouter_RelayFanOut_EndToEnd`'s own "JUDGMENT CALL — LIGHTER FLAG-AND-DEFER" comment discloses (later renamed to `TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly`, see v2.20); owner: architect (disposition) / PO (scoping), then e2e-tester/test-writer, in a follow-on. FO summary paragraph updated: (h) newly opened + deferred alongside (g). `acceptance_criteria_count` stays 18; points stay 8; `status` stays `ready`; `input-hash` stays `5a4d0da` (body-only edits — no declared `inputs:` file changed). |
 | 2.18 | 2026-07-20 | **Step-4.5 pass-1 spec-drift reconciliation (MED-1 + MED-2).** Two stale/overclaiming body passages corrected; no AC postconditions, test names, or `acceptance_criteria_count` (stays 18) changed; points stay 8; status stays `ready`; `input-hash` stays `5a4d0da` (body-only edits — no declared `inputs:` file changed). **(1) MED-1 — AC-001 Scope note updated to reflect FO(e) RESOLVED (Task 6d, af91335):** the v2.13 "Scope note (Ruling 4, v1.10, 2026-07-15)" paragraph stated that `wireDiscoveryListener` "is not called from `runRouter`" and that the AC's test "currently cannot verify daemon-lifecycle behavior" — both now FALSE. Task 6d (delivered worktree `af91335`) wired `wireDiscoveryListener` into `runRouter` via a startup loop iterating `routerKS.AllSVTNEntries()`; `discoveryWG` and the `onRelay` closure are live; `TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs` (`cmd/switchboard/discovery_listener_wire_test.go`) now provides the daemon-level join oracle. Scope note superseded in place: historical provenance preserved ("Ruling 4, v1.10, 2026-07-15" label retained), current-state statement updated to reflect that `wireDiscoveryListener` IS called from `runRouter` (Task 6d, af91335), and that the daemon-level test now exists; remaining residual (dynamic post-startup SVTN join) is FO(g). **(2) MED-2 — File-Change List row for `discovery_listener_wire_test.go` corrected to match delivered reality:** the v2.17 row claimed "full `runRouter` → `wireDiscoveryListener` → `relayDispatch` chain" end-to-end — false. The delivered file explicitly disclaims the full runtime relay chain via its own "JUDGMENT CALL — LIGHTER FLAG-AND-DEFER" and "FULL E2E RELAY COVERAGE GAP" comments (lines 166-202 of the delivered file). Row replaced with accurate description of the four delivered tests: `TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs` (AC-001 daemon-level multicast-group-join oracle), `TestRunRouter_DiscoveryListeners_CleanShutdown` (`discoveryWG` teardown green-guard), `TestOnRelayClosureConcurrentAccess` (`relayRateCap` `-race` lock-in), and `TestRunRouter_RelayFanOut_EndToEnd` (deferred/green-guard placeholder — full runtime relay chain NOT exercised end-to-end; unit coverage via `TestRelayDispatch_*` (6b) + `TestRelayDispatch_RateCap_*` (6c); FLAG-AND-DEFER noted per the file's own disclaimer; later renamed to `TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly`, see v2.20). **Note for pass-1 context:** this spec-drift burst is part of a larger Step-4.5 pass-1 fix set. Two concurrent HIGH findings are being fixed separately in the worktree (`af91335`): (a) a non-UTF-8 session name → decoder-accepts / encoder-panics router-crash defect (fix: guard at `DecodeSessionList` boundary per BC-2.03.003 PC-2); (b) the ruling-mandated `onRelay` wiring integration test (added to `discovery_listener_wire_test.go`). Those are code/test fixes in the worktree, not spec edits, and are not part of this story-file burst. |
