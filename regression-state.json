@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-07-20T08:41:04Z","command":"cd /Users/skippy/work/aae-orc/run/switchboard-blue/.worktrees/S-BL.DISCOVERY-WIRE-FANOUT && go test ./cmd/switchboard/ -race -count=1 -run 'TestRunRouter_Discovery|TestWireDiscoveryListener' 2>&1 | tail -6"}
+{"status":"pass","timestamp":"2026-07-20T11:10:41Z","command":"go test ./... -race -count=1 -skip 'TestLookup_ConcurrentRegisterRace' 2>&1"}

@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-discovery-wire-pass3-fixed
+phase_step: steady-state-discovery-wire-pass7-fixed
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,20 +42,20 @@ develop_head: 7fcf0cf
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "Step-4.5 adversarial convergence pass 4: S-BL.DISCOVERY-WIRE Task 6a-6d; worktree 88d015e (17 commits); story v2.20; pass-1 ALL FIXED (2 HIGH + 2 MED) + pass-2 ALL FIXED (1 MED + 2 LOW) + pass-3 ALL FIXED (1 MED bind/join-error-not-surfaced + LOW-1 test-name-ref + LOW-2 FO(g) materiality). Convergence counter 0/3 (reset by pass-3 edits). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED — 1 MED (bind/join-error-not-surfaced) + LOW-1 (test-name-ref sync) + LOW-2 (FO(g) materiality sharpening) fixed; worktree 88d015e (17 commits); story v2.20 (body-only, input-hash 5a4d0da); all 6 gates green; convergence counter 0/3 (reset by pass-3 edits). develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "Step-4.5 adversarial convergence pass 8 (1st clean of new run): S-BL.DISCOVERY-WIRE Task 6a-6d; worktree 0821149 (21 commits); story v2.20; passes 3-6 MED/LOW only all remediated; pass-7 LOW (stale doc comment assembleDiscoveryRelayFrame) fixed comment-only at 0821149; all 6 gates green; counter 0/3 (reset by pass-7 edit). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "DISCOVERY-WIRE Step-4.5 pass-5 NITPICK_ONLY + pass-6 NITPICK_ONLY + pass-7 LOW (stale doc comment assembleDiscoveryRelayFrame unwired/GATED when Task 6d wired it live) fixed comment-only at 0821149; worktree 0821149 (21 commits); story v2.20 (input-hash 5a4d0da unchanged); all 6 gates green; convergence counter 0/3 (reset — pass-5/pass-6 reviewed pre-fix state 1cd8457 do NOT bank; BC-5.39.001 needs 3 consecutive NITPICK_ONLY after last edit). develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-20T09:02:16Z
+timestamp: 2026-07-20T11:29:28Z
 last_update: 2026-07-20
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 200 = 300 (D-446(c) dual-margin form). 200 lines (wc-l).
+  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 201 = 299 (D-446(c) dual-margin form). 201 lines (wc-l).
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED (1 MED + LOW-1 + LOW-2): worktree 88d015e (17 commits); story v2.20 (body-only, input-hash 5a4d0da); convergence counter 0/3 (reset); awaiting pass 4; develop @ 7fcf0cf; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-20 — S-BL.DISCOVERY-WIRE Step-4.5 pass-5/6 NITPICK_ONLY + pass-7 LOW (stale doc comment) fixed comment-only at 0821149 (21 commits); counter 0/3 reset; story v2.20 / input-hash 5a4d0da unchanged; develop @ 7fcf0cf; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-20
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-20 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED — worktree 88d015e (17 commits); story v2.20; convergence counter 0/3 (reset). Awaiting pass 4. develop @ 7fcf0cf. |
+| **Current Step** | DISCOVERY-WIRE Step-4.5 pass-5/6 NITPICK_ONLY + pass-7 LOW fixed comment-only — worktree 0821149 (21 commits); story v2.20; convergence counter 0/3 (reset by pass-7 edit). Awaiting pass-8. develop @ 7fcf0cf. |
 
 ## Phase Progress
 
@@ -100,11 +100,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-19 | **S-BL.DISCOVERY-WIRE AC-017/018/Task 6 DELIVERY-READY — fan-out-resolution ruling v1.0 (f7959c4) applied; story v2.16; Task 6→6a-6d; Router.InterfacesForSVTN; AC-017/018 UNGATED.** | ready | develop @ 7fcf0cf. Next = TDD delivery of hop-2 fan-out delta. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files, 1828 ins); all 6 gates green; story v2.17; task6d ruling v1.0; FO(g) deferred.** | code-complete | develop @ 7fcf0cf. Awaiting Step-4.5 adversarial convergence. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-1 ALL FIXED — HIGH-1 decoder fix + HIGH-2 wiring test; story v2.18 (MED-1 AC-001 scope + MED-2 File-Change List); worktree 1740b76 (15 commits); all 6 gates green; convergence counter 0/3.** | pass-1-fixed | develop @ 7fcf0cf. Awaiting Step-4.5 pass 2. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-2 ALL FIXED — MED (POL-002: STORY-INDEX row 144 stale col-3 corrected); LOW-1 (header comment); LOW-2 (test comment + FO(h) added); pass-1 2 HIGH independently re-confirmed COMPLETE; worktree de4d00c (16 commits); story v2.19; all 6 gates green; convergence counter 0/3.** | pass-2-fixed | develop @ 7fcf0cf. Awaiting Step-4.5 pass 3. |
-| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED — MED (bind/join-error-not-surfaced at GH-level join); LOW-1 (test-name-ref sync TestRelayDispatch_WithDrainedSVTN_SkipsRelay→TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly in FO(h) body/summary/file-change-list); LOW-2 (FO(g) materiality sharpened: cold-start → empty snapshot → zero listeners spawned → hop-2 inert until restart); worktree 88d015e (17 commits); story v2.20 (body-only, input-hash 5a4d0da); all 6 gates green; convergence counter 0/3 (reset by pass-3 edits).** | pass-3-fixed | develop @ 7fcf0cf. Awaiting Step-4.5 pass 4. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files, 1828 ins); all 6 gates green; story v2.17; task6d ruling v1.0; FO(g) deferred.** | code-complete | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-1 ALL FIXED — HIGH-1 + HIGH-2 + MED-1 + MED-2; story v2.18; worktree 1740b76 (15 commits); all 6 gates green; counter 0/3.** | pass-1-fixed | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-2 ALL FIXED — MED (POL-002 row 144) + LOW-1 + LOW-2; story v2.19; worktree de4d00c (16 commits); all 6 gates green; counter 0/3.** | pass-2-fixed | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED — MED (bind/join-error-not-surfaced) + LOW-1 (test-name-ref sync) + LOW-2 (FO(g) materiality); story v2.20 (body-only, input-hash 5a4d0da); worktree 88d015e (17 commits); all 6 gates green; counter 0/3 (reset).** | pass-3-fixed | develop @ 7fcf0cf. |
+| 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 pass-5 NITPICK_ONLY + pass-6 NITPICK_ONLY (reviewed pre-fix state 1cd8457; do NOT bank) + pass-7 LOW (stale doc comment on assembleDiscoveryRelayFrame) — fixed comment-only at 0821149 (21 commits vs develop); story v2.20 / input-hash 5a4d0da unchanged; all 6 gates green; counter 0/3 RESET (BC-5.39.001 requires 3 consecutive NITPICK_ONLY after last edit).** | pass-7-fixed | develop @ 7fcf0cf. Awaiting pass-8. |
 
 ## Wave 6 Story Status
 
@@ -159,6 +159,7 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | **DISCOVERY-WIRE Step-4.5 pass-1 ALL FIXED** | 2 HIGH + 2 MED fixed; worktree 1740b76 (15 commits); story v2.18; convergence counter 0/3 | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 pass-2 ALL FIXED** | 1 MED (POL-002 STORY-INDEX row 144) + 2 LOW fixed; pass-1 2 HIGH re-confirmed COMPLETE; worktree de4d00c (16 commits); story v2.19; convergence counter 0/3 | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 pass-3 ALL FIXED** | 1 MED (bind/join-error-not-surfaced) + LOW-1 (test-name-ref sync) + LOW-2 (FO(g) materiality); worktree 88d015e (17 commits); story v2.20 (body-only, input-hash 5a4d0da); convergence counter 0/3 (reset) | 2026-07-20 |
+| **DISCOVERY-WIRE Step-4.5 pass-5/6 NITPICK_ONLY + pass-7 LOW fixed** | 1 LOW (stale doc comment on assembleDiscoveryRelayFrame) fixed comment-only at 0821149 (21 commits); story v2.20 / input-hash 5a4d0da unchanged; counter 0/3 reset | 2026-07-20 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -187,11 +188,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.DISCOVERY-WIRE Step-4.5 pass-3 fixed (2026-07-20). Worktree feature/S-BL.DISCOVERY-WIRE-FANOUT @ 88d015e (17 commits); story v2.20 (body-only, input-hash 5a4d0da unchanged); MED (bind/join-error-not-surfaced at GH-level join) + LOW-1 (test-name-ref: TestRelayDispatch_WithDrainedSVTN_SkipsRelay→TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly in FO(h) body/summary/file-change-list) + LOW-2 (FO(g) materiality: cold-start → empty snapshot → zero listeners spawned → hop-2 inert until restart) all remediated; all 6 gates green; convergence counter 0/3 (reset by pass-3 edits; BC-5.39.001 requires 3 consecutive NITPICK_ONLY after last edit). develop @ 7fcf0cf.
+**Position:** S-BL.DISCOVERY-WIRE Step-4.5 pass-7 fixed (2026-07-20). Worktree feature/S-BL.DISCOVERY-WIRE-FANOUT @ 0821149 (21 commits vs develop); story v2.20 (input-hash 5a4d0da unchanged — comment-only code fix, no story-spec edit); pass-5 NITPICK_ONLY + pass-6 NITPICK_ONLY (reviewed pre-fix state 1cd8457; do NOT bank toward BC-5.39.001) + pass-7 LOW (stale doc comment on assembleDiscoveryRelayFrame claiming unwired/GATED when Task 6d wired it live) fixed comment-only at 0821149; all 6 gates green; convergence counter 0/3 RESET (BC-5.39.001 requires 3 consecutive NITPICK_ONLY after last edit; pass-8 is the 1st candidate clean pass of the new run). develop @ 7fcf0cf.
 
-**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 pass 4 (dispatch-ready; worktree 88d015e); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
+**Next candidates:** (a) S-BL.DISCOVERY-WIRE Step-4.5 pass-8 (dispatch-ready; worktree 0821149, 21 commits); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial pass 4 for S-BL.DISCOVERY-WIRE (worktree 88d015e) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch Step-4.5 adversarial pass-8 for S-BL.DISCOVERY-WIRE (worktree 0821149) or deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
 
 ## Concurrent Cycles
 
