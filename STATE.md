@@ -42,20 +42,20 @@ develop_head: 7fcf0cf
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "DISPATCH-READY: S-BL.DISCOVERY-WIRE AC-017/018/Task 6 (unblocked by PR #127 @ 7fcf0cf). Alt: SEC-NIDW-SVTNID-CONSISTENCY follow-up story. S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "NODE-IDENTIFY-WIRE DELIVERED 2026-07-19 — PR #127 squash-merged @ 7fcf0cf; 13 ACs, 10 pts; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "DISPATCH-READY: (a) S-BL.DISCOVERY-WIRE AC-017/018/Task 6 (unblocked by PR #127 @ 7fcf0cf); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "NODE-IDENTIFY-WIRE DELIVERED 2026-07-19 — PR #127 squash-merged @ 7fcf0cf; 13 ACs, 10 pts; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. SEC-NIDW follow-up story authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-19T23:40:00Z
+timestamp: 2026-07-20T00:10:00Z
 last_update: 2026-07-19
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 196 = 304 (D-446(c) dual-margin form). 196 lines (wc-l).
+  Hard cap (500 lines) margin from soft-target = 500 - 415 = 85; margin from actual = 500 - 197 = 303 (D-446(c) dual-margin form). 197 lines (wc-l).
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-19 — S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged @ 7fcf0cf (2026-07-19T23:25:22Z); Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED; post-merge security findings recorded; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-19 — S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged @ 7fcf0cf (2026-07-19T23:25:22Z); Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED; post-merge security findings recorded; SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready); trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-19
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-19 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | NODE-IDENTIFY-WIRE DELIVERED — PR #127 @ 7fcf0cf (2026-07-19); Step-4.5 3/3 NITPICK_ONLY; DISCOVERY-WIRE AC-017/018/Task 6 unblocked |
+| **Current Step** | NODE-IDENTIFY-WIRE DELIVERED — PR #127 @ 7fcf0cf (2026-07-19); Step-4.5 3/3 NITPICK_ONLY; DISCOVERY-WIRE AC-017/018/Task 6 unblocked; SEC-NIDW follow-up story authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready) |
 
 ## Phase Progress
 
@@ -104,7 +104,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 | 2026-07-15 | **S-BL.DISCOVERY-WIRE Tasks 1-5 DELIVERED — PR #123 merged @ d249f88; step-4.5 impl-diff converged 3/3 @ pass 6 (4 fix-bursts); AC-017/018/Task 6 gated on S-BL.NODE-IDENTIFY-WIRE.** | completed | PR #123 MERGED. develop @ d249f88. |
 | 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts.** | completed | PR #126 MERGED. develop @ 92a2c65. NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
 | 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
-| 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged to develop @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 13 ACs, 10 pts; F-1 (HIGH verify-source) + MED-1 (AdmitNode godoc) + LOW-1 (E-ADM-022 log) + F-2 (log-coverage) fixed; post-merge sec review recorded.** | completed | PR #127 MERGED. develop @ 7fcf0cf. DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. |
+| 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged to develop @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 13 ACs, 10 pts; F-1 (HIGH verify-source) + MED-1 (AdmitNode godoc) + LOW-1 (E-ADM-022 log) + F-2 (log-coverage) fixed; post-merge sec review recorded. SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready).** | completed | PR #127 MERGED. develop @ 7fcf0cf. DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. |
 
 ## Wave 6 Story Status
 
@@ -135,7 +135,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | O-1 (NODE-IDENTIFY-WIRE FWD) | MED | AdmitNode expiry enforcement — O-1 RATIFIED 2026-07-18. Delivered via AC-013 in PR #127. | architect | resolved |
 | CI-FLAKE-DISCOVERY-HEARTBEAT | LOW | develop tip 92a2c65 post-merge push run (#29659181289) failed on TestDiscovery_Advertise_PeriodicHeartbeat (timing flake). Dispositioned FLAKE; NOT a merge-blocker. | orchestrator | known-flake |
 | NODEADDR-WIDTH-8B | OBS | 8-byte DeriveNodeAddress width ADR candidate. Anchor: rulings §18. | architect | deferred |
-| SEC-NIDW-SVTNID-CONSISTENCY | MED | ChallengeResponse outer-header SVTNID not validated vs NodeIdentify (msg-1) SVTNID. Fail-closed hygiene gap. Fix: guard + test + BC-2.01.009 postcondition. Post-merge sec review, PR #127. | security-reviewer | open (follow-up story candidate) |
+| SEC-NIDW-SVTNID-CONSISTENCY | MED | ChallengeResponse outer-header SVTNID not validated vs NodeIdentify (msg-1) SVTNID. Fail-closed hygiene gap. Fix: guard + test + BC-2.01.009 postcondition. Post-merge sec review, PR #127. | security-reviewer | story-authored (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, ready) |
 | SEC-NIDW-READFRAME-PREALLOC | LOW | ReadOuterFrame preallocs ≤64KB before PayloadLen validated (pre-existing; mitigated by 128-conn sem + 10s deadline). | orchestrator | deferred |
 | SEC-NIDW-NO-RATELIMIT | LOW | No per-IP handshake-failure rate limit (mitigated by sem cap; not an auth vector). | orchestrator | deferred |
 
@@ -155,6 +155,7 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | **S-BL.NODE-ADMISSION-PROVISIONING DELIVERED** | PR #125 @ ce06f6a (mergedAt 2026-07-16); retroactively reconciled; 8 ACs, 5 pts | 2026-07-18 |
 | **S-BL.NODE-IDENTIFY-WIRE elaboration COMPLETE** | Rulings v1.1: O-1 RATIFIED; story v1.7 13 ACs 10 pts; 2× audits clean. TDD delivery started. | 2026-07-18 |
 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED** | PR #127 @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY; F-1 stored-key verify + BC-2.01.009 PC-5 cascade + MED-1 godoc + LOW-1 log + F-2 log-coverage; 13 ACs, 10 pts; DISCOVERY-WIRE AC-017/018 unblocked | 2026-07-19 |
+| **S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY authored** | Story v1.0 ready; BC-2.01.009 PC-9 / E-ADM-024; closes SEC-NIDW-SVTNID-CONSISTENCY drift; input-hash 1f94fc2 | 2026-07-19 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md`.
 
@@ -183,11 +184,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.NODE-IDENTIFY-WIRE DELIVERED (PR #127 @ 7fcf0cf, 2026-07-19T23:25:22Z). Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001 satisfied). develop @ 7fcf0cf. Post-merge security findings recorded in Open Drift Items (SEC-NIDW-SVTNID-CONSISTENCY MED, SEC-NIDW-READFRAME-PREALLOC LOW, SEC-NIDW-NO-RATELIMIT LOW).
+**Position:** S-BL.NODE-IDENTIFY-WIRE DELIVERED (PR #127 @ 7fcf0cf, 2026-07-19T23:25:22Z). Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001 satisfied). develop @ 7fcf0cf. SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored and ready (S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0, 3 ACs, 3 pts, BC-2.01.009 PC-9 / E-ADM-024).
 
-**Next candidates:** S-BL.DISCOVERY-WIRE AC-017/018/Task 6 (UNBLOCKED) and/or SEC-NIDW-SVTNID-CONSISTENCY follow-up story. S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
+**Next candidates:** (a) S-BL.DISCOVERY-WIRE AC-017/018/Task 6 (UNBLOCKED by PR #127); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, AC-001 OnAck gate).
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) select next story (DISCOVERY-WIRE AC-017/018/Task 6 or SEC-NIDW follow-up).
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) select next story from (a) or (b) above.
 
 ## Concurrent Cycles
 
