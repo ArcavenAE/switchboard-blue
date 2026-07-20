@@ -1,24 +1,20 @@
-// discovery_listener_wire_test.go — RED tests for Task 6d:
+// discovery_listener_wire_test.go — tests for Task 6d:
 // wire the hop-1 ingest → rate-cap → hop-2 fan-out chain into runRouter.
 //
-// RED GATE: These tests fail because runRouter does not yet construct a
-// discovery.RouterIngest, does not iterate routerKS.AllSVTNEntries() at
-// startup, and does not call wireDiscoveryListener for any admitted SVTN.
-// The RED gate is BEHAVIORAL (runtime failure), not a compile failure —
-// the package must continue to build cleanly.
+// DELIVERED (Task 6d GREEN): runRouter now constructs discovery.NewRouterIngest,
+// iterates routerKS.AllSVTNEntries() at startup, and spawns a
+// wireDiscoveryListener goroutine for each admitted SVTN with an onRelay
+// closure wired through relayRateCap → relayDispatch. These tests verify
+// that wiring.
 //
 // Design note: these tests drive behavior through runRouter, NOT through
-// wireDiscoveryListener directly. The wireDiscoveryListener signature change
-// (5-arg → 6-arg per task6d-wiring-seam-ruling.md Decision 1/2) is a GREEN
-// implementer obligation. Updating callWireDiscoveryListenerRecovered and its
-// call site (discovery_wire_test.go line 38 / line 101) to the 6-arg form is
-// also a GREEN step. Neither is done here — the existing 5-arg call sites MUST
-// NOT be modified in the RED step; doing so would compile-fail the whole
-// package before any behavioral tests could run.
+// wireDiscoveryListener directly. The wireDiscoveryListener signature was
+// updated to the 6-arg form (task6d-wiring-seam-ruling.md Decision 1/2)
+// as part of the GREEN step; all call sites updated accordingly.
 //
 // Task 6d wiring-seam ruling: .factory/decisions/S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md v1.0
 // Fan-out resolution ruling:  .factory/decisions/S-BL.DISCOVERY-WIRE-fanout-resolution-ruling.md v1.0
-// Story:                       .factory/stories/S-BL.DISCOVERY-WIRE.md v2.16
+// Story:                       .factory/stories/S-BL.DISCOVERY-WIRE.md
 package main
 
 import (
@@ -40,11 +36,11 @@ import (
 // by the same probe-sender + captureLogger receive-oracle pattern used by
 // TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly.
 //
-// RED GATE: MUST FAIL before Task 6d GREEN step. runRouter currently has NO
-// RouterIngest construction, NO AllSVTNEntries() startup loop, and NO
-// wireDiscoveryListener call — so nothing joins the multicast group, nothing
-// reads datagrams, and the captureLogger never receives an HMAC-failure log
-// line. Expected failure message: "listener did not join / no log observed".
+// GREEN (Task 6d delivered): runRouter constructs RouterIngest, iterates
+// AllSVTNEntries() at startup, and calls wireDiscoveryListener for each
+// admitted SVTN — the listener joins the multicast group and feeds datagrams
+// into RouterIngest.Ingest, which emits the HMAC-failure log line this test
+// observes. Was the RED gate before Task 6d; now a post-wiring regression guard.
 //
 // NOT t.Parallel(): binds a real loopback multicast UDP socket on a fixed port
 // (discovery.DiscoveryPort). Must not run concurrently with
@@ -86,10 +82,9 @@ func TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs(t *testing.T) {
 	// injected via the package-level routerLoggerHook test seam if available,
 	// or observe output in the syncBuffer — see Red Gate discussion below.
 	//
-	// Red Gate discussion: pre-Task-6d, runRouter has no RouterIngest, so no
-	// log line is ever emitted regardless of which observer we use. The test
-	// will timeout at the 2-second deadline and fail with the "no log observed"
-	// error — the correct behavioral RED failure.
+	// Historical RED note: pre-Task-6d, runRouter had no RouterIngest, so no
+	// log line was emitted and the test timed out ("no log observed"). Task 6d
+	// GREEN wired the RouterIngest; this observer now receives the expected line.
 
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
@@ -137,8 +132,8 @@ func TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs(t *testing.T) {
 	// startup messages (which contain "switchboard router:"), proving genuine
 	// ingest processing by the per-SVTN listener goroutine.
 	//
-	// RED failure: the "E-ADM-017" line never appears because no RouterIngest
-	// is constructed and no listener goroutine is spawned in runRouter today.
+	// Post-wiring: the "E-ADM-017" line appears because Task 6d GREEN constructs
+	// RouterIngest and spawns a per-SVTN listener goroutine inside runRouter.
 	const hmacAlertSubstr = "E-ADM-017"
 	received := false
 	deadline := time.Now().Add(2 * time.Second)
@@ -160,53 +155,32 @@ func TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs(t *testing.T) {
 	}
 }
 
-// TestRunRouter_RelayFanOut_EndToEnd is the Task 6d / AC-017 / AC-018 full
-// end-to-end relay test.
+// TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly is a discoveryWG-teardown
+// guard that verifies runRouter with at least one admitted SVTN shuts down
+// within the deadline after an immediate context cancellation (no sleep before
+// cancel — contrast with TestRunRouter_DiscoveryListeners_CleanShutdown which
+// sleeps 100ms to let listener goroutines start before cancelling).
 //
-// JUDGMENT CALL — LIGHTER FLAG-AND-DEFER CHOSEN:
+// This is NOT an end-to-end relay test. The full runtime relay chain
+// (runRouter → RouterIngest → onRelay closure → relayRateCap.allow →
+// relayDispatch → admitted TCP connection) is NOT exercised here. That
+// end-to-end path is:
+//   - Covered at unit level by TestRelayDispatch_SVTNScoped_* and
+//     TestRelayDispatch_RateCap_* (discovery_relay_wire_test.go)
+//   - Deferred as Forward Obligation (h) in the story
+//     (.factory/stories/S-BL.DISCOVERY-WIRE.md)
 //
-// A full end-to-end relay test (two admitted nodes with live TCP connections,
-// NODE_IDENTIFY handshake, one sends a valid hop-1 multicast advertisement,
-// assert the other receives a DISCOVERY_RELAY frame) requires:
-//   - Real multicast socket AND real TCP connections in the same test
-//   - NODE_IDENTIFY handshake timing (the existing handshake tests show this
-//     needs careful synchronization via dialNodeAndAwaitRegistrationAdmitted)
-//   - Coordinated timing between the multicast sender (access-node side) and
-//     the relay recipient (admitted TCP connection side)
-//   - Reliable delivery ordering across three goroutines (listener, relay
-//     dispatch, frame reader)
-//
-// This composition is exercised at UNIT level by:
-//   - TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking
-//     (discovery_relay_wire_test.go): exercises relayDispatch with a
-//     net.Pipe-based sendMap directly
-//   - TestRelayDispatch_RateCap_* (discovery_relay_wire_test.go): exercises
-//     the rate-cap gate with relayDispatch
-//
-// The only layer NOT covered by those tests is the runRouter → RouterIngest →
-// onRelay closure → relayRateCap.allow → relayDispatch chain. That chain is
-// what Task 6d wires. A deterministic integration test for that chain requires
-// a controllable admission-keyed HMAC-valid multicast datagram arriving at
-// runRouter's multicast listener — which depends on a full node keypair and
-// Encode path. This is feasible but introduces clock-sensitive multicast
-// delivery timing that makes it unreliable as a unit-of-wiring gate.
-//
-// Decision: implement the lighter assertion (runRouter shuts down cleanly with
-// admitted SVTNs after wiring; full e2e relay evidence comes from unit tests
-// already present). The missing coverage is explicitly documented below.
-//
-// FULL E2E RELAY COVERAGE GAP (to be addressed in a follow-on integration test
-// or by extending this test once Task 6d GREEN lands and the timing can be
-// probed reliably): send a valid HMAC-authenticated multicast advertisement
-// from an admitted access node; observe the relay frame on a second admitted
-// node's TCP connection; confirm the originator does NOT receive its own relay.
-// This gap is acceptable given the relay chain is covered at unit level above.
+// Historical note: this test was authored as a GREEN-guard placeholder named
+// "RelayFanOut_EndToEnd" during RED-phase authoring; renamed post-delivery to
+// reflect what it actually asserts (immediate-cancel shutdown teardown with an
+// admitted SVTN present). The rename is a documentation fix only — test logic
+// and assertions are unchanged.
 //
 // NOT t.Parallel(): uses admission state file on disk and a real TCP listener.
 //
-// Traces to AC-017 / AC-018; BC-2.03.001 Postcondition 1 delivery-mechanism
-// note; fanout-resolution-ruling.md v1.0.
-func TestRunRouter_RelayFanOut_EndToEnd(t *testing.T) {
+// Traces to ruling Decision 4 (discoveryWG.Wait() teardown);
+// AC-017 / AC-018 (unit coverage via TestRelayDispatch_*).
+func TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly(t *testing.T) {
 	// Seed admission state so AllSVTNEntries() returns at least one SVTN after
 	// Task 6d GREEN step constructs ri and starts the listener loop.
 	dataAddr := probeDataAddr(t)
@@ -221,21 +195,17 @@ func TestRunRouter_RelayFanOut_EndToEnd(t *testing.T) {
 	var buf syncBuffer
 	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
 
-	// Lighter assertion: runRouter with an admitted SVTN starts and shuts down
-	// cleanly. After Task 6d GREEN step, this exercises the discoveryWG.Wait()
-	// teardown path (ruling Decision 4) in addition to the existing shutdown
-	// sequence. The discoveryWG.Wait() call is inserted between dataWG.Wait()
-	// and writerWG.Wait() — a graceful shutdown must drain all listener
-	// goroutines before returning.
+	// Shutdown guard: runRouter with an admitted SVTN must start and shut down
+	// cleanly. Task 6d GREEN added discoveryWG.Wait() between dataWG.Wait() and
+	// writerWG.Wait() — a graceful shutdown must drain all listener goroutines
+	// before returning. A deadlock in discoveryWG.Wait() (e.g., a listener
+	// goroutine stuck in ReadFromUDP despite ctx cancellation + conn.Close())
+	// surfaces here as a 3s timeout.
 	//
-	// Pre-wiring RED state: runRouter starts with no discovery listeners
-	// (discoveryWG is not declared), so cancel+wait still returns cleanly.
-	// This test will PASS trivially today (no discriminating behavior pre-wiring)
-	// — it is a GREEN-guard: it becomes discriminating only after Task 6d lands,
-	// at which point a deadlock in discoveryWG.Wait() would surface here.
-	//
-	// GREEN-guard annotation: this test does not contribute to the RED gate.
-	// The RED gate for Task 6d is TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs.
+	// This test cancels immediately (no sleep before cancel). The sibling
+	// TestRunRouter_DiscoveryListeners_CleanShutdown sleeps 100ms first, giving
+	// listener goroutines time to start before teardown — a slightly different
+	// fixture. Both guards are retained to catch different timing windows.
 	cancel()
 	select {
 	case err := <-errCh:
@@ -243,7 +213,7 @@ func TestRunRouter_RelayFanOut_EndToEnd(t *testing.T) {
 			t.Errorf("runRouter returned error on clean shutdown: %v", err)
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("runRouter did not return within 3s after cancel — possible discoveryWG.Wait() deadlock (GREEN-guard)")
+		t.Fatal("runRouter did not return within 3s after cancel — possible discoveryWG.Wait() deadlock")
 	}
 }
 
