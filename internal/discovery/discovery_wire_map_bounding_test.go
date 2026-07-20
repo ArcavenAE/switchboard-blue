@@ -11,7 +11,7 @@
 // All four tests MUST FAIL before the implementation lands — the bounding
 // constant (maxLastSeenEntries) and evictLRULastSeen() do NOT yet exist.
 //
-// Ruling: .factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md v1.1
+// Ruling: .factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md v1.2
 // Spec:   S-BL.DISCOVERY-WIRE.md v2.21, SEC-DW-10
 package discovery
 

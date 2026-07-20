@@ -107,7 +107,7 @@ const (
 // population-sized state.  Eviction strategy: LRU-by-lowest-sequence
 // (evictLRULastSeen) on both the cold-start insertion path (evict-before-insert,
 // len >= cap) and the forward-advance over-cap drain path (len > cap, after the
-// watermark write) per ruling v1.1 Decision 8 (Option A, both-paths bound).
+// watermark write) per ruling v1.2 Decision 8 (Option A, both-paths bound).
 // Security trade-off: evicting an entry re-opens a one-heartbeat cold-start
 // window for the evicted key (accepted per EC-006 and the Human Gate
 // SEC-DW-07 residual acceptance).
@@ -247,7 +247,7 @@ func NewRouterIngest(cfg RouterIngestConfig) *RouterIngest {
 // O(N) scan; called under ri.mu from Ingest() on both the cold-start
 // insertion path (before inserting a new key when len >= cap) and the
 // forward-advance over-cap drain path (len > cap, after the watermark
-// write) per ruling v1.1 Decision 8 (SEC-DW-10,
+// write) per ruling v1.2 Decision 8 (SEC-DW-10,
 // map-bounding-ruling.md Decision 2).
 // MUST be called with ri.mu held.
 func (ri *RouterIngest) evictLRULastSeen() {
@@ -393,10 +393,13 @@ func (ri *RouterIngest) Ingest(raw []byte) (RouterIngestDecision, error) {
 		//
 		// Forward-advance (seen=true, sequence>last): the write is an
 		// in-place update — map size does not increase. Write the updated
-		// watermark FIRST so k's sequence rises above 1 before any eviction
-		// pass runs (prevents k from being selected as LRU victim during
-		// drain). Then drain any over-cap state with len > maxLastSeenEntries
-		// (strict, not >=, so a map exactly at cap is untouched).
+		// watermark FIRST so k's advanced sequence lowers the chance it is
+		// chosen as its own LRU victim during drain; if it still holds the
+		// global-minimum sequence and the map is over-cap it may be evicted,
+		// which is benign — it reverts to the accepted one-heartbeat
+		// cold-start residual (EC-006). Then drain any over-cap state with
+		// len > maxLastSeenEntries (strict, not >=, so a map exactly at cap
+		// is untouched).
 		if !seen {
 			for len(ri.lastSeen) >= maxLastSeenEntries {
 				ri.evictLRULastSeen()
