@@ -269,9 +269,9 @@ func TestAssembleDiscoveryRelayFrame_IngestRelayAdvertisement_RoundTrip(t *testi
 // math.MaxUint16 (65535) — the wire size of OuterHeader.PayloadLen — panics
 // rather than silently truncating PayloadLen via the uint16(len(payload))
 // conversion. Currently unreachable via any real caller (sessions only ever
-// arrive already bounded by discovery.MaxDiscoveryDatagramSize=32768, and
-// re-encoding here never expands that; Task 6's relay-dispatch closure is
-// GATED), but is the same class of silent wire-field-truncation defect
+// arrive already bounded by discovery.MaxDiscoveryDatagramSize=32768 via
+// RouterIngest.Ingest→DecodeSessionList, and re-encoding never expands the
+// payload beyond that bound), but is the same class of silent wire-field-truncation defect
 // F-DWIP1-001 found on the hop-1 side, so it is guarded and tested
 // explicitly rather than left implicit.
 //

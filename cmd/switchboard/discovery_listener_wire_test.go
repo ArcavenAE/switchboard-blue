@@ -149,7 +149,7 @@ func TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs(t *testing.T) {
 			"TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs: "+
 				"no %q log line observed after %d probe datagrams to svtnID %x multicast group %s — "+
 				"runRouter did not join the discovery group for the admitted SVTN "+
-				"(RED gate: Task 6d startup loop not yet wired into runRouter; AC-001 daemon-level oracle)",
+				"(regression: Task 6d startup loop that joins discovery groups for admitted SVTNs is not functioning — AC-001 daemon-level join oracle)",
 			hmacAlertSubstr, probeCount, svtnID, groupAddr,
 		)
 	}
