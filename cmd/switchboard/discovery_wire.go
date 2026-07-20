@@ -109,7 +109,14 @@ func wireDiscoveryListener(
 	if err != nil {
 		// Mirror the read-error path: write to w before returning so the
 		// operator sees the failure (SOUL.md #4 — no silent failures).
-		_, _ = fmt.Fprintf(w, "discovery: multicast join error (svtn=%x, group=%s:%d): %v\n", svtnID, groupAddr, discovery.DiscoveryPort, err)
+		// Guard against nil w: runRouter's doc contract states "tests may
+		// pass nil (in which case the messages are suppressed)," and
+		// runRouter guards every write with `if w != nil` (6 sites).
+		// fmt.Fprintf(nil, ...) panics; match runRouter's nil-guard discipline
+		// (Step-4.5 pass-4 F-2).
+		if w != nil {
+			_, _ = fmt.Fprintf(w, "discovery: multicast join error (svtn=%x, group=%s:%d): %v\n", svtnID, groupAddr, discovery.DiscoveryPort, err)
+		}
 		return fmt.Errorf("wireDiscoveryListener: join multicast group %s:%d: %w", groupAddr, discovery.DiscoveryPort, err)
 	}
 	defer func() { _ = conn.Close() }()
@@ -126,7 +133,11 @@ func wireDiscoveryListener(
 			if ctx.Err() != nil {
 				return nil
 			}
-			_, _ = fmt.Fprintf(w, "discovery: multicast read error (svtn=%x): %v\n", svtnID, readErr)
+			// Guard against nil w: matches runRouter's nil-guard discipline and
+			// the multicast-join-error guard above (Step-4.5 pass-4 F-2).
+			if w != nil {
+				_, _ = fmt.Fprintf(w, "discovery: multicast read error (svtn=%x): %v\n", svtnID, readErr)
+			}
 			return fmt.Errorf("wireDiscoveryListener: multicast read error: %w", readErr)
 		}
 
