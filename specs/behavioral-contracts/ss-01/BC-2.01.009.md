@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.009
 document_type: behavioral-contract
 level: L3
-version: "1.4"
+version: "1.5"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -27,11 +27,21 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.5"
+    date: 2026-07-19
+    author: product-owner
+    change: >
+      Fix v1.4 changelog PC-number inconsistency: both the frontmatter change block
+      and Changelog table row for v1.4 stated "PC-10 added" but the body numbers the
+      ChallengeResponse SVTNID-consistency postcondition as PC-9 (ninth item in the
+      Postconditions list). Corrected to "PC-9 added" in both locations to match
+      the actual body numbering. No postcondition semantics changed. E-ADM-024
+      registered in error-taxonomy.md v5.2 (taxonomy-orphan gap introduced by v1.4).
   - version: "1.4"
     date: 2026-07-19
     author: product-owner
     change: >
-      PC-10 added: ChallengeResponse SVTNID-consistency enforcement postcondition.
+      PC-9 added: ChallengeResponse SVTNID-consistency enforcement postcondition.
       Before calling AdmitNode, the router MUST verify that the ChallengeResponse
       (message 3) outer-header svtn_id equals the svtn_id from the NodeIdentify
       (message 1) outer header; mismatch closes the connection (E-ADM-024).
@@ -246,7 +256,8 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 
 | Version | Date | Change |
 |---------|------|--------|
-| 1.4 | 2026-07-19 | PC-10 added: ChallengeResponse SVTNID-consistency enforcement postcondition. Before calling `AdmitNode`, the router MUST verify that the ChallengeResponse (message 3) outer-header `svtn_id` equals the `svtn_id` from the NodeIdentify (message 1) outer header; mismatch closes the connection. EC-008 and test vector row added for the mismatch path. Error code E-ADM-024 added to error table. Origin: post-merge security review of PR #127; drift item SEC-NIDW-SVTNID-CONSISTENCY (MED). |
+| 1.5 | 2026-07-19 | Fix v1.4 changelog PC-number inconsistency: both the frontmatter `change:` block and the Changelog table row for v1.4 stated "PC-10 added" but the body numbers the ChallengeResponse SVTNID-consistency postcondition as PC-9 (it is the ninth item in the Postconditions list). Corrected to "PC-9 added" in both locations to match the actual body numbering. No postcondition semantics changed. Also: E-ADM-024 registered in error-taxonomy.md v5.2 (the taxonomy-orphan gap introduced by v1.4). |
+| 1.4 | 2026-07-19 | PC-9 added: ChallengeResponse SVTNID-consistency enforcement postcondition. Before calling `AdmitNode`, the router MUST verify that the ChallengeResponse (message 3) outer-header `svtn_id` equals the `svtn_id` from the NodeIdentify (message 1) outer header; mismatch closes the connection. EC-008 and test vector row added for the mismatch path. Error code E-ADM-024 added to error table. Origin: post-merge security review of PR #127; drift item SEC-NIDW-SVTNID-CONSISTENCY (MED). |
 | 1.3 | 2026-07-19 | PC-5 verification-source corrected: the embedded expression now names the STORED registered key as the verification authority, not the frame-supplied `pubKey` argument. The frame-supplied `pubKey` is used only to derive the keyset lookup address via `frame.DeriveNodeAddress`; the signature is verified against the stored key retrieved from the admitted keyset. Cascade completion of the F-1 fix; aligns with rulings §18 and BC-2.05.001 PC-3. |
 | 1.2 | 2026-07-19 | Invariant 7 gains a mechanism note specifying HOW the connection is closed on a duplicate NodeIdentify (E-ADM-023): `conn.Close()` in the per-conn `route` closure for `case 0x04` via the handle injected by `runRouter`, per S-BL.NODE-IDENTIFY-WIRE-rulings.md §17 (Option B). No PC renumber; no AC citation change — AC-011 cites Invariant 7 by number, not text body. |
 | 1.1 | 2026-07-18 | PC-5 cross-reference corrected from "BC-2.05.001 Postconditions 3–6" to "Postconditions 3–7" — the prior range under-claimed coverage (omitted the revoked-key path now documented at BC-2.05.001 PC-7). Citation-accuracy fix; no postcondition semantics changed (consistency-audit Finding 3 cascade). |
