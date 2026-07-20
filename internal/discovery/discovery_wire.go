@@ -105,7 +105,9 @@ const (
 // map-bounding-ruling.md Decision 2). Matches maxTrackedSources in
 // internal/admission/failure_counter.go — both maps track admitted-node-
 // population-sized state.  Eviction strategy: LRU-by-lowest-sequence
-// (evictLRULastSeen), on the cold-start insertion path only.
+// (evictLRULastSeen) on both the cold-start insertion path (evict-before-insert,
+// len >= cap) and the forward-advance over-cap drain path (len > cap, after the
+// watermark write) per ruling v1.1 Decision 8 (Option A, both-paths bound).
 // Security trade-off: evicting an entry re-opens a one-heartbeat cold-start
 // window for the evicted key (accepted per EC-006 and the Human Gate
 // SEC-DW-07 residual acceptance).
@@ -239,9 +241,14 @@ func NewRouterIngest(cfg RouterIngestConfig) *RouterIngest {
 // evictLRULastSeen removes the lastSeen entry with the lowest stored
 // Sequence watermark — the node that has sent the fewest recent
 // advertisements and is most likely to have already left the network.
-// Deterministic first-found on ties.  O(N) scan; called only when a new
-// lastSeen entry is about to be inserted and the map is at or above cap
-// (SEC-DW-10, map-bounding-ruling.md Decision 2).
+// On a tie for the lowest sequence, the victim is arbitrary among the
+// equal-lowest entries (any is an equally-valid LRU victim; no code or
+// test relies on tie stability — Go map iteration order is randomized).
+// O(N) scan; called under ri.mu from Ingest() on both the cold-start
+// insertion path (before inserting a new key when len >= cap) and the
+// forward-advance over-cap drain path (len > cap, after the watermark
+// write) per ruling v1.1 Decision 8 (SEC-DW-10,
+// map-bounding-ruling.md Decision 2).
 // MUST be called with ri.mu held.
 func (ri *RouterIngest) evictLRULastSeen() {
 	var lruKey lastSeenKey
