@@ -2,7 +2,7 @@
 artifact_id: BC-2.01.009
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-07-18T00:00:00Z
@@ -27,6 +27,17 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - version: "1.4"
+    date: 2026-07-19
+    author: product-owner
+    change: >
+      PC-10 added: ChallengeResponse SVTNID-consistency enforcement postcondition.
+      Before calling AdmitNode, the router MUST verify that the ChallengeResponse
+      (message 3) outer-header svtn_id equals the svtn_id from the NodeIdentify
+      (message 1) outer header; mismatch closes the connection (E-ADM-024).
+      EC-008 and matching test vector and error code row added.
+      Origin: post-merge security review of PR #127; drift item
+      SEC-NIDW-SVTNID-CONSISTENCY (MED).
   - version: "1.3"
     date: 2026-07-19
     author: product-owner
@@ -116,9 +127,11 @@ The three messages consume exactly one opcode registry entry: `NODE_IDENTIFY = 0
 
 8. **Connection lifecycle invariant:** After `onAccept` returns, the connection is in one of two states: (a) fully bound — `Router.BindInterface` called, `sendMap` entry live, `ServeConn` running; or (b) closed. There is no "unbound but open" state.
 
+9. **ChallengeResponse SVTNID consistency enforced:** Before calling `AdmitNode`, the router MUST verify that the ChallengeResponse (message 3) outer-header `svtn_id` equals the `svtn_id` from the NodeIdentify (message 1) outer header. If they differ, the router closes the connection and returns E-ADM-024 (no admission is attempted). This enforces the "svtn_id unchanged" invariant stated in the message-3 frame description (PC-4) and prevents a ChallengeResponse tagged with a mismatched SVTN from being silently accepted.
+
 ### Failure paths
 
-9. **Failure posture:** Any error at any step during the three-message exchange closes the connection immediately. The error code / log message for each failure path is listed in the Error Codes section below. No error or status is returned to the connecting node beyond connection closure.
+10. **Failure posture:** Any error at any step during the three-message exchange closes the connection immediately. The error code / log message for each failure path is listed in the Error Codes section below. No error or status is returned to the connecting node beyond connection closure.
 
 ## Invariants
 
@@ -155,6 +168,7 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 | E-ADM-015 | key expired | Key expiry is set and past in `AdmitNode` (BC-2.05.001 Postcondition 6) | Close immediately |
 | E-ADM-022 | handshake timeout | 10s elapsed without completing three-message exchange (`conn.SetDeadline` fires) | Close immediately |
 | E-ADM-023 | duplicate NodeIdentify | Second `NodeIdentify` frame received on an already-handshaken connection | Close immediately |
+| E-ADM-024 | ChallengeResponse SVTNID mismatch | `ChallengeResponse` outer-header `svtn_id` ≠ `NodeIdentify` outer-header `svtn_id` | Close immediately |
 | (WARN log) | malformed ChallengeResponse frame | `hdr.PayloadLen != 68`, wrong discriminators at `ChallengeResponse` receipt | Close immediately |
 
 > **Note:** E-ADM-022 and E-ADM-023 are `cmd/switchboard`-scope wire-protocol error codes; they describe wire-handler violations, not `internal/admission` keyset semantics. E-ADM-001, -003, -005, -008, -015 are re-used from `internal/admission` (same codes as `ReAuthenticate`).
@@ -170,6 +184,7 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 | EC-005 | Node's key is expired at connect time | `AdmitNode` returns `ErrKeyExpired` (E-ADM-015); connection closed. See BC-2.05.001 Postcondition 6 / Invariant 5. |
 | EC-006 | Node's key is not registered for the SVTN in the outer header `SVTNID` | `AdmitNode` returns `ErrNotAdmitted` (E-ADM-003); connection closed. |
 | EC-007 | Two successive reconnects from the same node (new TCP each time) | Each reconnect completes a full three-message handshake on its new TCP connection. `Router.BindInterface` uses LWW semantics (BC-2.01.010 PC-2). Rebind is only possible after `AdmitNode` returns nil — full re-handshake required. |
+| EC-008 | Node sends ChallengeResponse with outer-header `svtn_id` ≠ the `svtn_id` from the NodeIdentify outer header | Connection closed with E-ADM-024 before `AdmitNode` is called. No admission is attempted. Enforces the "svtn_id unchanged" invariant stated in PC-4 and PC-9. |
 
 ## Canonical Test Vectors
 
@@ -187,6 +202,7 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 | 10s elapses before `ChallengeResponse` arrives | Connection closed; E-ADM-022 timeout warning logged | error |
 | Second `NodeIdentify` on already-admitted connection | Connection closed; E-ADM-023 duplicate warning logged | error |
 | Node connects twice (new TCP each time); key admitted | Both handshakes succeed; second `BindInterface` call LWW-overwrites first binding | rebind |
+| `ChallengeResponse` outer-header `svtn_id` ≠ `NodeIdentify` outer-header `svtn_id` | Connection closed before `AdmitNode`; E-ADM-024 logged | error (EC-008) |
 
 ## Verification Properties
 
@@ -199,6 +215,7 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 | test-as-evidence | Handshake timeout (10s) closes connection with E-ADM-022 | unit (mock deadline) |
 | test-as-evidence | `payload[3] != 0x00` (non-zero reserved byte) closes connection | unit |
 | test-as-evidence | Zero SVTN ID in outer header closes connection | unit |
+| test-as-evidence | `ChallengeResponse` outer-header `svtn_id` ≠ `NodeIdentify` `svtn_id` closes connection with E-ADM-024 before `AdmitNode` (EC-008 / PC-9) | unit |
 
 ## Traceability
 
@@ -229,6 +246,7 @@ A new TCP connection is accepted by the router's `netingress` listener, causing 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-19 | PC-10 added: ChallengeResponse SVTNID-consistency enforcement postcondition. Before calling `AdmitNode`, the router MUST verify that the ChallengeResponse (message 3) outer-header `svtn_id` equals the `svtn_id` from the NodeIdentify (message 1) outer header; mismatch closes the connection. EC-008 and test vector row added for the mismatch path. Error code E-ADM-024 added to error table. Origin: post-merge security review of PR #127; drift item SEC-NIDW-SVTNID-CONSISTENCY (MED). |
 | 1.3 | 2026-07-19 | PC-5 verification-source corrected: the embedded expression now names the STORED registered key as the verification authority, not the frame-supplied `pubKey` argument. The frame-supplied `pubKey` is used only to derive the keyset lookup address via `frame.DeriveNodeAddress`; the signature is verified against the stored key retrieved from the admitted keyset. Cascade completion of the F-1 fix; aligns with rulings §18 and BC-2.05.001 PC-3. |
 | 1.2 | 2026-07-19 | Invariant 7 gains a mechanism note specifying HOW the connection is closed on a duplicate NodeIdentify (E-ADM-023): `conn.Close()` in the per-conn `route` closure for `case 0x04` via the handle injected by `runRouter`, per S-BL.NODE-IDENTIFY-WIRE-rulings.md §17 (Option B). No PC renumber; no AC citation change — AC-011 cites Invariant 7 by number, not text body. |
 | 1.1 | 2026-07-18 | PC-5 cross-reference corrected from "BC-2.05.001 Postconditions 3–6" to "Postconditions 3–7" — the prior range under-claimed coverage (omitted the revoked-key path now documented at BC-2.05.001 PC-7). Citation-accuracy fix; no postcondition semantics changed (consistency-audit Finding 3 cascade). |
