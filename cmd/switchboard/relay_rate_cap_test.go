@@ -8,7 +8,7 @@
 // production symbol, so the package compiles and failures manifest as
 // assertion failures, not compile errors.
 //
-// Ruling: .factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md v1.0
+// Ruling: .factory/decisions/S-BL.DISCOVERY-WIRE-map-bounding-ruling.md v1.1
 // Spec:   S-BL.DISCOVERY-WIRE.md v2.21, SEC-DW-10
 package main
 
