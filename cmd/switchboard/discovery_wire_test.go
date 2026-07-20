@@ -35,13 +35,13 @@ func redGateGuard(t *testing.T) {
 // cannot protect a panic raised inside a separately-spawned goroutine. This
 // helper is that goroutine-local recovery point; the caller inspects
 // `panicked` and fails the test explicitly from the main test goroutine.
-func callWireDiscoveryListenerRecovered(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer) (panicked any, err error) {
+func callWireDiscoveryListenerRecovered(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer, onRelay func(discovery.RouterIngestDecision)) (panicked any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = r
 		}
 	}()
-	err = wireDiscoveryListener(ctx, wg, svtnID, ri, w)
+	err = wireDiscoveryListener(ctx, wg, svtnID, ri, w, onRelay)
 	return panicked, err
 }
 
@@ -98,7 +98,7 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 	// site in this package.
 	wg.Add(1)
 	go func() {
-		p, err := callWireDiscoveryListenerRecovered(ctx, &wg, svtnID, ri, io.Discard)
+		p, err := callWireDiscoveryListenerRecovered(ctx, &wg, svtnID, ri, io.Discard, nil)
 		resultCh <- result{err: err, panicked: p}
 	}()
 
