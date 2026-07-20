@@ -729,3 +729,375 @@ func TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking(t *tes
 //   sync      — used by makeRelayTestNodeConn (sync.Once) and sendMap (sync.Map)
 //   time      — used by the best-effort non-blocking subtest watchdog (time.After)
 // context and encoding/binary were already imported for AC-014-016 tests above.
+
+// TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst is the mandated
+// AC-018 test (S-BL.DISCOVERY-WIRE story, Task 6c). It verifies the
+// ~1/sec per-(SVTNID,NodeAddr) rate cap applied AT THE DISPATCH-DECISION
+// POINT (SEC-DW-09). The cap decides whether relayDispatch is called at all;
+// it does not live inside relayDispatch.
+//
+// Postconditions exercised:
+//
+//  1. (PC-1) Relay dispatch for a given (SVTNID,NodeAddr) pair is capped at
+//     ~1/sec, keyed INDEPENDENTLY per (SVTNID,NodeAddr).
+//  2. (PC-2) An excess-rate arrival is silently dropped — no panic, no error.
+//     The arriving advertisement's upstream ingest/registry state (AC-010)
+//     is unaffected; only the relay step is suppressed.
+//  3. (PC-3) An optional, non-gating suppression counter records
+//     allow()==false results but NEVER alters the drop decision.
+//
+// The composition this test drives mirrors exactly what Task 6d will wire
+// in production:
+//
+//	if cap.allow(d.SVTNID, d.NodeAddr) {
+//	    relayDispatch(router, &sendMap, d)
+//	}
+//
+// Expected RED state: compile-fail — "undefined: relayRateCap" /
+// "undefined: newRelayRateCap".
+//
+// Traces to BC-2.03.001 Postcondition 5; SEC-DW-09;
+// S-BL.DISCOVERY-WIRE AC-018; fanout-resolution-ruling.md v1.0 Decision 4.
+func TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst(t *testing.T) {
+	// Fixed test vectors — not invented; derived from AC-018 postconditions.
+	svtnID := [16]byte{0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0, 0x00}
+	nodeAddrA := [8]byte{0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA}
+	nodeAddrB := [8]byte{0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB, 0xBB}
+	nodeAddrC := [8]byte{0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC}
+	ifaceIDA := routing.InterfaceID(201)
+	ifaceIDB := routing.InterfaceID(202)
+	ifaceIDC := routing.InterfaceID(203)
+
+	sessions := []discovery.SessionPresence{
+		{SessionName: "cap-session", Status: discovery.Attached, Quality: discovery.QualityGreen},
+	}
+	const testSeq = uint64(99)
+
+	// fakeNow is the shared clock value mutated between calls to exercise the
+	// rate cap's ~1s window. cap.now is set to return fakeNow so tests run
+	// deterministically without wall-clock dependence. The cap exposes a
+	// settable `now func() time.Time` field, mirroring tokenBucket.now in
+	// internal/discovery/discovery_wire.go.
+	fakeNow := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	cap := newRelayRateCap()
+	cap.now = func() time.Time { return fakeNow }
+
+	// buildThreeNodeRouter builds a router with all three node bindings used
+	// across subtests. Using a shared router is safe because BindInterface is
+	// idempotent and the router's identityIfaceMap is not mutated by relayDispatch.
+	buildThreeNodeRouter := func(t *testing.T) *routing.Router {
+		t.Helper()
+		return buildRelayRouter(t, []struct {
+			svtnID   [16]byte
+			nodeAddr [8]byte
+			ifaceID  routing.InterfaceID
+		}{
+			{svtnID, nodeAddrA, ifaceIDA},
+			{svtnID, nodeAddrB, ifaceIDB},
+			{svtnID, nodeAddrC, ifaceIDC},
+		})
+	}
+
+	// decisionFrom builds a RouterIngestDecision for the given originating
+	// (svtnID, nodeAddr) with the shared sessions and testSeq.
+	decisionFrom := func(sid [16]byte, na [8]byte) discovery.RouterIngestDecision {
+		return discovery.RouterIngestDecision{
+			Accept:   true,
+			Relay:    true,
+			SVTNID:   sid,
+			NodeAddr: na,
+			Sequence: testSeq,
+			Sessions: sessions,
+		}
+	}
+
+	// --- subtest 1: first_relayed_second_dropped_same_key ---
+	// PC-1 (cap at ~1/sec) + PC-2 (silent drop).
+	// Two arrivals from the same (svtnID, nodeAddrA) at the same fake instant.
+	// First: allow==true → relayDispatch called → B and C receive the frame.
+	// Second: allow==false → relayDispatch NOT called → B and C receive nothing new.
+	//
+	// This is THE discriminating test: a cap that did nothing would relay both
+	// arrivals, and the mustNotReceive assertions would fire.
+	t.Run("first_relayed_second_dropped_same_key", func(t *testing.T) {
+		router := buildThreeNodeRouter(t)
+
+		// A originates; B and C are targets for relayed frames.
+		ncA := makeRelayTestNodeConn(t, 4)
+		ncB := makeRelayTestNodeConn(t, 4)
+		ncC := makeRelayTestNodeConn(t, 4)
+		var sendMap sync.Map
+		sendMap.Store(ifaceIDA, ncA)
+		sendMap.Store(ifaceIDB, ncB)
+		sendMap.Store(ifaceIDC, ncC)
+
+		d := decisionFrom(svtnID, nodeAddrA)
+		expectedFrame := assembleDiscoveryRelayFrame(d.SVTNID, d.NodeAddr, d.Sequence, d.Sessions)
+
+		// First arrival — fakeNow is at the epoch; cap has no prior entry for
+		// this key, so allow() must return true.
+		if cap.allow(svtnID, nodeAddrA) {
+			relayDispatch(router, &sendMap, d)
+		}
+
+		// B must have received exactly one relay frame.
+		gotB, okB := nonBlockingDrain(ncB)
+		if !okB {
+			t.Error("first arrival: node B expected relay frame, got nothing")
+		} else if !bytes.Equal(gotB, expectedFrame) {
+			t.Errorf("first arrival: node B frame mismatch: got %d bytes, want %d bytes", len(gotB), len(expectedFrame))
+		}
+		// C must also have received exactly one relay frame.
+		gotC, okC := nonBlockingDrain(ncC)
+		if !okC {
+			t.Error("first arrival: node C expected relay frame, got nothing")
+		} else if !bytes.Equal(gotC, expectedFrame) {
+			t.Errorf("first arrival: node C frame mismatch: got %d bytes, want %d bytes", len(gotC), len(expectedFrame))
+		}
+		// A (originator) must not echo.
+		mustNotReceive(t, ncA, "first arrival: node A (originator)")
+
+		// Second arrival at the SAME fake instant — within ~1s of the first.
+		// cap.allow must return false; relayDispatch must NOT be called.
+		if cap.allow(svtnID, nodeAddrA) {
+			relayDispatch(router, &sendMap, d)
+		}
+
+		// B and C must receive NOTHING on the second arrival.
+		mustNotReceive(t, ncB, "second arrival (capped): node B must not receive")
+		mustNotReceive(t, ncC, "second arrival (capped): node C must not receive")
+	})
+
+	// --- subtest 2: distinct_key_not_capped ---
+	// PC-1 keying: after nodeAddrA is capped, a DIFFERENT originator
+	// (svtnID, nodeAddrC) at the same fake instant is still allowed because
+	// the cap is keyed per (SVTNID, NodeAddr), not globally.
+	//
+	// Router has A, B, C in the same SVTN. C originates in this subtest, so
+	// A and B are the targets.
+	t.Run("distinct_key_not_capped", func(t *testing.T) {
+		router := buildThreeNodeRouter(t)
+
+		ncA := makeRelayTestNodeConn(t, 4)
+		ncB := makeRelayTestNodeConn(t, 4)
+		ncC := makeRelayTestNodeConn(t, 4)
+		var sendMap sync.Map
+		sendMap.Store(ifaceIDA, ncA)
+		sendMap.Store(ifaceIDB, ncB)
+		sendMap.Store(ifaceIDC, ncC)
+
+		// First: exhaust nodeAddrA's allowance at fakeNow.
+		dA := decisionFrom(svtnID, nodeAddrA)
+		if cap.allow(svtnID, nodeAddrA) {
+			relayDispatch(router, &sendMap, dA)
+		}
+		// Drain A's delivery (B and C received from A-originating relays).
+		nonBlockingDrain(ncB)
+		nonBlockingDrain(ncC)
+
+		// Confirm A is now capped (second allow call for A must return false).
+		if cap.allow(svtnID, nodeAddrA) {
+			// should not happen — if it does, the cap logic is wrong
+			t.Error("nodeAddrA: second allow at same instant returned true (expected false — cap should be active)")
+		}
+
+		// Now send from nodeAddrC at the same fake instant.
+		// nodeAddrC has NO prior allow call, so cap.allow(svtnID, nodeAddrC)
+		// must return true — independent key.
+		dC := decisionFrom(svtnID, nodeAddrC)
+		expectedFrameC := assembleDiscoveryRelayFrame(dC.SVTNID, dC.NodeAddr, dC.Sequence, dC.Sessions)
+
+		if cap.allow(svtnID, nodeAddrC) {
+			relayDispatch(router, &sendMap, dC)
+		} else {
+			// If this branch executes, the cap incorrectly blocked nodeAddrC.
+			t.Error("nodeAddrC: allow at first call returned false (independent key must not be capped)")
+		}
+
+		// A must receive the relay from C's advertisement (C is originator, A is target).
+		gotA, okA := nonBlockingDrain(ncA)
+		if !okA {
+			t.Error("distinct key (nodeAddrC): node A expected relay frame, got nothing")
+		} else if !bytes.Equal(gotA, expectedFrameC) {
+			t.Errorf("distinct key (nodeAddrC): node A frame mismatch: got %d bytes, want %d bytes", len(gotA), len(expectedFrameC))
+		}
+		// B must also receive from C's advertisement.
+		gotB, okB := nonBlockingDrain(ncB)
+		if !okB {
+			t.Error("distinct key (nodeAddrC): node B expected relay frame, got nothing")
+		} else if !bytes.Equal(gotB, expectedFrameC) {
+			t.Errorf("distinct key (nodeAddrC): node B frame mismatch: got %d bytes, want %d bytes", len(gotB), len(expectedFrameC))
+		}
+		// C (originator) must not echo.
+		mustNotReceive(t, ncC, "distinct key (nodeAddrC): node C (originator)")
+	})
+
+	// --- subtest 3: allowed_again_after_interval ---
+	// PC-1 (~1/sec rate cap, not a one-shot latch): after the second (dropped)
+	// arrival, advance cap.now by >= 1s; the same (svtnID, nodeAddrA) key is
+	// allowed again, proving the cap resets after the interval.
+	t.Run("allowed_again_after_interval", func(t *testing.T) {
+		router := buildThreeNodeRouter(t)
+
+		ncA := makeRelayTestNodeConn(t, 4)
+		ncB := makeRelayTestNodeConn(t, 4)
+		ncC := makeRelayTestNodeConn(t, 4)
+		var sendMap sync.Map
+		sendMap.Store(ifaceIDA, ncA)
+		sendMap.Store(ifaceIDB, ncB)
+		sendMap.Store(ifaceIDC, ncC)
+
+		d := decisionFrom(svtnID, nodeAddrA)
+		expectedFrame := assembleDiscoveryRelayFrame(d.SVTNID, d.NodeAddr, d.Sequence, d.Sessions)
+
+		// First call — allowed (consume the allowance at fakeNow).
+		cap.allow(svtnID, nodeAddrA) // return value not checked; subtest 1 already verified it is true
+
+		// Second call at the same instant — must be dropped (same fakeNow).
+		if cap.allow(svtnID, nodeAddrA) {
+			relayDispatch(router, &sendMap, d)
+		}
+		// Drain any residual deliveries from relayDispatch in earlier subtests
+		// that shared the same cap; channels are fresh so nothing to drain here.
+		mustNotReceive(t, ncB, "at-same-instant: node B must not receive on second call")
+
+		// Advance fakeNow by exactly 1 second — cap interval is ~1s.
+		fakeNow = fakeNow.Add(time.Second)
+
+		// Third call after >= 1s has elapsed — cap must allow again.
+		if cap.allow(svtnID, nodeAddrA) {
+			relayDispatch(router, &sendMap, d)
+		} else {
+			t.Error("allowed_again_after_interval: allow returned false after >= 1s elapsed (cap should have reset)")
+		}
+
+		// B must have received the relay frame from the third (allowed) call.
+		gotB, okB := nonBlockingDrain(ncB)
+		if !okB {
+			t.Error("after >= 1s interval: node B expected relay frame, got nothing")
+		} else if !bytes.Equal(gotB, expectedFrame) {
+			t.Errorf("after >= 1s interval: node B frame mismatch: got %d bytes, want %d bytes", len(gotB), len(expectedFrame))
+		}
+		gotC, okC := nonBlockingDrain(ncC)
+		if !okC {
+			t.Error("after >= 1s interval: node C expected relay frame, got nothing")
+		} else if !bytes.Equal(gotC, expectedFrame) {
+			t.Errorf("after >= 1s interval: node C frame mismatch: got %d bytes, want %d bytes", len(gotC), len(expectedFrame))
+		}
+		mustNotReceive(t, ncA, "after interval: node A (originator)")
+	})
+
+	// --- subtest 4: suppression_counter_nongating ---
+	// PC-3: cap.suppressed() increments on the dropped arrival but the drop
+	// decision is independent of the counter — the counter is observed, never
+	// consulted.
+	//
+	// Assert suppressed() goes 0 → 1 across a single capped call. This
+	// exercises PC-3 explicitly so the implementer must build suppressed();
+	// if this subtest is present, the implementer provides the counter.
+	t.Run("suppression_counter_nongating", func(t *testing.T) {
+		// Each call to allow() for the same key at fakeNow either allowed or
+		// dropped based on prior subtest state. We use a FRESH cap to isolate
+		// this subtest's counter from subtest 1–3.
+		freshCap := newRelayRateCap()
+		freshCap.now = func() time.Time { return fakeNow }
+
+		// One allow call — consumes the allowance; suppressed() should be 0.
+		freshCap.allow(svtnID, nodeAddrA)
+		if got := freshCap.suppressed(); got != 0 {
+			t.Errorf("suppressed() after first (allowed) call = %d, want 0", got)
+		}
+
+		// Second call at same instant — must be dropped; suppressed() must become 1.
+		freshCap.allow(svtnID, nodeAddrA)
+		if got := freshCap.suppressed(); got != 1 {
+			t.Errorf("suppressed() after first (dropped) call = %d, want 1", got)
+		}
+
+		// Third call also at same instant — another drop; suppressed() must be 2.
+		freshCap.allow(svtnID, nodeAddrA)
+		if got := freshCap.suppressed(); got != 2 {
+			t.Errorf("suppressed() after second (dropped) call = %d, want 2", got)
+		}
+
+		// Crucially: the allow()==false return value is the sole drop signal.
+		// The test does not pass the counter into relayDispatch — nothing inside
+		// relayDispatch consults the counter. The counter's value is observable
+		// but never wired to any dispatch gate.
+	})
+
+	// --- subtest 5: no_error_no_panic_burst ---
+	// PC-2 (silent drop): a rapid burst of 5 same-key arrivals at the same
+	// fake instant produces exactly one relay delivery and four suppressions.
+	// No panic, no error value (allow returns bool; relayDispatch returns nothing).
+	// The burst exercises the silent-drop-first contract in bulk.
+	t.Run("no_error_no_panic_burst", func(t *testing.T) {
+		router := buildThreeNodeRouter(t)
+
+		ncA := makeRelayTestNodeConn(t, 8) // large buffer — absorb all deliveries
+		ncB := makeRelayTestNodeConn(t, 8)
+		ncC := makeRelayTestNodeConn(t, 8)
+		var sendMap sync.Map
+		sendMap.Store(ifaceIDA, ncA)
+		sendMap.Store(ifaceIDB, ncB)
+		sendMap.Store(ifaceIDC, ncC)
+
+		d := decisionFrom(svtnID, nodeAddrA)
+
+		// Use a fresh cap isolated from earlier subtests.
+		burstCap := newRelayRateCap()
+		burstCap.now = func() time.Time { return fakeNow }
+
+		const burstSize = 5
+		relayed := 0
+		for i := 0; i < burstSize; i++ {
+			if burstCap.allow(svtnID, nodeAddrA) {
+				relayDispatch(router, &sendMap, d) // must not panic
+				relayed++
+			}
+		}
+
+		// Exactly one of the five calls must have been relayed (the first).
+		if relayed != 1 {
+			t.Errorf("burst of %d: relayed %d times, want exactly 1", burstSize, relayed)
+		}
+
+		// B and C each received exactly one frame.
+		bCount := 0
+		for {
+			_, ok := nonBlockingDrain(ncB)
+			if !ok {
+				break
+			}
+			bCount++
+		}
+		if bCount != 1 {
+			t.Errorf("node B: received %d frames from burst, want exactly 1", bCount)
+		}
+
+		cCount := 0
+		for {
+			_, ok := nonBlockingDrain(ncC)
+			if !ok {
+				break
+			}
+			cCount++
+		}
+		if cCount != 1 {
+			t.Errorf("node C: received %d frames from burst, want exactly 1", cCount)
+		}
+
+		// Suppression counter reflects the four dropped calls.
+		if got := burstCap.suppressed(); got != uint64(burstSize-1) {
+			t.Errorf("suppressed() after burst = %d, want %d", got, burstSize-1)
+		}
+
+		// A (originator) received nothing across the entire burst.
+		mustNotReceive(t, ncA, "burst: node A (originator)")
+	})
+}
+
+// New imports added for AC-018 tests (all already present from AC-017 tests above):
+//   bytes, sync, time — unchanged
+//   discovery, routing — unchanged
+// No new imports are required for the rate-cap tests.
