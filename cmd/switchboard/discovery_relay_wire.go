@@ -1,26 +1,31 @@
 // discovery_relay_wire.go — DISCOVERY_RELAY (control_type=0x03) hop-2 frame
-// assembly for cmd/switchboard (S-BL.DISCOVERY-WIRE Task 5; AC-014, AC-015,
-// AC-016).
+// assembly and fan-out dispatch for cmd/switchboard (S-BL.DISCOVERY-WIRE
+// Task 5: AC-014, AC-015, AC-016; Task 6b: AC-017).
 //
 // assembleDiscoveryRelayFrame is a pure function: no live connection or
 // fan-out mechanism is needed to construct the frame bytes (AC-014
-// postcondition 4). The relay-dispatch closure that fans the assembled
-// frame out to admitted nodes (SVTN-scoped, exclude-originator,
-// best-effort, SEC-DW-09 rate cap) is Task 6 — [GATED —
-// depends_on S-BL.NODE-IDENTIFY-WIRE] — and is out of scope for this file
-// until that companion story lands (see the story's Task 6 section).
+// postcondition 4).
 //
-// Purity classification (ARCH-09): pure-core — no I/O, deterministic
-// serialization from decoded fields to bytes.
+// relayDispatch fans the assembled frame out to admitted nodes for the
+// advertisement's SVTN, excluding the originating NodeAddr (AC-017).
+// It is best-effort and non-blocking. Task 6d wires it into runRouter
+// behind the decision.Relay gate — this helper itself does not check
+// decision.Relay; it dispatches unconditionally (the caller gates).
+//
+// Purity classification (ARCH-09): assembleDiscoveryRelayFrame is pure-core
+// (no I/O, deterministic serialization). relayDispatch is effectful (fan-out
+// I/O to live connections).
 package main
 
 import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"sync"
 
 	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/frame"
+	"github.com/arcavenae/switchboard/internal/routing"
 )
 
 // discoveryRelayControlType identifies the DISCOVERY_RELAY control frame
@@ -106,4 +111,38 @@ func assembleDiscoveryRelayFrame(svtnID [16]byte, nodeAddr [8]byte, sequence uin
 	raw = append(raw, ehdr[:]...)
 	raw = append(raw, payload...)
 	return raw
+}
+
+// relayDispatch fans out a DISCOVERY_RELAY frame to every node admitted to
+// decision.SVTNID except the originating node (decision.NodeAddr).
+//
+// It resolves target interfaces via Router.InterfacesForSVTN (SVTN-scoped,
+// exclude-originator, fresh snapshot under RLock), assembles the relay frame
+// once, then attempts a best-effort non-blocking send on each target's
+// nodeConn.send channel. If a sendMap entry is missing (connection closed
+// between snapshot and send), the target is silently skipped — no log, no
+// counter, no error (Decision 2 / TOCTOU window). If a send channel is full,
+// the frame is dropped silently (Decision 3 / best-effort).
+//
+// relayDispatch does NOT check decision.Relay — it dispatches
+// unconditionally. The caller is responsible for gating on decision.Relay
+// before calling this function (Task 6d).
+//
+// Matches the DRAIN observer fan-out shape at mgmt_wire.go:842–849.
+// AC-017 / BC-2.03.001 Postcondition 1 delivery-mechanism note;
+// fanout-resolution-ruling.md v1.0 Decisions 1/2/3.
+func relayDispatch(router *routing.Router, sendMap *sync.Map, decision discovery.RouterIngestDecision) {
+	ifaceIDs := router.InterfacesForSVTN(decision.SVTNID, decision.NodeAddr)
+	frame := assembleDiscoveryRelayFrame(decision.SVTNID, decision.NodeAddr, decision.Sequence, decision.Sessions)
+	for _, ifaceID := range ifaceIDs {
+		val, ok := sendMap.Load(ifaceID)
+		if !ok {
+			continue
+		}
+		nc := val.(*nodeConn)
+		select {
+		case nc.send <- frame:
+		default:
+		}
+	}
 }
