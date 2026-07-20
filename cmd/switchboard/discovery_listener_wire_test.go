@@ -383,4 +383,3 @@ func TestOnRelayClosureConcurrentAccess(t *testing.T) {
 	// in a parallel test. The assertion is purely "no data race" (enforced by
 	// go test -race) and "no panic".
 }
-

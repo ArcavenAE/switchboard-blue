@@ -970,7 +970,16 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 	for svtnID := range routerKS.AllSVTNEntries() {
 		svtnID := svtnID // per-goroutine capture (Go loop variable semantics)
 		discoveryWG.Add(1)
-		go wireDiscoveryListener(ingressCtx, &discoveryWG, svtnID, ri, w, onRelay)
+		go func() {
+			// wireDiscoveryListener manages discoveryWG.Done() via its own
+			// defer — discoveryWG.Add(1) happens here in the parent before
+			// `go`, per ARCH-01 §Goroutine WaitGroup Contract (F-DWIP3-001).
+			// A bind/join error is already reported via the w writer inside
+			// wireDiscoveryListener; no additional action is needed here on
+			// an early-return path (ctx cancellation returns nil; socket
+			// errors log and return a wrapped error).
+			_ = wireDiscoveryListener(ingressCtx, &discoveryWG, svtnID, ri, w, onRelay)
+		}()
 	}
 
 	// Block until context is cancelled, a SIGHUP reload event fires, or an
