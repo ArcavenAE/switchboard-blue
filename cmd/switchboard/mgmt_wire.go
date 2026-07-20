@@ -37,6 +37,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/config"
+	"github.com/arcavenae/switchboard/internal/discovery"
 	"github.com/arcavenae/switchboard/internal/drain"
 	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/mgmt"
@@ -932,6 +933,46 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 		}
 	}
 
+	// Construct the shared RouterIngest instance (one per runRouter invocation;
+	// shared across all per-SVTN listener goroutines — RouterIngest is safe for
+	// concurrent use per VP-11 of S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md).
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{
+		Router: router,
+		Logger: routerLogger,
+	})
+
+	// Construct the per-(SVTNID, NodeAddr) relay rate cap (AC-018, SEC-DW-09).
+	// Constructed once; captured by onRelay below. Mutex-guarded inside its own
+	// type (Decision 3 concurrency requirement — safe for concurrent callers from
+	// multiple per-SVTN listener goroutines).
+	relayRateCap := newRelayRateCap()
+
+	// onRelay: inline closure capturing router, &sendMap, relayRateCap.
+	// Called by each wireDiscoveryListener goroutine when decision.Relay==true.
+	// Matches the DRAIN observer seam (VP-14, parent ruling Decision 3).
+	// See S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md Decision 1/Decision 3.
+	onRelay := func(decision discovery.RouterIngestDecision) {
+		if !relayRateCap.allow(decision.SVTNID, decision.NodeAddr) {
+			return // silent drop — AC-018, SEC-DW-09
+		}
+		relayDispatch(router, &sendMap, decision)
+	}
+
+	// Discovery listener startup loop (Task 6d — S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md
+	// Decision 4): spawn one wireDiscoveryListener goroutine per admitted SVTN.
+	// Uses ingressCtx (torn down by ingressCancel() in the shutdown block) so
+	// listeners exit when ingress is cancelled — the same cancel-via-close idiom
+	// already used by wireDiscoveryListener's internal context watcher goroutine.
+	// discoveryWG is NOT writerWG: a dedicated WaitGroup keeps the two goroutine
+	// families semantically distinct and preserves writerWG's carefully-documented
+	// shutdown invariant (VP-9).
+	var discoveryWG sync.WaitGroup
+	for svtnID := range routerKS.AllSVTNEntries() {
+		svtnID := svtnID // per-goroutine capture (Go loop variable semantics)
+		discoveryWG.Add(1)
+		go wireDiscoveryListener(ingressCtx, &discoveryWG, svtnID, ri, w, onRelay)
+	}
+
 	// Block until context is cancelled, a SIGHUP reload event fires, or an
 	// RPC-triggered drain request arrives.
 	// (ARCH-01 lifecycle contract; S-7.04-FU-SIGHUP-RELOAD two-case select,
@@ -1077,6 +1118,15 @@ shutdown:
 	// line returns (doneOnce makes a second close from the flush pass
 	// above, if it already fired, a harmless no-op).
 	dataWG.Wait()
+
+	// Join all discovery listener goroutines. ingressCancel() (above) already
+	// fired before dataWG.Wait(), so each listener's context watcher goroutine
+	// has closed its UDP socket, causing ReadFromUDP to return with ctx.Err()
+	// set — the listener returns nil and wg.Done() fires. This wait is proven
+	// prompt: no listener can outlive ingressCancel() + conn.Close() + one
+	// ReadFromUDP error return.
+	// Decision 4 of S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md.
+	discoveryWG.Wait()
 
 	// Final UNBOUNDED join — the SOLE writerWG.Wait() call in the entire
 	// sequence. Safe on the grounds that no writerWG.Add(1) can occur

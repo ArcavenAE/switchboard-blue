@@ -9,23 +9,18 @@
 // advertisements directly from another node's socket (AC-001 postcondition
 // 2, verified by inspection: neither imports internal/discovery).
 //
-// Multi-SVTN group-membership dynamics — which SVTN group address(es) a
-// running router process should join at startup, and how that set changes
-// as SVTNs are admitted or reloaded — is EXPLICITLY NOT resolved by this
-// function or this story. internal/admission.AdmittedKeySet exposes no
-// SVTN-enumeration method and no admission-event hook (the nodeConnHook/
-// drainObserverFiredHook pattern this codebase uses elsewhere for other
-// lifecycle events has no SVTN-admission equivalent), and config.Config
-// carries no static SVTN identifier — so runRouter has no data source from
-// which to derive "which SVTNs to join at startup" without inventing new
-// production API surface in internal/admission or internal/routing, which
-// this story's File-Change List does not authorize (it lists only
-// cmd/switchboard/mgmt_wire.go as touched for this concern). Wiring
-// wireDiscoveryListener into runRouter's daemon lifecycle is therefore left
-// to a follow-on story once an SVTN-admission-event source exists;
-// wireDiscoveryListener itself is fully implemented and independently
-// tested (TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly), ready
-// for that story to call.
+// Task 6d wired wireDiscoveryListener into runRouter's daemon lifecycle:
+// runRouter iterates routerKS.AllSVTNEntries() at startup and spawns one
+// listener goroutine per admitted SVTN, passing an onRelay inline closure that
+// chains RouterIngest.Ingest → relayRateCap.allow → relayDispatch.
+//
+// Dynamic SVTN group join/leave (Forward Obligation g): SVTNs admitted after
+// runRouter startup via wireAdmissionSyncHandlers push do not automatically
+// get a discovery listener goroutine. A follow-on story must add an
+// admission-event hook (analogous to nodeConnHook) to call
+// wireDiscoveryListener for newly admitted SVTNs. This requires new API
+// surface in wireAdmissionSyncHandlers and is outside the current story's
+// File-Change List.
 //
 // Purity classification (ARCH-09): effectful-boundary — network I/O
 // (multicast socket bind/join/read).
@@ -88,7 +83,23 @@ const discoveryReadBufSize = discovery.MaxDiscoveryDatagramSize
 // inside Ingest itself — so this loop does not log per-rejected-datagram
 // and does not exit on an Ingest error; it only exits on a real socket
 // error or ctx cancellation.
-func wireDiscoveryListener(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer) error {
+//
+// onRelay, if non-nil, is invoked for every datagram where
+// decision.Relay == true (HMAC-verified, replay-accepted). The callback
+// contract is: the caller receives only relay-worthy decisions; nil is
+// a valid no-op (discard relay dispatch — same behaviour as today's
+// blank-identifier discard; fail-safe rather than fail-open, as nil
+// suppresses relay amplification without affecting the HMAC/replay-gate
+// invariants enforced by RouterIngest.Ingest; ruling Decision 2 nil semantics).
+// See S-BL.DISCOVERY-WIRE-task6d-wiring-seam-ruling.md Decision 1/2.
+func wireDiscoveryListener(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	svtnID [16]byte,
+	ri *discovery.RouterIngest,
+	w io.Writer,
+	onRelay func(discovery.RouterIngestDecision),
+) error {
 	defer wg.Done()
 
 	groupAddr := discovery.MulticastAddrFor(svtnID)
@@ -119,8 +130,12 @@ func wireDiscoveryListener(ctx context.Context, wg *sync.WaitGroup, svtnID [16]b
 		raw := make([]byte, n)
 		copy(raw, buf[:n])
 
-		if _, ingestErr := ri.Ingest(raw); ingestErr != nil {
+		decision, ingestErr := ri.Ingest(raw)
+		if ingestErr != nil {
 			continue
+		}
+		if decision.Relay && onRelay != nil {
+			onRelay(decision)
 		}
 	}
 }
