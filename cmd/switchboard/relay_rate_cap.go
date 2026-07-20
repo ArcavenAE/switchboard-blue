@@ -19,6 +19,13 @@ type relayRateKey struct {
 	nodeAddr [8]byte
 }
 
+// maxRelayRateCapEntries is the upper bound on the relayRateCap.last map size
+// (SEC-DW-10, map-bounding-ruling.md Decision 1). When len(c.last) exceeds
+// half this value, allow() runs an amortized prune sweep that evicts all
+// entries whose stored timestamp is older than c.interval (stale by the same
+// criterion the rate-cap decision logic itself uses).
+const maxRelayRateCapEntries = 65536
+
 // relayRateCap enforces a ~1/sec per-(SVTNID, NodeAddr) rate cap on relay
 // dispatch (AC-018, SEC-DW-09). Multiple per-SVTN listener goroutines (Task 6d)
 // will share one instance, so all methods are concurrency-safe via a single
@@ -67,6 +74,19 @@ func (c *relayRateCap) allow(svtnID [16]byte, nodeAddr [8]byte) bool {
 
 	key := relayRateKey{svtnID: svtnID, nodeAddr: nodeAddr}
 	t := c.now()
+
+	// Amortized prune-by-age sweep (SEC-DW-10, map-bounding-ruling.md Decision 1):
+	// when the map exceeds half the cap, delete every entry whose stored timestamp
+	// is stale (older than c.interval). Uses the same staleness criterion as the
+	// allow/deny decision below for consistency. O(N) but triggered at most once
+	// per cap/2 insertions, so amortised cost is O(1) per call.
+	if len(c.last) > maxRelayRateCapEntries/2 {
+		for k, storedTS := range c.last {
+			if t.Sub(storedTS) >= c.interval {
+				delete(c.last, k)
+			}
+		}
+	}
 
 	if last, seen := c.last[key]; seen && t.Sub(last) < c.interval {
 		// Within the cap window: silent drop. Increment the non-gating counter
