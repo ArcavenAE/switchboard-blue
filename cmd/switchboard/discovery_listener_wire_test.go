@@ -177,8 +177,9 @@ func TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs(t *testing.T) {
 //     dispatch, frame reader)
 //
 // This composition is exercised at UNIT level by:
-//   - TestRelayDispatch_FanOut_* (discovery_relay_wire_test.go): exercises
-//     relayDispatch with a net.Pipe-based sendMap directly
+//   - TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking
+//     (discovery_relay_wire_test.go): exercises relayDispatch with a
+//     net.Pipe-based sendMap directly
 //   - TestRelayDispatch_RateCap_* (discovery_relay_wire_test.go): exercises
 //     the rate-cap gate with relayDispatch
 //
