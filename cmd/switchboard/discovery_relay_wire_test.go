@@ -1,7 +1,7 @@
 // discovery_relay_wire_test.go covers AC-014, AC-015, AC-016 (DISCOVERY_RELAY
 // hop-2 frame-assembly, Task 5) and AC-017 (hop-2 fan-out dispatch, Task 6b).
-// AC-018 (relay rate cap, Task 6c) is in scope for a follow-on test function
-// in this same file once Task 6c is ready.
+// AC-018 (relay rate cap, Task 6c) is covered in this file by
+// TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst.
 package main
 
 import (

@@ -8,7 +8,7 @@
 // itself (Design Constraint: Router-Mode Discovery Wiring). The caller
 // (cmd/switchboard's multicast listener, Task 3) owns the actual
 // net.ListenMulticastUDP socket and the hop-2 relay-dispatch closure
-// (Task 6, GATED).
+// (onRelay, delivered and wired live in runRouter as of Task 6d).
 //
 // Purity classification (ARCH-09): boundary — RouterIngest holds the
 // per-(SVTN,NodeAddr) lastSeen replay-discard map as of Task 2's Green step
@@ -51,7 +51,8 @@ type RouterIngestConfig struct {
 // returns to its caller. internal/discovery performs no relay I/O itself
 // (Design Constraint: Router-Mode Discovery Wiring) — the caller uses this
 // decision to decide whether to invoke the hop-2 relay-dispatch closure
-// (Task 6, GATED — depends_on S-BL.NODE-IDENTIFY-WIRE) and to construct the
+// (the onRelay closure in runRouter, wired live as of Task 6d with
+// S-BL.NODE-IDENTIFY-WIRE gate satisfied) and to construct the
 // DISCOVERY_RELAY frame (AC-014, Task 5).
 type RouterIngestDecision struct {
 	// Accept records whether the datagram passed HMAC verification
