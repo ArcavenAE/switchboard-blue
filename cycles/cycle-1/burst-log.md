@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "455be0a"
+input-hash: "1f875f7"
 traces_to: STATE.md
 ---
 
@@ -1868,3 +1868,6 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 |------|------|--------|--------|
 | 2026-07-18 | **S-BL.ADMISSION-SYNC-WIRE DELIVERED — PR #126 squash-merged to develop @ 92a2c65; step-4.5 impl-diff 3/3 NITPICK_ONLY (passes 10/11/12); 4 architect rulings (12-15); BC-2.05.009 v1.0→v1.6; 13 ACs, 12 pts.** | completed | PR #126 MERGED. develop @ 92a2c65. NODE-IDENTIFY-WIRE admission-sync leg UNBLOCKED. |
 
+| 2026-07-18 | **S-BL.NODE-ADMISSION-PROVISIONING retroactively reconciled — DELIVERED via PR #125 @ ce06f6a (mergedAt 2026-07-16); NODE-IDENTIFY-WIRE UNBLOCKED: both legs cleared.** | completed | PR #125 MERGED. develop @ ce06f6a. Both identity-cluster prerequisites cleared. |
+
+| 2026-07-19 | **S-BL.NODE-IDENTIFY-WIRE DELIVERED — PR #127 squash-merged to develop @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 13 ACs, 10 pts; F-1 (HIGH verify-source) + MED-1 (AdmitNode godoc) + LOW-1 (E-ADM-022 log) + F-2 (log-coverage) fixed; post-merge sec review recorded. SEC-NIDW-SVTNID-CONSISTENCY follow-up story authored.** | completed | PR #127 MERGED. develop @ 7fcf0cf. DISCOVERY-WIRE AC-017/018/Task 6 UNBLOCKED. |

@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "455be0a"
+input-hash: "03f5d8f"
 traces_to: STATE.md
 ---
 
@@ -772,3 +772,14 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 **Phase 5 trajectory:** P1→P31 (see session-checkpoints.md) → P32 BOTH LANES CLEAN → streak 0/3→1/3 → P33 BOTH LANES CLEAN → streak 1/3→2/3 → P34 Adv-A HAS_FINDINGS 2H taxonomy-orphan + Adv-B NO_FINDINGS → streak RESET 2/3→0/3 → Burst 82 REMEDIATED → P35 Adv-A HAS_FINDINGS 1M governance-premise-stale + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 85 REMEDIATED → P36 Adv-A HAS_FINDINGS 1H+1M + Adv-B NO_FINDINGS → streak HOLDS 0/3 → Burst 87+88 REMEDIATED (v1.14) → P37 BOTH LANES CLEAN → streak 0/3→1/3 → P38 BOTH LANES CLEAN → streak 1/3→2/3 → **P39 BOTH LANES CLEAN → streak 2/3→3/3 → BC-5.39.001 CONVERGED**
 
 **Next action (superseded — Phase 6 through Phase 7 convergence through steady-state all completed in subsequent sessions; this checkpoint carried STATE.md's Session Resume Checkpoint slot unchanged from 2026-07-04 through the S-7.04-FU-DRAIN-WIRE delivery on 2026-07-12, when it was archived here and replaced with the current checkpoint):** Phase 6 (formal hardening) dispatch — formal-verifier for VP proofs, fuzzing, mutation testing, security scanning.
+
+---
+
+## Checkpoint: S-BL.CLI-SURFACE-COMPLETION DELIVERED (archived from STATE.md at S-BL.ADMISSION-SYNC-WIRE delivery burst, 2026-07-18)
+
+**Timestamp:** 2026-07-13T19:23:54Z
+**Position:** S-BL.CLI-SURFACE-COMPLETION DELIVERED 2026-07-13 — PR #122 squash-merged to `develop` @ `1f25677d00a3f6bc5f96f1a0a0571033ade9eb6a` (2026-07-13T19:23:54Z, mergedBy arcavenai); CI 6/6 SUCCESS at head `95a9d6ae554008e8cdb5ba809ce9f56615a7ba56`; remote feature branch deleted; worktree cleanup pending (orchestrator). Both adversarial arcs converged: spec-adversarial 3/3 @ pass 9 (9 passes, 10 findings all remediated), step-4.5 implementation-diff 3/3 @ pass 7 (7 passes, 6 findings all remediated same-pass). pr-review ran 2 rounds — round 1 found 2 blockers (PR-description Blast Radius, a CI-only `-race` flake widened by AC-013's register-before-serve) + 1 security LOW (CWE-20/150, missing `validateSVTNName` sibling-parity in `admin.svtn.status`); round 2 confirmed all three genuinely resolved and APPROVEd. Merge gate: COMMENTED-review disposition APPROVE + CI green, per `drbothen/vsdd-factory#626` single-identity convention. `pr-review.md` relocated from stray worktree-relative path to canonical `.factory/code-delivery/S-BL.CLI-SURFACE-COMPLETION/pr-review.md`. Full delivery record: `cycles/cycle-1/S-BL.CLI-SURFACE-COMPLETION/implementation/red-gate-log.md`.
+
+Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement attempt STOPPED (PAT-03 instance 2 — `testenv.NewLoopback` is a compile-shim, discards `LoopbackConfig`, drives no ticks, imports no halfchannel/arq/multipath); lower-bound bench migrated to the canonical API and MERGED as PR #121 @ `4c276d9`. Residual re-anchored to a new story, `S-BL.LOOPBACK-FULLSTACK` (draft v1.0, P2, 8 points, AC-001 hard-gates implementation on an `arq.OnAck` call-contract sign-off). HS-006 holdout re-evaluated fresh at `f73676d`: 0.895 PASS. POL-005 (adversary-dispatch-integrity) registered in `policies.yaml` v1.4. Session-review cycle-1 dispositions processed (11 approved / 1 deferred). S-7.04-FU-DRAIN-WIRE MERGED PR #120 @ f73676d. S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2. S-BL.DISCOVERY-WIRE Tasks 1-5 MERGED PR #123 @ d249f88.
+
+**Next action (superseded by S-BL.ADMISSION-SYNC-WIRE delivery):** Select next story — S-BL.ADMISSION-SYNC-WIRE was next per identity-cluster prerequisite order (leaf story, blocks NODE-IDENTIFY-WIRE); dispatched 2026-07-15–2026-07-18.
