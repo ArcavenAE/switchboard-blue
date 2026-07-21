@@ -10,6 +10,21 @@ producer: story-writer
 timestamp: 2026-07-01T00:00:00
 modified:
   - date: 2026-07-20
+    version: "2.27"
+    change: >
+      Step-4.5 traceability F-1 (MED) remediation + EXHAUSTIVE version-pin audit. Root fix for
+      the recurring narrowed-sweep-grep miss class (3rd instance: cf. F-DWSP6-001 line-wrap,
+      F-DWSP11-001 paren-form): performed a full-story audit of EVERY declared-input version pin
+      across ALL structural forms (suffix / paren / possessive / line-wrapped). Corrected the
+      two live-body Decision-3 spots the v2.26 sweep missed: 3(c) `BC-2.03.001 PC-5
+      (v1.6→v1.7, already landed)` and 3(h) `v1.6→v1.7's PC-5 sentence` (PC-5 content
+      byte-stable; substance unchanged). All live-prose current-version pins now match canonical
+      (BC-2.03.001 v1.7, BC-2.03.002 v1.5, BC-2.01.008 v1.3, ARCH-03 v1.8, VP-080 v1.7,
+      VP-044 v1.2, VP-045 v1.4, map-bounding v1.2, rulings v1.11; landed-at/point-in-time
+      citations correctly retained). Added paren-form `(vN` and possessive-form `vN's` variants
+      to the standing re-cert sweep-set. Body-only; input-hash unchanged at def6b7b. count 18,
+      points 8, status ready — unchanged.
+  - date: 2026-07-20
     version: "2.26"
     change: >
       Step-4.5 Pass-2 F-1 (MED) remediation — two declared-input BCs pinned stale in story
@@ -767,7 +782,7 @@ modified:
       `input-hash`, `traces_to`, `behavioral_contracts`, `verification_properties`,
       `target_module`, `estimated_days`, `assumption_validations`, `risk_mitigations`).
       `input-hash` computed via `compute-input-hash --update`.
-version: "2.26"
+version: "2.27"
 phase: 2
 epic: E-7
 wave: backlog
@@ -1073,7 +1088,7 @@ undiluted.
 
 **(c) Payload — re-serialized, not a raw relay of hop-1's UDP bytes.** Hop-1's HMAC is scoped to
 the wire path/key that produced it and has no meaning to a receiving node — forwarding it verbatim
-would misleadingly imply the receiving node could re-verify it, which BC-2.03.001 PC-5 (v1.6,
+would misleadingly imply the receiving node could re-verify it, which BC-2.03.001 PC-5 (v1.7,
 already landed) explicitly forecloses. Layout, respecting `BC-2.01.008` PC-3's fixed 4-byte
 control header and its extend-beyond-byte-3 allowance (Invariant 5/DI-007):
 
@@ -1168,7 +1183,7 @@ elaboration does not pick one unilaterally.
 **(g) `BC-2.01.008` registry row — already landed.** v1.2, executed by product-owner between
 ruling v1.2 and v1.3. No story-writer or implementer action.
 
-**(h) `BC-2.03.001` needs no further amendment for hop-2 — confirmed, not assumed.** v1.6's PC-5
+**(h) `BC-2.03.001` needs no further amendment for hop-2 — confirmed, not assumed.** v1.7's PC-5
 sentence ("access and console nodes never independently look up or re-verify another node's
 `DiscoveryAuthKey`; they receive already-authenticated advertisements via the router's relay over
 their own admitted connection") already describes the trust model this ruling formalizes.
@@ -2194,6 +2209,7 @@ pass result rather than reviewing stale state.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.27 | 2026-07-20 | **Step-4.5 traceability F-1 (MED) remediation + EXHAUSTIVE version-pin audit. Root fix for the recurring narrowed-sweep-grep miss class (3rd instance: cf. F-DWSP6-001 line-wrap, F-DWSP11-001 paren-form): performed a full-story audit of EVERY declared-input version pin across ALL structural forms (suffix / paren / possessive / line-wrapped). Corrected the two live-body Decision-3 spots the v2.26 sweep missed: 3(c) `BC-2.03.001 PC-5 (v1.6→v1.7, already landed)` and 3(h) `v1.6→v1.7's PC-5 sentence` (PC-5 content byte-stable; substance unchanged). All live-prose current-version pins now match canonical (BC-2.03.001 v1.7, BC-2.03.002 v1.5, BC-2.01.008 v1.3, ARCH-03 v1.8, VP-080 v1.7, VP-044 v1.2, VP-045 v1.4, map-bounding v1.2, rulings v1.11; landed-at/point-in-time citations correctly retained). Added paren-form `(vN` and possessive-form `vN's` variants to the standing re-cert sweep-set. Body-only; `input-hash` unchanged at `def6b7b`. `count` 18, `points` 8, `status` ready — unchanged.** |
 | 2.26 | 2026-07-20 | **Step-4.5 Pass-2 F-1 (MED) remediation — two declared-input BCs pinned stale in story prose: BC-2.03.001 v1.6→v1.7 (10 spots: inputDocuments comment + 3 body + 7 Anchors Consumed rows; v1.7 added PC-4 = `discovery.Config.LocalNodeAdmissionPubkey`, populated by BC-2.09.004 / S-BL.NODE-ADMISSION-PROVISIONING — annotated as out-of-scope; story consumes PC-1/2/3+PC-5, unchanged substance) and BC-2.01.008 v1.2→v1.3 (inputDocuments comment + 1 Anchors row; v1.3 added NODE_IDENTIFY=0x04 row). The 2026-07-15 BC bumps fell through 10+ story-version re-cert sweeps because the sweep grep-set had narrowed to rulings/VP patterns and dropped the BC-2.03.001/BC-2.01.008 patterns (process-gap). Restored those patterns to the standing re-cert sweep set. Substance cited unchanged between pinned and canonical versions — no AC/behavior affected. Body/metadata-only; `input-hash` unchanged at `def6b7b` (declared-input bytes already captured). `count` 18, `points` 8, `status` ready — unchanged.** |
 | 2.25 | 2026-07-20 | **Step-4.5 Pass-1 F-1 (MED) remediation — SEC-DW-10 body forward-advance clause still asserted the pre-v1.2 absolute self-eviction guarantee ('k cannot be selected as its own LRU victim'); the v2.24 burst corrected this everywhere else (code comment, frontmatter, STORY-INDEX, ruling v1.2) but missed the story-body transcription. Corrected to 'improbable — not impossible; benign if evicted' matching ruling v1.2 Decision 8. Also disambiguated the sibling Decision-8 version pin (v1.1 provenance → 'introduced v1.1, rationale refined v1.2'). Body-only; `input-hash` unchanged at `def6b7b` (no `inputs:` file changed). `count` 18, `points` 8, `status` ready — unchanged.** |
 | 2.24 | 2026-07-20 | **Step-4.5 Pass-1/Pass-2 reconvergence remediation.** (F-1 MED) FCL row for `relay_rate_cap_test.go` corrected `modify`→`create` (file absent at develop `7fcf0cf`, added on feature branch at `5d7cdb1`, contains only the 3 map-bounding tests + `newFakeClock`/`makeRelayRateKey` helpers; sibling of the v2.22 `discovery_wire_map_bounding_test.go` correction). (F-2 MED) top-of-body Status note corrected — claimed `draft`/not-promoted, contradicting frontmatter `status: ready` (v2.12 promoted 2026-07-14). (F-3 LOW) Provenance Status bullet explicitly scoped as v2.0-era historical snapshot. Map-bounding-ruling v1.1→v1.2 citation sweep (Pass-2 F-1: ruling Decision 8 self-eviction guarantee corrected to improbable-not-impossible; benign if evicted). `input-hash` 7ff0732→def6b7b (ruling input bytes changed). `count` 18, `points` 8, `status` ready — unchanged. |
