@@ -34,12 +34,19 @@ const maxRelayRateCapEntries = 65536
 //
 // The now field is injectable for deterministic test control, mirroring the
 // tokenBucket.now pattern in internal/discovery/discovery_wire.go.
+//
+// The maxEntries field overrides the production cap for tests that need a
+// small cap to avoid iterating 65536 times under the race detector. Production
+// callers use newRelayRateCap() which leaves maxEntries at zero, meaning
+// maxRelayRateCapEntries is used. Tests use newRelayRateCapWithMax(n) to set
+// a small cap.
 type relayRateCap struct {
-	mu        sync.Mutex
-	last      map[relayRateKey]time.Time
-	suppCount uint64
-	interval  time.Duration
-	now       func() time.Time
+	mu         sync.Mutex
+	last       map[relayRateKey]time.Time
+	suppCount  uint64
+	interval   time.Duration
+	now        func() time.Time
+	maxEntries int // 0 means use maxRelayRateCapEntries
 }
 
 // newRelayRateCap returns a relay rate cap with a 1-second interval and
@@ -51,6 +58,26 @@ func newRelayRateCap() *relayRateCap {
 		interval: time.Second,
 		now:      time.Now,
 	}
+}
+
+// newRelayRateCapWithMax returns a relay rate cap with a custom maxEntries cap.
+// Intended for tests that need a small cap to avoid 65536-iteration loops under
+// the race detector. Production code uses newRelayRateCap().
+func newRelayRateCapWithMax(maxEntries int) *relayRateCap {
+	return &relayRateCap{
+		last:       make(map[relayRateKey]time.Time),
+		interval:   time.Second,
+		now:        time.Now,
+		maxEntries: maxEntries,
+	}
+}
+
+// capLimit returns the effective maxEntries for this cap instance.
+func (c *relayRateCap) capLimit() int {
+	if c.maxEntries > 0 {
+		return c.maxEntries
+	}
+	return maxRelayRateCapEntries
 }
 
 // allow reports whether a relay dispatch for (svtnID, nodeAddr) should proceed.
@@ -80,7 +107,7 @@ func (c *relayRateCap) allow(svtnID [16]byte, nodeAddr [8]byte) bool {
 	// is stale (older than c.interval). Uses the same staleness criterion as the
 	// allow/deny decision below for consistency. O(N) but triggered at most once
 	// per cap/2 insertions, so amortised cost is O(1) per call.
-	if len(c.last) > maxRelayRateCapEntries/2 {
+	if len(c.last) > c.capLimit()/2 {
 		for k, storedTS := range c.last {
 			if t.Sub(storedTS) >= c.interval {
 				delete(c.last, k)

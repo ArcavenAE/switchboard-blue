@@ -17,11 +17,13 @@ import (
 	"time"
 )
 
-// testRelayRateCapMax is the cap value the ruling mandates
-// (maxRelayRateCapEntries = 65536, Decision 1). Written as a test-local
-// literal so the package compiles before the production constant exists;
-// the implementer's const must match this value.
-const testRelayRateCapMax = 65536
+// testRelayRateCapMax is the small cap value used in bounding tests to avoid
+// iterating 65536 times under the race detector. Set to 16 so each test
+// only needs 17-33 allow() calls rather than 65537. The production constant
+// (maxRelayRateCapEntries = 65536) is verified in TestRelayRateCapProdConst
+// below. Tests use newRelayRateCapWithMax(testRelayRateCapMax) to inject this
+// small cap while exercising the same code paths.
+const testRelayRateCapMax = 16
 
 // newFakeClock returns a func() time.Time whose returned value is controlled
 // by the caller via the returned *time.Time pointer.
@@ -59,7 +61,9 @@ func TestRelayRateCap_MapBounded_AfterStaleEntries(t *testing.T) {
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	clk, ts := newFakeClock(base)
 
-	c := newRelayRateCap()
+	// Use a small cap (testRelayRateCapMax = 16) so the test only needs
+	// 17 allow() calls rather than 65537 under the race detector.
+	c := newRelayRateCapWithMax(testRelayRateCapMax)
 	c.now = clk
 
 	// Insert testRelayRateCapMax+1 distinct keys at time T=base.
@@ -114,7 +118,8 @@ func TestRelayRateCap_StalePrunedKey_ReAllowed(t *testing.T) {
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	clk, ts := newFakeClock(base)
 
-	c := newRelayRateCap()
+	// Use a small cap so the prune threshold is crossed with few entries.
+	c := newRelayRateCapWithMax(testRelayRateCapMax)
 	c.now = clk
 
 	// Insert key K at time T.
@@ -174,7 +179,8 @@ func TestRelayRateCap_ActiveKeys_NotPruned(t *testing.T) {
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	clk, ts := newFakeClock(base)
 
-	c := newRelayRateCap()
+	// Use a small cap so the prune threshold is crossed with few entries.
+	c := newRelayRateCapWithMax(testRelayRateCapMax)
 	c.now = clk
 
 	// Insert active key K at time T.
@@ -218,14 +224,29 @@ func TestRelayRateCap_ActiveKeys_NotPruned(t *testing.T) {
 		t.Error("active key K was pruned — prune must NOT remove keys within the interval")
 	}
 	// Discriminating assertion: after the prune sweep runs (triggered because
-	// len(c.last) > testRelayRateCapMax/2 = 32768), all stale entries must be
-	// deleted. Only K (with fresh timestamp base) survives. So post-sweep size
-	// must be ≤ 2 (K + the trigger key).
-	// Without the prune, size = testRelayRateCapMax/2+2 = 32770 → FAILS this
+	// len(c.last) > testRelayRateCapMax/2 = 8 with our small cap), all stale
+	// entries must be deleted. Only K (with fresh timestamp base) survives. So
+	// post-sweep size must be ≤ 2 (K + the trigger key).
+	// Without the prune, size = testRelayRateCapMax/2+2 = 10 → FAILS this
 	// assertion, making the test discriminating.
 	const maxPostSweepSize = 2 // K (fresh) + trigger key
 	if size > maxPostSweepSize {
 		t.Errorf("len(c.last) = %d after prune sweep, want ≤ %d (stale entries must be removed; prune not yet implemented)",
 			size, maxPostSweepSize)
+	}
+}
+
+// TestRelayRateCapProdConst verifies that the production constant
+// maxRelayRateCapEntries equals the mandated 65536 (SEC-DW-10,
+// map-bounding-ruling.md Decision 1). The three bounding tests above use the
+// small testRelayRateCapMax = 16 seam to avoid 65536-iteration loops under
+// the race detector; this test ensures the production cap value itself is
+// correct.
+func TestRelayRateCapProdConst(t *testing.T) {
+	t.Parallel()
+	const want = 65536
+	if maxRelayRateCapEntries != want {
+		t.Errorf("maxRelayRateCapEntries = %d, want %d (SEC-DW-10, map-bounding-ruling.md Decision 1)",
+			maxRelayRateCapEntries, want)
 	}
 }
