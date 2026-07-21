@@ -2023,3 +2023,81 @@ func TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin(t *testing.T) {
 		t.Fatal("AC-003 postcondition 1: timed out waiting for a multicast datagram from Advertise")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// BC-2.03.003 PC-2 — DecodeSessionList must reject non-UTF-8 session names
+// (Step-4.5 pass-1 HIGH; VP-055)
+// ---------------------------------------------------------------------------
+
+// TestDecodeSessionList_RejectsNonUTF8Name is the RED test for the asymmetric
+// validation gap: DecodeSessionList accepted arbitrary bytes as session names
+// while encodedSessionName (and the relay assembly path) required valid UTF-8.
+// A non-UTF-8 name passing Ingest reached assembleDiscoveryRelayFrame which
+// panics on ErrInvalidSessionName, crashing the router daemon.
+//
+// BC-2.03.003 Postcondition 2: "Session names are UTF-8 encoded, maximum 255
+// bytes." VP-055: "invalid names rejected." The decoder is the spec violation —
+// the ingest-accept set must be a strict subset of the encode-valid set.
+func TestDecodeSessionList_RejectsNonUTF8Name(t *testing.T) {
+	t.Parallel()
+
+	invalidUTF8 := []byte{0xFF, 0xFE, 0xFF}
+	// Sanity: confirm the bytes are in fact invalid UTF-8 so the test
+	// is honest about what it exercises.
+	if utf8.Valid(invalidUTF8) {
+		t.Fatal("test setup: byte sequence must be invalid UTF-8")
+	}
+
+	// Build a session-list body by hand:
+	//   uint16 count=1
+	//   uint16 nameLen=3
+	//   3 invalid-UTF-8 bytes
+	//   uint8 status (Detached=0)
+	//   uint8 quality (QualityGreen=0)
+	body := make([]byte, 0, 2+2+3+1+1)
+	body = binary.BigEndian.AppendUint16(body, 1)                        // count=1
+	body = binary.BigEndian.AppendUint16(body, uint16(len(invalidUTF8))) // nameLen=3
+	body = append(body, invalidUTF8...)
+	body = append(body, byte(discovery.Detached), byte(discovery.QualityGreen))
+
+	sessions, err := discovery.DecodeSessionList(body)
+	if err == nil {
+		t.Fatalf("DecodeSessionList(non-UTF-8 name): got nil error, want ErrInvalidSessionName; sessions=%v (BC-2.03.003 PC-2, VP-055)", sessions)
+	}
+	if !errors.Is(err, discovery.ErrInvalidSessionName) {
+		t.Errorf("DecodeSessionList(non-UTF-8 name): got %v, want errors.Is(err, ErrInvalidSessionName)", err)
+	}
+	if sessions != nil {
+		t.Errorf("DecodeSessionList(non-UTF-8 name): got non-nil sessions %v, want nil", sessions)
+	}
+}
+
+// TestDecodeSessionList_AcceptsValidMultibyteUTF8Name is the regression guard:
+// the UTF-8 fix must not reject valid multibyte UTF-8 session names.
+// "日本語" is 9 bytes, 3 runes — a representative non-ASCII valid UTF-8 string.
+func TestDecodeSessionList_AcceptsValidMultibyteUTF8Name(t *testing.T) {
+	t.Parallel()
+
+	name := "日本語"
+	nameBytes := []byte(name)
+	if !utf8.Valid(nameBytes) {
+		t.Fatal("test setup: name must be valid UTF-8")
+	}
+
+	body := make([]byte, 0, 2+2+len(nameBytes)+1+1)
+	body = binary.BigEndian.AppendUint16(body, 1)
+	body = binary.BigEndian.AppendUint16(body, uint16(len(nameBytes)))
+	body = append(body, nameBytes...)
+	body = append(body, byte(discovery.Attached), byte(discovery.QualityGreen))
+
+	sessions, err := discovery.DecodeSessionList(body)
+	if err != nil {
+		t.Fatalf("DecodeSessionList(valid multibyte UTF-8 name %q): unexpected error: %v", name, err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("DecodeSessionList: got %d sessions, want 1", len(sessions))
+	}
+	if sessions[0].SessionName != name {
+		t.Errorf("DecodeSessionList: got SessionName=%q, want %q", sessions[0].SessionName, name)
+	}
+}

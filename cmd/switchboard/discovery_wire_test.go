@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"io"
 	"net"
 	"sync"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/discovery"
+	"github.com/arcavenae/switchboard/internal/frame"
 	"github.com/arcavenae/switchboard/internal/routing"
 	"github.com/arcavenae/switchboard/internal/testenv"
 )
@@ -35,13 +38,13 @@ func redGateGuard(t *testing.T) {
 // cannot protect a panic raised inside a separately-spawned goroutine. This
 // helper is that goroutine-local recovery point; the caller inspects
 // `panicked` and fails the test explicitly from the main test goroutine.
-func callWireDiscoveryListenerRecovered(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer) (panicked any, err error) {
+func callWireDiscoveryListenerRecovered(ctx context.Context, wg *sync.WaitGroup, svtnID [16]byte, ri *discovery.RouterIngest, w io.Writer, onRelay func(discovery.RouterIngestDecision)) (panicked any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = r
 		}
 	}()
-	err = wireDiscoveryListener(ctx, wg, svtnID, ri, w)
+	err = wireDiscoveryListener(ctx, wg, svtnID, ri, w, onRelay)
 	return panicked, err
 }
 
@@ -98,7 +101,7 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 	// site in this package.
 	wg.Add(1)
 	go func() {
-		p, err := callWireDiscoveryListenerRecovered(ctx, &wg, svtnID, ri, io.Discard)
+		p, err := callWireDiscoveryListenerRecovered(ctx, &wg, svtnID, ri, io.Discard, nil)
 		resultCh <- result{err: err, panicked: p}
 	}()
 
@@ -166,6 +169,237 @@ func TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly(t *testing.T) {
 		}
 		if r.err != nil && ctx.Err() == nil {
 			t.Errorf("wireDiscoveryListener: unexpected error: %v", r.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("wireDiscoveryListener did not return after ctx cancellation")
+	}
+	wg.Wait()
+}
+
+// TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue is the ruling-mandated
+// wiring-seam test (task6d-wiring-seam-ruling.md v1.0 RED checklist). It
+// exercises the decision-threading branch in wireDiscoveryListener:
+//
+//	if decision.Relay && onRelay != nil { onRelay(decision) }
+//
+// (the `if decision.Relay && onRelay != nil { onRelay(decision) }` branch in wireDiscoveryListener) — the load-bearing seam that the orchestrator
+// flagged as inspection-only coverage before this test existed.
+//
+// Test strategy: REAL datagram path (preferred over any fallback). We admit a
+// real Ed25519 public key into an AdmittedKeySet, build a RouterIngest from
+// the resulting router (exactly the AC-005/AC-006 pattern used by
+// TestDiscovery_EncodeThenRouterIngest_AcceptsRealAdmittedNode in
+// internal/discovery/discovery_wire_test.go), and use discovery.Encode()
+// to produce a cryptographically valid hop-1 multicast datagram for Sequence=0
+// (cold start → decision.Relay == true per AC-008). We then send it through a
+// real UDP socket to the multicast group and observe the onRelay closure firing.
+//
+// Two assertions (discriminating by contract):
+//  1. onRelay FIRES for a valid HMAC, cold-start Sequence datagram — proves the
+//     `decision.Relay && onRelay != nil` branch is exercised and onRelay is
+//     invoked with the decision carrying Relay==true.
+//  2. onRelay does NOT fire for an HMAC-invalid datagram (wrong tag) — proves
+//     that the HMAC/replay gate must pass for the branch to be entered; onRelay
+//     is not invoked for reject-path datagrams.
+//
+// Discriminating evidence: if the `onRelay(decision)` call were removed from
+// wireDiscoveryListener, assertion (1) would fail because `fired` stays false
+// and no decision is captured. The test cannot pass vacuously without the
+// branch being reached.
+//
+// NOT t.Parallel(): binds a real loopback multicast UDP socket on a fixed port
+// (discovery.DiscoveryPort). Must not run concurrently with
+// TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly.
+//
+// Traces to task6d-wiring-seam-ruling.md v1.0 RED checklist; AC-001/AC-008/
+// AC-010; BC-2.03.001 Postcondition 1 delivery-mechanism note; Invariant 1
+// (DI-004); ruling Decision 1/2 (onRelay nil semantics and threading).
+func TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue(t *testing.T) {
+	testenv.RequireMulticastLoopback(t)
+
+	// ----- Test setup -----
+	// Admit a real Ed25519 public key into the AdmittedKeySet under our test
+	// SVTN ID. This is the AC-005/AC-006 pattern: ks.RegisterKey(svtnID, pub,
+	// admission.RoleAccess) + frame.DeriveNodeAddress(svtnID, pub) gives the
+	// nodeAddr that discovery.Encode will embed in the datagram, and that
+	// RouterIngest uses for key lookup.
+	svtnID := [16]byte{0x77, 0x77, 0x77, 0x77}
+
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate admission key: %v", err)
+	}
+
+	ks := admission.NewAdmittedKeySet()
+	ks.RegisterKey(svtnID, pub, admission.RoleAccess)
+	nodeAddr := frame.DeriveNodeAddress(svtnID, []byte(pub))
+
+	router := routing.NewRouter(ks)
+	ri := discovery.NewRouterIngest(discovery.RouterIngestConfig{Router: router})
+
+	// ----- Relay capture oracle -----
+	// The onRelay closure captures the decision in a mutex-protected struct
+	// (ruling Decision 3 §4: multiple wireDiscoveryListener goroutines may call
+	// onRelay concurrently; the closure must be safe for concurrent callers even
+	// if this test only spawns one listener goroutine).
+	var (
+		mu          sync.Mutex
+		fireCount   int
+		gotDecision discovery.RouterIngestDecision
+	)
+	onRelay := func(d discovery.RouterIngestDecision) {
+		mu.Lock()
+		defer mu.Unlock()
+		fireCount++
+		gotDecision = d
+	}
+
+	// ----- Start the listener -----
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	var wg sync.WaitGroup
+
+	type result struct {
+		err      error
+		panicked any
+	}
+	resultCh := make(chan result, 1)
+	wg.Add(1)
+	go func() {
+		p, listenErr := callWireDiscoveryListenerRecovered(ctx, &wg, svtnID, ri, io.Discard, onRelay)
+		resultCh <- result{err: listenErr, panicked: p}
+	}()
+
+	// Wait up to 500ms for the listener to bind and join the group.
+	select {
+	case r := <-resultCh:
+		if r.panicked != nil {
+			t.Fatalf("red gate: wireDiscoveryListener stub not yet implemented: %v", r.panicked)
+		}
+		// An immediate return (no panic, no error) before we even sent anything
+		// is unexpected for a real listener; surface it as a test setup failure.
+		t.Fatalf("wireDiscoveryListener returned before probe was sent: %v", r.err)
+	case <-time.After(500 * time.Millisecond):
+		// Listener is running.
+	}
+
+	// ----- Assertion 1: onRelay fires for a valid HMAC-authenticated datagram -----
+	// discovery.Encode produces a cryptographically valid hop-1 datagram using
+	// the admitted public key as the nodeAdmissionPubkey argument. Sequence=0
+	// is a cold-start value: RouterIngest.Ingest accepts it unconditionally
+	// (AC-008: no prior lastSeen entry → cold start → decision.Relay == true).
+	validRaw, err := discovery.Encode(discovery.AdvertisementPayload{
+		NodeAddr: nodeAddr,
+		SVTNID:   svtnID,
+		Sequence: 0,
+		Sessions: []discovery.SessionPresence{
+			{SessionName: "relay-test-session", Status: discovery.Attached, Quality: discovery.QualityGreen},
+		},
+	}, []byte(pub))
+	if err != nil {
+		t.Fatalf("Encode valid advertisement: %v", err)
+	}
+
+	groupAddr := discovery.MulticastAddrFor(svtnID)
+	sendConn, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: groupAddr, Port: discovery.DiscoveryPort})
+	if err != nil {
+		t.Fatalf("DialUDP for valid probe: %v", err)
+	}
+	t.Cleanup(func() { _ = sendConn.Close() })
+
+	if _, err := sendConn.Write(validRaw); err != nil {
+		t.Fatalf("Write valid datagram: %v", err)
+	}
+
+	// Poll for the onRelay closure to fire (up to 2s).
+	relayFired := false
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		count := fireCount
+		mu.Unlock()
+		if count > 0 {
+			relayFired = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !relayFired {
+		t.Errorf(
+			"TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue: " +
+				"onRelay was NOT invoked after sending an HMAC-valid cold-start datagram — " +
+				"the decision.Relay && onRelay != nil branch was not reached " +
+				"(ruling RED checklist; the decision.Relay && onRelay != nil branch in wireDiscoveryListener)",
+		)
+	} else {
+		mu.Lock()
+		d := gotDecision
+		mu.Unlock()
+
+		if !d.Relay {
+			t.Errorf("onRelay received decision with Relay == false, want true (cold-start AC-008)")
+		}
+		if d.SVTNID != svtnID {
+			t.Errorf("onRelay decision.SVTNID = %x, want %x", d.SVTNID, svtnID)
+		}
+		if d.NodeAddr != nodeAddr {
+			t.Errorf("onRelay decision.NodeAddr = %x, want %x", d.NodeAddr, nodeAddr)
+		}
+	}
+
+	// ----- Assertion 2: onRelay does NOT fire for an HMAC-invalid datagram -----
+	// Record current fireCount before sending the invalid datagram.
+	mu.Lock()
+	countBefore := fireCount
+	mu.Unlock()
+
+	// Build a datagram with a deliberately-wrong HMAC tag (all zeroes, which
+	// will not verify against the admitted key). RouterIngest.Ingest will
+	// return ErrInvalidHMACTag → decision.Relay = false → onRelay not called.
+	// Wire layout: [8]byte HMAC tag | body (svtnID + nodeAddr + Sequence +
+	// session list). Pad to 42 bytes (minimum valid-frame size) to pass the
+	// keySelectorMinRaw guard and exercise the HMAC-fail branch, not the
+	// short-datagram branch.
+	invalidRaw := make([]byte, 42)       // 8 tag + 16 svtnID + 8 nodeAddr + 8 seq + 2 count
+	copy(invalidRaw[8:24], svtnID[:])    // SVTNID at body[0:16]
+	copy(invalidRaw[24:32], nodeAddr[:]) // NodeAddr at body[16:24]
+	// HMAC tag stays all-zero → will not verify
+
+	if _, err := sendConn.Write(invalidRaw); err != nil {
+		t.Fatalf("Write invalid datagram: %v", err)
+	}
+
+	// Give the listener time to process the invalid datagram (if it were going
+	// to call onRelay, it would within ~100ms of the send landing on the socket).
+	// Also send several copies so the listener goroutine has time to process at
+	// least one before the deadline elapses.
+	for i := 0; i < 3; i++ {
+		_, _ = sendConn.Write(invalidRaw)
+	}
+	time.Sleep(300 * time.Millisecond)
+
+	mu.Lock()
+	countAfter := fireCount
+	mu.Unlock()
+
+	if countAfter != countBefore {
+		t.Errorf(
+			"TestWireDiscoveryListener_InvokesOnRelay_WhenRelayTrue: "+
+				"onRelay was invoked %d additional time(s) after HMAC-invalid datagram(s) — "+
+				"want 0 additional invocations; the HMAC/replay gate must block the callback",
+			countAfter-countBefore,
+		)
+	}
+
+	// ----- Teardown -----
+	cancel()
+	select {
+	case r := <-resultCh:
+		if r.panicked != nil {
+			t.Fatalf("wireDiscoveryListener panicked on shutdown: %v", r.panicked)
+		}
+		if r.err != nil && ctx.Err() == nil {
+			t.Errorf("wireDiscoveryListener: unexpected error on shutdown: %v", r.err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("wireDiscoveryListener did not return after ctx cancellation")

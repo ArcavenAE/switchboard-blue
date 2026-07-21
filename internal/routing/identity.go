@@ -99,3 +99,35 @@ func (r *Router) UnbindInterface(svtnID [16]byte, nodeAddr [8]byte, callerIfaceI
 		delete(r.identityIfaceMap, svtnID)
 	}
 }
+
+// InterfacesForSVTN returns the InterfaceID for every node bound under svtnID,
+// excluding the node identified by excludeNodeAddr. The result is a freshly
+// allocated value slice — never nil — so callers may safely check len(result)
+// without a nil guard. An unknown svtnID, a zero-binding svtnID, or a
+// fully-excluded set each return a non-nil empty slice.
+//
+// InterfacesForSVTN acquires r.mu read lock; the snapshot is complete and the
+// lock released before return (fanout-resolution-ruling.md v1.0 Decision 2:
+// RLock scope confined to this method's body). No pointer into internal state
+// escapes — returned values are copies of the InterfaceID scalars
+// (go.md rule 12).
+//
+// Traces to BC-2.01.010 (AC-017); fanout-resolution-ruling.md v1.0 Decision 1
+// (originator exclusion) + Decision 2 (never-nil postcondition);
+// S-BL.DISCOVERY-WIRE Task 6a (target resolution).
+func (r *Router) InterfacesForSVTN(svtnID [16]byte, excludeNodeAddr [8]byte) []InterfaceID {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	inner, ok := r.identityIfaceMap[svtnID]
+	if !ok {
+		return make([]InterfaceID, 0)
+	}
+	out := make([]InterfaceID, 0, len(inner))
+	for nodeAddr, ifaceID := range inner {
+		if nodeAddr != excludeNodeAddr {
+			out = append(out, ifaceID)
+		}
+	}
+	return out
+}

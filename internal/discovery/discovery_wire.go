@@ -8,7 +8,7 @@
 // itself (Design Constraint: Router-Mode Discovery Wiring). The caller
 // (cmd/switchboard's multicast listener, Task 3) owns the actual
 // net.ListenMulticastUDP socket and the hop-2 relay-dispatch closure
-// (Task 6, GATED).
+// (onRelay, delivered and wired live in runRouter as of Task 6d).
 //
 // Purity classification (ARCH-09): boundary — RouterIngest holds the
 // per-(SVTN,NodeAddr) lastSeen replay-discard map as of Task 2's Green step
@@ -51,7 +51,8 @@ type RouterIngestConfig struct {
 // returns to its caller. internal/discovery performs no relay I/O itself
 // (Design Constraint: Router-Mode Discovery Wiring) — the caller uses this
 // decision to decide whether to invoke the hop-2 relay-dispatch closure
-// (Task 6, GATED — depends_on S-BL.NODE-IDENTIFY-WIRE) and to construct the
+// (the onRelay closure in runRouter, wired live as of Task 6d with
+// S-BL.NODE-IDENTIFY-WIRE gate satisfied) and to construct the
 // DISCOVERY_RELAY frame (AC-014, Task 5).
 type RouterIngestDecision struct {
 	// Accept records whether the datagram passed HMAC verification
@@ -98,6 +99,19 @@ const (
 	discoveryFailureThreshold = 5
 	discoveryFailureWindow    = 60 * time.Second
 )
+
+// maxLastSeenEntries bounds the RouterIngest.lastSeen map to prevent
+// unbounded growth over the router's process lifetime (SEC-DW-10,
+// map-bounding-ruling.md Decision 2). Matches maxTrackedSources in
+// internal/admission/failure_counter.go — both maps track admitted-node-
+// population-sized state.  Eviction strategy: LRU-by-lowest-sequence
+// (evictLRULastSeen) on both the cold-start insertion path (evict-before-insert,
+// len >= cap) and the forward-advance over-cap drain path (len > cap, after the
+// watermark write) per ruling v1.2 Decision 8 (Option A, both-paths bound).
+// Security trade-off: evicting an entry re-opens a one-heartbeat cold-start
+// window for the evicted key (accepted per EC-006 and the Human Gate
+// SEC-DW-07 residual acceptance).
+const maxLastSeenEntries = 65536
 
 // keySelectorMinRaw is the minimum raw datagram length before any key
 // lookup is attempted: 8-byte HMAC tag + 16-byte SVTNID + 8-byte NodeAddr
@@ -224,6 +238,34 @@ func NewRouterIngest(cfg RouterIngestConfig) *RouterIngest {
 	}
 }
 
+// evictLRULastSeen removes the lastSeen entry with the lowest stored
+// Sequence watermark — the node that has sent the fewest recent
+// advertisements and is most likely to have already left the network.
+// On a tie for the lowest sequence, the victim is arbitrary among the
+// equal-lowest entries (any is an equally-valid LRU victim; no code or
+// test relies on tie stability — Go map iteration order is randomized).
+// O(N) scan; called under ri.mu from Ingest() on both the cold-start
+// insertion path (before inserting a new key when len >= cap) and the
+// forward-advance over-cap drain path (len > cap, after the watermark
+// write) per ruling v1.2 Decision 8 (SEC-DW-10,
+// map-bounding-ruling.md Decision 2).
+// MUST be called with ri.mu held.
+func (ri *RouterIngest) evictLRULastSeen() {
+	var lruKey lastSeenKey
+	var lruSeq uint64
+	first := true
+	for k, seq := range ri.lastSeen {
+		if first || seq < lruSeq {
+			lruKey = k
+			lruSeq = seq
+			first = false
+		}
+	}
+	if !first {
+		delete(ri.lastSeen, lruKey)
+	}
+}
+
 // Ingest authenticates and processes one raw inbound multicast datagram.
 //
 // Fixed-offset key-selector extraction (SEC-DW-01, AC-005): SVTNID and
@@ -339,7 +381,36 @@ func (ri *RouterIngest) Ingest(raw []byte) (RouterIngestDecision, error) {
 	k := lastSeenKey{svtnID: svtnID, nodeAddr: nodeAddr}
 	last, seen := ri.lastSeen[k]
 	if !seen || sequence > last {
-		ri.lastSeen[k] = sequence
+		// Bound the lastSeen map (SEC-DW-10, map-bounding-ruling.md
+		// Decision 2).
+		//
+		// Cold-start (!seen): a new entry is about to be inserted, growing
+		// the map by one. Evict the LRU (lowest-sequence) entry while
+		// len >= maxLastSeenEntries before inserting. In normal operation
+		// this fires exactly once; the loop also handles any over-cap map
+		// state inherited before this call (e.g. white-box preloaded in
+		// tests).
+		//
+		// Forward-advance (seen=true, sequence>last): the write is an
+		// in-place update — map size does not increase. Write the updated
+		// watermark FIRST so k's advanced sequence lowers the chance it is
+		// chosen as its own LRU victim during drain; if it still holds the
+		// global-minimum sequence and the map is over-cap it may be evicted,
+		// which is benign — it reverts to the accepted one-heartbeat
+		// cold-start residual (EC-006). Then drain any over-cap state with
+		// len > maxLastSeenEntries (strict, not >=, so a map exactly at cap
+		// is untouched).
+		if !seen {
+			for len(ri.lastSeen) >= maxLastSeenEntries {
+				ri.evictLRULastSeen()
+			}
+			ri.lastSeen[k] = sequence
+		} else {
+			ri.lastSeen[k] = sequence // raise watermark before eviction scan
+			for len(ri.lastSeen) > maxLastSeenEntries {
+				ri.evictLRULastSeen()
+			}
+		}
 		decision.Relay = true
 	}
 	return decision, nil
