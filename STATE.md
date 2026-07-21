@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-discovery-wire-STEP4.5-CONVERGED-3of3-5c8db39
+phase_step: steady-state-discovery-wire-DELIVERED-PR128-4bfcbf7
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -38,24 +38,24 @@ wave_5_gate: CONVERGED
 wave_6_gate: CONVERGED_3_OF_3
 phase_4_gate: "PASS 0.895 re-eval 2026-07-12 @ f73676d (original PASS_AT_THRESHOLD 0.85 @ 7fe3e29 2026-07-02, IP-C1-04)"
 phase_5_pass_4_gate: BC_5_39_001_SATISFIED
-develop_head: 7fcf0cf
+develop_head: 4bfcbf72dacc5d6ae75560136e960b23aef8a1a6
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001) at code `5c8db39` (26 commits) / story v2.27 / def6b7b / ruling v1.2; 3 benign nits deferred (tracker). NEXT: per-AC demo recording (demo-recorder, POL-004 .tape-only) → PR into develop (pr-manager 9-step) → merge → worktree cleanup → sm-LAST → session-review. (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001) at code 5c8db39 (26 commits) / story v2.27 / def6b7b / ruling v1.2; diverse-lens passes (spec-fidelity + security/concurrency + traceability); 3 benign nits deferred. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "S-BL.DISCOVERY-WIRE FULLY DELIVERED (PR #128 @ 4bfcbf7 merged develop 2026-07-21; Tasks 6a-6d + SEC-DW-10; all 18 ACs; Step-4.5 3/3 converged; feature branch+worktree cleaned). Cycle-close: 3 [process-gap] candidates logged in tracker for S-7.02 evaluation (narrowed-sweep-grep miss class 3rd instance; pr-manager step-9 branch-deletion mis-verify; post-convergence production-edit-without-reconverge). NEXT: (a) S-7.02 cycle-close disposition; (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts); S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "S-BL.DISCOVERY-WIRE FULLY DELIVERED — PR #128 squash-merged to develop @ 4bfcbf7 (2026-07-21); Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs; Step-4.5 3/3 converged; 2 benign CI-fix commits folded (test-only guards + relay_rate_cap test-injection seam, production semantics unchanged); feature branch+worktree cleaned. develop @ 4bfcbf7. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-21T16:30:00Z
+timestamp: 2026-07-21T18:09:00Z
 last_update: 2026-07-21
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  Hard cap (500 lines) margin from soft-target = 500 - 191 = 309; margin from actual = 500 - 191 = 309 (D-446(c) dual-margin form). 191 lines (wc-l).
+  Hard cap (500 lines) margin from soft-target = 500 - 192 = 308; margin from actual = 500 - 192 = 308 (D-446(c) dual-margin form). 192 lines (wc-l).
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-07-21 — S-BL.DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001) at code 5c8db39 / story v2.27 / ruling v1.2 via diverse-lens passes (spec-fidelity + security/concurrency + traceability); 3 benign nits deferred (tracker); next = per-AC demos → PR; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-07-21 — S-BL.DISCOVERY-WIRE FULLY DELIVERED (PR #128 @ 4bfcbf7 squash-merged develop 2026-07-21); Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs; Step-4.5 3/3 converged; 2 benign CI-fix commits folded; feature branch+worktree cleaned; sm-LAST complete; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-07-21
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-07-21 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | S-BL.DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001) at code 5c8db39 (26 commits) / story v2.27 / def6b7b / ruling v1.2; diverse-lens passes (spec-fidelity + security/concurrency + traceability); 3 benign nits deferred (tracker). NEXT: per-AC demo recording → PR into develop. develop @ 7fcf0cf. |
+| **Current Step** | S-BL.DISCOVERY-WIRE FULLY DELIVERED — PR #128 squash-merged develop @ 4bfcbf7 (2026-07-21); Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs delivered; Step-4.5 3/3 converged; 2 benign CI-fix commits folded (test-only guards + relay_rate_cap test-injection seam, production semantics unchanged); feature branch+worktree cleaned. develop @ 4bfcbf7. |
 
 ## Phase Progress
 
@@ -104,7 +104,7 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 | 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 Pass-1 F-1 (MED) remediated: story-body SEC-DW-10 self-eviction guarantee corrected to "improbable-not-impossible; benign if evicted" matching ruling v1.2 Decision 8 (v2.24 burst missed this transcription); story v2.25 / def6b7b (input-hash unchanged); factory 68fb3fe; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | pass-1-f1-remediation | develop @ 7fcf0cf. |
 | 2026-07-20 | **S-BL.DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated: declared-input BC pins re-synced to canonical (BC-2.03.001 v1.6→v1.7, BC-2.01.008 v1.2→v1.3; substance unchanged); story v2.26 / def6b7b (input-hash unchanged); factory 43f2e47; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | pass-2-traceability-f1 | develop @ 7fcf0cf. |
 | 2026-07-21 | **S-BL.DISCOVERY-WIRE Step-4.5 exhaustive version-pin audit: story v2.27 / def6b7b (2 missed BC-2.03.001 PC-5 structural-variant pins v1.6→v1.7; all declared-input pins confirmed canonical); factory 075bfc0; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | v2.27-pin-audit | develop @ 7fcf0cf. |
-| 2026-07-21 | **S-BL.DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001) at code 5c8db39 / story v2.27 / ruling v1.2; diverse-lens passes (spec-fidelity + security/concurrency + traceability); 3 benign nits deferred (tracker). NEXT: per-AC demo recording → PR.** | step-4.5-converged-3of3 | develop @ 7fcf0cf. |
+| 2026-07-21 | **S-BL.DISCOVERY-WIRE FULLY DELIVERED — PR #128 squash-merged develop @ 4bfcbf7; Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 2 benign CI-fix commits folded; feature branch+worktree cleaned.** | story-DELIVERED | develop @ 4bfcbf7. |
 
 ## Wave 6 Story Status
 
@@ -150,6 +150,7 @@ Additional drift items: `cycles/cycle-1/closed-drift.md`.
 | **DISCOVERY-WIRE v2.24 second remediation burst at 930f266** | ruling v1.2 (Decision-8 self-eviction guarantee corrected — watermark-first makes advancing key improbable not impossible LRU victim; eviction benign per EC-006); reconvergence F-1/F-2/F-3 + v1.1→v1.2 sweep; story v2.24 / def6b7b; code 5c8db39 (26 commits); all 6 gates green; counter RESET 0/3 | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated at factory 43f2e47** | declared-input BC pins re-synced to canonical: BC-2.03.001 v1.6→v1.7 + BC-2.01.008 v1.2→v1.3; substance unchanged; story v2.26 / def6b7b (input-hash unchanged — prose/metadata-only); code 5c8db39 + ruling v1.2 unchanged; counter 0/3 RESET | 2026-07-20 |
 | **DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001)** | code 5c8db39 (26 commits) / story v2.27 / def6b7b / ruling v1.2; diverse-lens passes (spec-fidelity + security/concurrency + traceability); 3 benign nits deferred (tracker); NEXT: per-AC demos → PR into develop | 2026-07-21 |
+| **S-BL.DISCOVERY-WIRE FULLY DELIVERED — PR #128 squash-merged develop** | 4bfcbf72dacc5d6ae75560136e960b23aef8a1a6 (2026-07-21); Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs; Step-4.5 3/3 NITPICK_ONLY; 2 benign CI-fix commits folded (test-only RequireMulticastLoopback guards + relay_rate_cap test-injection seam — production semantics UNCHANGED: newRelayRateCap() defaults to 65536); feature branch + worktree cleaned; FO(g)/(h) open non-blocking; 3 [process-gap] candidates logged for S-7.02 cycle-close evaluation | 2026-07-21 |
 
 Full decision detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/state-history-discovery-wire.md` (9 older rows extracted 2026-07-20).
 
@@ -178,11 +179,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 NITPICK_ONLY (BC-5.39.001) at code `5c8db39` (26 commits) / story v2.27 / input-hash def6b7b / ruling v1.2 (2026-07-21). Three diverse fresh-context lenses (spec-fidelity, security/concurrency, traceability) run concurrently against frozen artifact set with ZERO edits between them. Counter 0/3 → 3/3. Three benign nitpicks surfaced, all adversary-tagged no-edit-required: (1) evictLRULastSeen godoc rationale imprecise under epoch-qualified Sequence — behavior correct/benign; (2) relayRateCap "hard cap" wording is a soft prune-bound — no defect; (3) one historical-record over-sweep in the v2.3 modified: entry (exempt frontmatter). None reset convergence. develop @ 7fcf0cf.
+**Position:** S-BL.DISCOVERY-WIRE FULLY DELIVERED (2026-07-21). PR #128 squash-merged to develop @ `4bfcbf72dacc5d6ae75560136e960b23aef8a1a6`; Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001). Two benign CI-fix commits folded into squash: (1) test-only RequireMulticastLoopback guards; (2) relay_rate_cap.go maxEntries TEST-INJECTION seam — production semantics UNCHANGED (newRelayRateCap() defaults to 65536; only tests inject small cap). Feature branch + worktree deleted. FO(g) dynamic SVTN-join + FO(h) e2e-relay-integration-test remain open/deferred/non-blocking. Story v2.27 / input-hash def6b7b / ruling v1.2. STORY-INDEX at v4.143 row-144 DELIVERED. develop @ 4bfcbf7.
 
-**Next candidates:** (a) Per-AC demo recording for S-BL.DISCOVERY-WIRE (demo-recorder, POL-004 .tape-only, code worktree `5c8db39`); (b) PR into develop (pr-manager 9-step); (c) merge → worktree cleanup → sm-LAST → session-review. (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts).
+**Next candidates:** (a) S-7.02 cycle-close disposition — 3 [process-gap] candidates in tracker (narrowed-sweep-grep miss class 3rd instance; pr-manager step-9 branch-deletion mis-verify; post-convergence production-edit-without-reconverge); (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts; closes drift SEC-NIDW-SVTNID-CONSISTENCY); S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, draft v1.1).
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch demo-recorder for S-BL.DISCOVERY-WIRE (code worktree `5c8db39`, 26 commits, story v2.27 / def6b7b) OR deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) choose: S-7.02 cycle-close disposition OR deliver S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY.
 
 ## Concurrent Cycles
 
