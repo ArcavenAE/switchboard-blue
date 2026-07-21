@@ -65,8 +65,9 @@ under `go test -race`.
 | AC-014 | `AC-014-015-016-relay-frame-assembly.tape` | `TestAssembleDiscoveryRelayFrame_PayloadLayout` | PASS | `DISCOVERY_RELAY` payload layout: `control_type=0x03`/`version=0x01`/`reserved=0x0000` at bytes 0-3; `NodeAddr`/`Sequence`/count/sessions at their specified offsets; `SVTNID` not repeated (lives in `OuterHeader.SVTNID`); pure function, no live connection required. |
 | AC-015 | `AC-014-015-016-relay-frame-assembly.tape` | `TestAssembleDiscoveryRelayFrame_ZeroHMACTag` | PASS | Relay frame's `OuterHeader.HMACTag` is the zero value (matches the DRAIN precedent); no per-frame HMAC computed for hop-2 — trust derives from the admitted TCP connection. |
 | AC-016 | `AC-014-015-016-relay-frame-assembly.tape` | `TestAssembleDiscoveryRelayFrame_NotRawHop1Bytes` | PASS | Relay payload is freshly constructed from decoded fields, never a byte-for-byte copy of hop-1's raw UDP datagram; hop-1's original HMAC tag never appears in the relay frame. |
-| AC-017 | — | — | **GATED** | `depends_on S-BL.NODE-IDENTIFY-WIRE` (fan-out target-resolution companion story, not yet landed). Not implemented, not tested, not demoed — see gap note below. |
-| AC-018 | — | — | **GATED** | Same gate as AC-017 (rate-cap decision is meaningless without a live dispatch mechanism to suppress). Not implemented, not tested, not demoed — see gap note below. |
+| AC-017 | `AC-017-hop2-fanout-dispatch.tape` | `TestInterfacesForSVTN_Excludes*` (×7), `TestSplitHorizon_ForwardOnAllOtherInterfaces`, `TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking` | PASS | SVTN-scoped target resolution excludes originator and only originator; unknown-SVTN returns non-nil empty; concurrent Bind/Unbind is race-safe; dispatch fans out to all other admitted nodes best-effort non-blocking; frame bytes match `assembleDiscoveryRelayFrame` output. |
+| AC-018 | `AC-018-relay-rate-cap.tape` | `TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst` | PASS | Per-(SVTNID, NodeAddr) ~1/sec relay rate cap: first datagram relayed, burst within window silently dropped, distinct keys not cross-capped, key re-allowed after interval, suppression counter non-gating, no panic on burst. |
+| SEC-DW-10 | `SEC-DW-10-map-bounding.tape` | `TestRelayRateCap_MapBounded_AfterStaleEntries`, `TestRelayRateCap_StalePrunedKey_ReAllowed`, `TestRelayRateCap_ActiveKeys_NotPruned`, `TestRouterIngest_LastSeenMap_BoundedAtCap`, `TestRouterIngest_ReplayRejected_AfterCapEviction`, `TestRouterIngest_EvictedKey_ColdStartAccepted`, `TestRouterIngest_LastSeen_LRU_EvictsLowestSequence` | PASS | Both process-lifetime maps bounded: `relayRateCap.last` via prune-by-age (stale pruned, active preserved, pruned key re-allowed); `RouterIngest.lastSeen` via LRU-by-lowest-sequence (map bounded at cap, LRU targets lowest-sequence, evicted key cold-start accepted per EC-006). |
 
 **CI portability note:** `TestRunRouter_DiscoveryListener_JoinsGroup_RouterModeOnly` (AC-001) and `TestDiscovery_Advertise_WriteToMulticast_TTL1_NoGroupJoin` (AC-003) perform real multicast socket I/O and `t.Skip` via `testenv.RequireMulticastLoopback` on environments lacking a UP+LOOPBACK+MULTICAST interface (e.g. stock GitHub Actions Linux runners, where `lo` lacks the MULTICAST flag) — covered on developer workstations and a future network-integration CI tier instead.
 
@@ -651,21 +652,186 @@ ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.300s
 
 ---
 
-## Coverage gap — AC-017/AC-018, Task 6 (intentional, documented)
+## AC-017 — Hop-2 relay fan-out dispatch: SVTN-scoped, exclude-originator, best-effort non-blocking
 
-`AC-017` (SVTN-scoped, exclude-originator, best-effort fan-out dispatch)
-and `AC-018` (relay-dispatch rate cap) are marked
-`[GATED — depends_on S-BL.NODE-IDENTIFY-WIRE]` in the story spec. Task 6
-(hop-2 fan-out dispatch) is explicitly out of scope for this story's
-Tasks 1-5 delivery. Neither AC has an implementation, a test, or a demo in
-this evidence set — `grep -rn "TestRelayDispatch" --include="*.go" .`
-returns zero matches in this worktree, confirming no stub or partial test
-exists yet. This is the story's own documented scope boundary (Human Gate
-item 3 / Forward Obligations table), not an evidence gap introduced by this
-report — the story's Task Breakdown states plainly: "Tasks 1-5 (hop-1
-ingest, sender dispatch, hop-2 frame construction) are independently
-deliverable and do not depend on `S-BL.NODE-IDENTIFY-WIRE` landing. Task 6
-(hop-2 fan-out dispatch) is explicitly GATED."
+**Tape:** `AC-017-hop2-fanout-dispatch.tape`
+**BC anchors:** BC-2.01.008 Precondition 2 (SVTN-scoped routing), Precondition 3 (exclude-originator); SEC-DW-08 (hop-2 relay dispatch correctness)
+**Test files:** `internal/routing/router_test.go`, `internal/routing/split_horizon_test.go`, `cmd/switchboard/discovery_relay_wire_test.go`
+
+`Router.InterfacesForSVTN(svtnID, excludeNodeAddr)` returns every admitted
+interface on the named SVTN except the originating node's. Target resolution
+is SVTN-scoped (nodes on other SVTNs are not returned), excludes one and only
+one node (the originator), returns a non-nil empty slice for unknown SVTNs or
+when all members are excluded, passes through an unbound exclude address by
+returning all members, and is safe under concurrent `Bind`/`Unbind` (race
+detector clean). `relayDiscoveryFrame` fans out the assembled `DISCOVERY_RELAY`
+frame to every other admitted node via best-effort non-blocking channel sends:
+missing send-map entries are silently skipped; a full channel does not block
+the caller; assembled frame bytes are equal to `assembleDiscoveryRelayFrame`
+output. Split-horizon property confirmed in isolation: forward to every
+interface except the one the datagram arrived on.
+
+**Evidence commands:**
+
+```
+go test -race -run 'TestInterfacesForSVTN_ExcludesOriginator_ReturnsRest|TestInterfacesForSVTN_ExcludesOnlyOriginator' -count=1 -v ./internal/routing/
+go test -race -run 'TestInterfacesForSVTN_SVTNIsolation|TestInterfacesForSVTN_UnknownSVTN_ReturnsNonNilEmptySlice|TestInterfacesForSVTN_AllExcluded_ReturnsNonNilEmptySlice|TestInterfacesForSVTN_ExcludeUnboundNodeAddr_ReturnsAll' -count=1 -v ./internal/routing/
+go test -race -run TestInterfacesForSVTN_ConcurrentBindUnbind_Race -count=1 -v ./internal/routing/
+go test -race -run TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking -count=1 -v ./cmd/switchboard/
+go test -race -run TestSplitHorizon_ForwardOnAllOtherInterfaces -count=1 -v ./internal/routing/
+```
+
+**Captured output:**
+
+```
+=== RUN   TestInterfacesForSVTN_ExcludesOriginator_ReturnsRest
+--- PASS: TestInterfacesForSVTN_ExcludesOriginator_ReturnsRest (0.00s)
+=== RUN   TestInterfacesForSVTN_ExcludesOnlyOriginator
+--- PASS: TestInterfacesForSVTN_ExcludesOnlyOriginator (0.00s)
+=== RUN   TestInterfacesForSVTN_SVTNIsolation
+--- PASS: TestInterfacesForSVTN_SVTNIsolation (0.00s)
+=== RUN   TestInterfacesForSVTN_UnknownSVTN_ReturnsNonNilEmptySlice
+--- PASS: TestInterfacesForSVTN_UnknownSVTN_ReturnsNonNilEmptySlice (0.00s)
+=== RUN   TestInterfacesForSVTN_AllExcluded_ReturnsNonNilEmptySlice
+--- PASS: TestInterfacesForSVTN_AllExcluded_ReturnsNonNilEmptySlice (0.00s)
+=== RUN   TestInterfacesForSVTN_ExcludeUnboundNodeAddr_ReturnsAll
+--- PASS: TestInterfacesForSVTN_ExcludeUnboundNodeAddr_ReturnsAll (0.00s)
+=== RUN   TestInterfacesForSVTN_ConcurrentBindUnbind_Race
+--- PASS: TestInterfacesForSVTN_ConcurrentBindUnbind_Race (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/routing	1.400s
+
+=== RUN   TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking
+    --- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking/two_nodes_originator_excluded (0.00s)
+    --- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking/three_nodes_fanout_width_two (0.00s)
+    --- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking/best_effort_nonblocking_full_channel (0.00s)
+    --- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking/missing_sendmap_entry_silent_skip (0.00s)
+    --- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking/svtn_isolation_different_svtn_excluded (0.00s)
+    --- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking/frame_identity_equals_assembleDiscoveryRelayFrame (0.00s)
+--- PASS: TestRelayDispatch_SVTNScoped_ExcludeOriginator_BestEffortNonBlocking (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.381s
+
+=== RUN   TestSplitHorizon_ForwardOnAllOtherInterfaces
+--- PASS: TestSplitHorizon_ForwardOnAllOtherInterfaces (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/routing	1.276s
+```
+
+**Discharge status:** FULL.
+
+---
+
+## AC-018 — Per-(SVTNID, NodeAddr) relay rate cap: ~1/sec, silent drop (SEC-DW-09)
+
+**Tape:** `AC-018-relay-rate-cap.tape`
+**BC anchor:** SEC-DW-09 (relay rate cap — silent drop, per (SVTNID, NodeAddr), ~1/second, at dispatch-decision point)
+**Test file:** `cmd/switchboard/relay_rate_cap_test.go`
+
+The relay-dispatch path enforces a per-`(SVTNID, NodeAddr)` rate cap of
+approximately one relay per second. The first relay for a given key is
+forwarded; subsequent relays within the window are silently dropped (no
+error, no panic, no visible signal to the sender). The cap is per-key:
+a distinct `(SVTNID, NodeAddr)` key is not affected by another key's window.
+A key whose window has elapsed is re-allowed on the next call. The suppression
+counter increments on each drop for observability but is non-gating — it does
+not change the allow/drop decision for future datagrams.
+
+**Evidence command:**
+
+```
+go test -race -run TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst -count=1 -v ./cmd/switchboard/
+```
+
+**Captured output:**
+
+```
+=== RUN   TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst
+    --- PASS: TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst/first_relayed_second_dropped_same_key (0.00s)
+    --- PASS: TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst/distinct_key_not_capped (0.00s)
+    --- PASS: TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst/allowed_again_after_interval (0.00s)
+    --- PASS: TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst/suppression_counter_nongating (0.00s)
+    --- PASS: TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst/no_error_no_panic_burst (0.00s)
+--- PASS: TestRelayDispatch_RateCap_PerSVTNNodeAddr_SilentDropFirst (0.00s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	1.307s
+```
+
+**Discharge status:** FULL.
+
+---
+
+## SEC-DW-10 — Both process-lifetime maps bounded (map-bounding-ruling v1.2)
+
+**Tape:** `SEC-DW-10-map-bounding.tape`
+**BC anchors:** SEC-DW-10 (process-lifetime map bounding), map-bounding-ruling.md v1.2
+Decisions 1 (prune-by-age for `relayRateCap`), Decision 2 (LRU-by-lowest-sequence
+for `lastSeen`), Decision 8 (both bounded); EC-006 (accepted residual: cold-start
+acceptance after LRU eviction); SEC-DW-07 (lastSeen replay gate)
+**Test files:** `cmd/switchboard/relay_rate_cap_test.go`, `internal/discovery/discovery_wire_test.go`
+
+Both per-`(SVTNID, NodeAddr)` process-lifetime maps are bounded so they cannot
+grow without limit across the process lifetime.
+
+`relayRateCap.last` is bounded via prune-by-age: after the staleness window
+elapses, `Prune()` evicts expired entries and the map shrinks to within its
+capacity. A pruned key returns to cold-start state and is re-allowed on its
+next relay (not permanently banned). Active keys — those still within their
+rate-cap window — are never pruned by the age sweep.
+
+`RouterIngest.lastSeen` is bounded via LRU-by-lowest-sequence: once the map
+reaches its cap, the next new `(SVTNID, NodeAddr)` pair triggers eviction of
+the entry with the lowest recorded `Sequence` value (the entry making the least
+forward progress). After eviction, the evicted key's cold-start is accepted
+(EC-006 accepted residual: the new node-instance starts fresh and its first
+datagram is accepted for any `Sequence`). A replayed sequence for an evicted
+key is rejected when the new cold-start `lastSeen` advances past it; the
+adversary cannot use eviction to bypass replay protection for sequences already
+observed in the new epoch.
+
+**Note on `TestRelayRateCap_MapBounded_AfterStaleEntries`:** this test sleeps
+for the prune staleness window (~20s) to verify time-based eviction; the tape
+uses `Wait+Line /PASS/` which waits as long as needed rather than a fixed sleep.
+Run without the race detector to avoid interaction with the time-based logic:
+`go test -run TestRelayRateCap_MapBounded_AfterStaleEntries -count=1 -v ./cmd/switchboard/`
+
+**Evidence commands:**
+
+```
+go test -run TestRelayRateCap_MapBounded_AfterStaleEntries -count=1 -v ./cmd/switchboard/
+go test -race -run 'TestRelayRateCap_StalePrunedKey_ReAllowed|TestRelayRateCap_ActiveKeys_NotPruned' -count=1 -v ./cmd/switchboard/
+go test -race -run 'TestRouterIngest_LastSeenMap_BoundedAtCap|TestRouterIngest_ReplayRejected_AfterCapEviction' -count=1 -v ./internal/discovery/
+go test -race -run 'TestRouterIngest_EvictedKey_ColdStartAccepted|TestRouterIngest_LastSeen_LRU_EvictsLowestSequence' -count=1 -v ./internal/discovery/
+```
+
+**Captured output:**
+
+```
+=== RUN   TestRelayRateCap_MapBounded_AfterStaleEntries
+--- PASS: TestRelayRateCap_MapBounded_AfterStaleEntries (24.05s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	24.354s
+
+=== RUN   TestRelayRateCap_StalePrunedKey_ReAllowed
+--- PASS: TestRelayRateCap_StalePrunedKey_ReAllowed (0.01s)
+=== RUN   TestRelayRateCap_ActiveKeys_NotPruned
+--- PASS: TestRelayRateCap_ActiveKeys_NotPruned (0.01s)
+PASS
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.354s
+
+=== RUN   TestRouterIngest_LastSeenMap_BoundedAtCap
+--- PASS: TestRouterIngest_LastSeenMap_BoundedAtCap (0.05s)
+=== RUN   TestRouterIngest_ReplayRejected_AfterCapEviction
+--- PASS: TestRouterIngest_ReplayRejected_AfterCapEviction (0.05s)
+=== RUN   TestRouterIngest_EvictedKey_ColdStartAccepted
+--- PASS: TestRouterIngest_EvictedKey_ColdStartAccepted (0.05s)
+=== RUN   TestRouterIngest_LastSeen_LRU_EvictsLowestSequence
+--- PASS: TestRouterIngest_LastSeen_LRU_EvictsLowestSequence (0.07s)
+PASS
+ok  	github.com/arcavenae/switchboard/internal/discovery	1.543s
+```
+
+**Discharge status:** FULL.
 
 ---
 
