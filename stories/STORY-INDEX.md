@@ -2,7 +2,7 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "4.141"
+version: "4.142"
 status: draft
 producer: state-manager
 timestamp: 2026-07-07T10:00:00
@@ -198,6 +198,7 @@ All story files are in `.factory/stories/S-N.MM-*.md`. Maintenance story files u
 
 | Version | Date | Change |
 |---------|------|--------|
+| 4.142 | 2026-07-21 | row-144 status — S-BL.DISCOVERY-WIRE Step-4.5 CONVERGED 3/3 (BC-5.39.001) at code 5c8db39 / story v2.27 / ruling v1.2 via diverse-lens (spec-fidelity + security/concurrency + traceability) fresh-context passes; 3 benign nits deferred (no-edit); next = per-AC demos → PR into develop. Frontmatter version 4.141 → 4.142. |
 | 4.141 | 2026-07-21 | row-144 status sync — S-BL.DISCOVERY-WIRE advanced to v2.27 (input-hash def6b7b unchanged); Step-4.5 traceability F-1 (MED) remediated + exhaustive all-variants version-pin audit (2 missed BC-2.03.001 PC-5 structural-variant pins v1.6→v1.7: paren form `(v1.6, already landed)` at Decision-3(c) line ~1076 and possessive `v1.6's PC-5 sentence` at Decision-3(h) line ~1171; all declared-input pins now confirmed at canonical — BC-2.03.001 v1.7, BC-2.03.002 v1.5, BC-2.01.008 v1.3, ARCH-03 v1.8, VP-080 v1.7, VP-044 v1.2, VP-045 v1.4, map-bounding v1.2, rulings v1.11; landed-at/point-in-time citations correctly retained; 3rd instance of narrowed-sweep-grep class hardened); code 5c8db39 unchanged; counter 0/3, fresh 3-pass NITPICK_ONLY reconvergence pending. Frontmatter version 4.140 → 4.141. |
 | 4.140 | 2026-07-20 | row-144 status sync — S-BL.DISCOVERY-WIRE advanced to v2.26 (input-hash def6b7b unchanged); Step-4.5 Pass-2 traceability F-1 (MED) remediated — declared-input BC pins re-synced to canonical (BC-2.03.001 v1.6→v1.7, BC-2.01.008 v1.2→v1.3; substance unchanged, prose-label drift from narrowed re-cert sweep-set); code 5c8db39 unchanged; counter 0/3, fresh reconvergence pending. Frontmatter version 4.139 → 4.140. |
 | 4.139 | 2026-07-20 | POL-002 row-144 status sync — S-BL.DISCOVERY-WIRE advanced to v2.25 (input-hash def6b7b unchanged); Step-4.5 Pass-1 F-1 (MED) remediated — story-body SEC-DW-10 self-eviction guarantee corrected to "improbable-not-impossible; benign if evicted" matching ruling v1.2 Decision 8 (v2.24 burst missed this transcription); Decision-8 version pin disambiguated v1.1→"introduced v1.1, rationale refined v1.2"; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; fresh 3-pass NITPICK_ONLY reconvergence pending. Frontmatter version 4.138 → 4.139. |
