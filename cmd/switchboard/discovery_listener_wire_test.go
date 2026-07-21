@@ -181,6 +181,8 @@ func TestRunRouter_JoinsDiscoveryGroups_ForAdmittedSVTNs(t *testing.T) {
 // Traces to ruling Decision 4 (discoveryWG.Wait() teardown);
 // AC-017 / AC-018 (unit coverage via TestRelayDispatch_*).
 func TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly(t *testing.T) {
+	testenv.RequireMulticastLoopback(t)
+
 	// Seed admission state so AllSVTNEntries() returns at least one SVTN after
 	// Task 6d GREEN step constructs ri and starts the listener loop.
 	dataAddr := probeDataAddr(t)
@@ -239,6 +241,8 @@ func TestRunRouter_WithAdmittedSVTN_ShutsDownCleanly(t *testing.T) {
 // Traces to ruling Decision 4 (discoveryWG.Wait() between dataWG.Wait() and
 // writerWG.Wait() in the shutdown block).
 func TestRunRouter_DiscoveryListeners_CleanShutdown(t *testing.T) {
+	testenv.RequireMulticastLoopback(t)
+
 	dataAddr := probeDataAddr(t)
 	sockPath := tempSockPath(t)
 	cfg := &config.Config{
