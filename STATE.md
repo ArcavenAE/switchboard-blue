@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-discovery-wire-reconverge-v2.26-5c8db39
+phase_step: steady-state-discovery-wire-reconverge-v2.27-5c8db39
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,11 +42,11 @@ develop_head: 7fcf0cf
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "Step-4.5 reconvergence for S-BL.DISCOVERY-WIRE — Pass-2 traceability F-1 (MED) remediated at factory `43f2e47` (story v2.26 / def6b7b; declared-input BC pins re-synced BC-2.03.001 v1.7 / BC-2.01.008 v1.3); code `5c8db39` (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; fresh 3-pass NITPICK_ONLY reconvergence against 5c8db39 / v2.26 next (POL-005 HEAD-SHA tuple mandatory). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
-current_step: "DISCOVERY-WIRE Step-4.5 Pass-2 traceability F-1 (MED) remediated at factory 43f2e47 (story v2.26 / def6b7b; input-hash UNCHANGED — prose/metadata-only; declared-input BC pins re-synced BC-2.03.001 v1.7 / BC-2.01.008 v1.3); code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "Step-4.5 reconvergence for S-BL.DISCOVERY-WIRE — traceability F-1 (MED) remediated + exhaustive version-pin audit at factory `075bfc0` (story v2.27 / def6b7b; 2 missed BC-2.03.001 PC-5 pins v1.6→v1.7; all declared-input pins confirmed canonical); code `5c8db39` (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET; fresh 3-pass NITPICK_ONLY reconvergence against 5c8db39 / v2.27 next (POL-005 HEAD-SHA tuple mandatory). (b) S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY (ready v1.0, 3 ACs, 3 pts). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts)."
+current_step: "DISCOVERY-WIRE Step-4.5 traceability F-1 (MED) remediated + exhaustive version-pin audit at factory 075bfc0 (story v2.27 / def6b7b; 2 missed BC-2.03.001 PC-5 structural-variant pins v1.6→v1.7; all declared-input pins confirmed canonical; 3rd narrowed-sweep-grep class instance); code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET. develop @ 7fcf0cf. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-07-21T02:00:00Z
-last_update: 2026-07-20
+timestamp: 2026-07-21T05:00:00Z
+last_update: 2026-07-21
 ---
 
 <!--
