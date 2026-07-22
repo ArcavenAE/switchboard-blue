@@ -461,10 +461,11 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongMsgKind(t *testing.T) 
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: the decode guard at node_identify_wire.go:196
-	// emits "msg_kind" in the error string. A deadline error (the fallback if
-	// the guard is removed) does NOT contain this substring — so removing the
-	// guard will fail this assertion quickly within the 200ms window.
+	// Discriminating assertion: the msg_kind guard in decodeNodeIdentify
+	// (node_identify_wire.go) emits "msg_kind" in the error string. A deadline
+	// error (the fallback if the guard is removed) does NOT contain this
+	// substring — so removing the guard will fail this assertion quickly within
+	// the 200ms window.
 	if !strings.Contains(res.err.Error(), "msg_kind") {
 		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
 			"msg_kind", res.err.Error())
@@ -523,10 +524,11 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte(t *test
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: the decode guard at node_identify_wire.go:199
-	// emits "reserved byte" in the error string. A deadline error (the fallback
-	// if the guard is removed) does NOT contain this substring — so removing the
-	// guard will fail this assertion quickly within the 200ms window.
+	// Discriminating assertion: the reserved-byte guard in decodeNodeIdentify
+	// (node_identify_wire.go) emits "reserved byte" in the error string. A
+	// deadline error (the fallback if the guard is removed) does NOT contain
+	// this substring — so removing the guard will fail this assertion quickly
+	// within the 200ms window.
 	if !strings.Contains(res.err.Error(), "reserved byte") {
 		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
 			"reserved byte", res.err.Error())
@@ -542,10 +544,11 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_NonZeroReservedByte(t *test
 // NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
 // var — parallel execution would race other tests relying on the 10s default.
 func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongControlType(t *testing.T) {
-	// Override timeout to 200ms: if the control_type guard (node_identify_wire.go:189)
-	// is accidentally removed, the frame decodes successfully and the driver blocks
-	// waiting for a ChallengeResponse. The 200ms deadline fires fast, but the
-	// resulting deadline error does NOT contain "control_type" — the new substring
+	// Override timeout to 200ms: if the control_type guard in decodeNodeIdentify
+	// (node_identify_wire.go) is accidentally removed, the frame decodes
+	// successfully and the driver blocks waiting for a ChallengeResponse. The
+	// 200ms deadline fires fast, but the resulting deadline error does NOT
+	// contain "control_type" — the new substring
 	// assertion below then fails immediately, giving a clear red rather than a
 	// 10s hang.
 	orig := nodeIdentifyHandshakeTimeout
@@ -585,10 +588,11 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongControlType(t *testing
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: the decode guard at node_identify_wire.go:189
-	// emits "control_type" in the error string. A deadline error (the fallback if
-	// the guard is removed) does NOT contain this substring — so removing the
-	// guard will fail this assertion quickly within the 200ms window.
+	// Discriminating assertion: the control_type guard in decodeNodeIdentify
+	// (node_identify_wire.go) emits "control_type" in the error string. A
+	// deadline error (the fallback if the guard is removed) does NOT contain
+	// this substring — so removing the guard will fail this assertion quickly
+	// within the 200ms window.
 	if !strings.Contains(res.err.Error(), "control_type") {
 		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
 			"control_type", res.err.Error())
@@ -604,12 +608,12 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongControlType(t *testing
 // NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
 // var — parallel execution would race other tests relying on the 10s default.
 func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongVersion(t *testing.T) {
-	// Override timeout to 200ms: if the version guard (node_identify_wire.go:192)
-	// is accidentally removed, the frame decodes successfully and the driver blocks
-	// waiting for a ChallengeResponse. The 200ms deadline fires fast, but the
-	// resulting deadline error does NOT contain "version" — the new substring
-	// assertion below then fails immediately, giving a clear red rather than a
-	// 10s hang.
+	// Override timeout to 200ms: if the version guard in decodeNodeIdentify
+	// (node_identify_wire.go) is accidentally removed, the frame decodes
+	// successfully and the driver blocks waiting for a ChallengeResponse. The
+	// 200ms deadline fires fast, but the resulting deadline error does NOT
+	// contain "version" — the new substring assertion below then fails
+	// immediately, giving a clear red rather than a 10s hang.
 	orig := nodeIdentifyHandshakeTimeout
 	nodeIdentifyHandshakeTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { nodeIdentifyHandshakeTimeout = orig })
@@ -647,10 +651,11 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongVersion(t *testing.T) 
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: the decode guard at node_identify_wire.go:192
-	// emits "version" in the error string. A deadline error (the fallback if
-	// the guard is removed) does NOT contain this substring — so removing the
-	// guard will fail this assertion quickly within the 200ms window.
+	// Discriminating assertion: the version guard in decodeNodeIdentify
+	// (node_identify_wire.go) emits "version" in the error string. A deadline
+	// error (the fallback if the guard is removed) does NOT contain this
+	// substring — so removing the guard will fail this assertion quickly within
+	// the 200ms window.
 	if !strings.Contains(res.err.Error(), "version") {
 		t.Errorf("AC-002: error does not name the offending field; want substring %q, got: %q",
 			"version", res.err.Error())
@@ -670,14 +675,15 @@ func TestNodeIdentifyHandshake_MalformedNodeIdentify_WrongVersion(t *testing.T) 
 // The node side sends a valid NodeIdentify, reads the 144-byte Challenge to
 // unblock the router's write on net.Pipe, then sends a ChallengeResponse frame
 // whose inner payload carries msg_kind=0xFF instead of 0x03.
-// decodeChallengeResponse (node_identify_wire.go:228) returns an error containing
+// decodeChallengeResponse (node_identify_wire.go) returns an error containing
 // "ChallengeResponse" before AdmitNode is ever reached.
 //
-// Discriminating requirement: deleting the msg_kind guard at line 228 allows the
-// decode to succeed; AdmitNode is then called with a zero NonceSig against an
-// unregistered key, returning admission.ErrNotAdmitted whose message does NOT
-// contain "ChallengeResponse" — so the substring assertion below fails immediately
-// without any timeout hang (AdmitNode returns synchronously).
+// Discriminating requirement: deleting the msg_kind guard in
+// decodeChallengeResponse allows the decode to succeed; AdmitNode is then
+// called with a zero NonceSig against an unregistered key, returning
+// admission.ErrNotAdmitted whose message does NOT contain "ChallengeResponse"
+// — so the substring assertion below fails immediately without any timeout
+// hang (AdmitNode returns synchronously).
 //
 // NOT t.Parallel(): overrides the package-level nodeIdentifyHandshakeTimeout
 // var — parallel execution would race other tests relying on the 10s default.
@@ -740,10 +746,11 @@ func TestNodeIdentifyHandshake_MalformedChallengeResponse_ConnectionClosed(t *te
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: decodeChallengeResponse at node_identify_wire.go:228
-	// emits "ChallengeResponse" in the error string. An admission error (the fallback
-	// if the guard is removed) does NOT contain this substring — so removing the
-	// guard fails this assertion immediately (no timeout required).
+	// Discriminating assertion: the msg_kind guard in decodeChallengeResponse
+	// (node_identify_wire.go) emits "ChallengeResponse" in the error string. An
+	// admission error (the fallback if the guard is removed) does NOT contain
+	// this substring — so removing the guard fails this assertion immediately
+	// (no timeout required).
 	if !strings.Contains(res.err.Error(), "ChallengeResponse") {
 		t.Errorf("BC-2.01.009: error does not name the malformed message; want substring %q, got: %q",
 			"ChallengeResponse", res.err.Error())
@@ -1265,14 +1272,14 @@ func TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023(t *testing.T) {
 	// router closed the connection — which is the required behavior.
 
 	// AC-011 PC-2: the router MUST emit a WARN log containing "E-ADM-023"
-	// (mgmt_wire.go:636: `routerLogger.Log("node_identify: duplicate NodeIdentify
-	// on established connection (E-ADM-023)")`).
+	// (the duplicate-NodeIdentify arm in mgmt_wire.go:
+	// `routerLogger.Log("node_identify: duplicate NodeIdentify on established connection (E-ADM-023)")`).
 	// Discriminating: deleting that Log call (while keeping conn.Close()) leaves
 	// the connection-close assertion above passing but fails this one — so this
 	// is the sole discriminating guard for the WARN log postcondition.
 	if !scanForLine(&buf, "E-ADM-023", 2*time.Second) {
 		t.Errorf("AC-011 PC-2: daemon log does not contain \"E-ADM-023\" within 2s "+
-			"(mgmt_wire.go:636 routerLogger.Log must emit the code); log:\n%s", buf.String())
+			"(duplicate-NodeIdentify arm routerLogger.Log in mgmt_wire.go must emit the code); log:\n%s", buf.String())
 	}
 }
 
@@ -1284,12 +1291,13 @@ func TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023(t *testing.T) {
 // from the client side, and asserts that the identity binding is removed once
 // the cleanup closure fires.
 //
-// Discriminating property: this test is the ONLY coverage for
-// mgmt_wire.go:778 (router.UnbindInterface in the cleanup closure). Disabling
-// that line leaves the binding in identityIfaceMap indefinitely, and
+// Discriminating property: this test is the ONLY coverage for the
+// router.UnbindInterface call in the cleanup closure (mgmt_wire.go). Disabling
+// that call leaves the binding in identityIfaceMap indefinitely, and
 // LookupInterface after nodeConnRemoved would still return (ifaceID, true) —
 // causing the post-cleanup assertion below to fail. The test is therefore
-// discriminating: removing mgmt_wire.go:778 flips it from PASS to FAIL.
+// discriminating: removing the UnbindInterface call from the cleanup func
+// in mgmt_wire.go flips it from PASS to FAIL.
 //
 // The router reference is captured through the nodeIdentifyHandshakeFn wrapper:
 // the wrapper calls the real handshake unchanged but stores the *routing.Router
@@ -1385,22 +1393,23 @@ func TestNodeIdentifyHandshake_CleanupFunc_UnbindInterface_Called(t *testing.T) 
 	// Close from the client side — triggers the daemon's per-conn ServeConn to
 	// return, which invokes the onAccept cleanup func:
 	//   sendMap.Delete(h.IfaceID)
-	//   router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)  ← line 778 under test
+	//   router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)  ← the UnbindInterface call in the cleanup closure (mgmt_wire.go)
 	//   nodeConnHook(nodeConnRemoved, h.IfaceID)
 	_ = nodeConn.Close()
 
 	// Wait for the cleanup closure to complete (bounded deadline).
-	// nodeConnRemoved fires synchronously at line 780, AFTER UnbindInterface
-	// at line 778 — so when this returns, the binding is already gone.
+	// nodeConnRemoved fires synchronously AFTER UnbindInterface in the same
+	// cleanup closure — so when this returns, the binding is already gone.
 	awaitNodeConnEvent(t, events, nodeConnRemoved, 2*time.Second)
 
 	// ASSERT: binding is removed after cleanup.
-	// Discriminating property: if mgmt_wire.go:778 is disabled, this assertion
-	// FAILS because identityIfaceMap still holds the entry.
+	// Discriminating property: if the router.UnbindInterface call in the
+	// cleanup closure (mgmt_wire.go) is disabled, this assertion FAILS because
+	// identityIfaceMap still holds the entry.
 	got, ok = r.LookupInterface(svtnID, nodeAddr)
 	if ok {
 		t.Errorf("AC-012: LookupInterface after conn close: want (0, false), got (%d, true); "+
-			"router.UnbindInterface was NOT called by the cleanup func (mgmt_wire.go:778 missing)",
+			"router.UnbindInterface was NOT called by the cleanup func in mgmt_wire.go",
 			got)
 	}
 	if got != 0 {
@@ -1484,16 +1493,16 @@ func TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	// ASSERT: the daemon log contains "E-ADM-008" within a bounded deadline.
-	// Discriminating property: removing/changing the code in mgmt_wire.go:712-713
-	// causes this assertion to fail.
+	// Discriminating property: removing/changing the E-ADM-008 arm in
+	// mgmt_wire.go causes this assertion to fail.
 	if !scanForLine(&buf, "E-ADM-008", 2*time.Second) {
 		t.Errorf("AC-007 PC2: daemon log does not contain \"E-ADM-008\" within 2s; log:\n%s",
 			buf.String())
 	}
 
 	// ASSERT: the SVTN ID hex also appears in the same log buffer.
-	// Discriminating property: removing "svtn=%x" from mgmt_wire.go:713 causes
-	// this assertion to fail.
+	// Discriminating property: removing "svtn=%x" from the E-ADM-008 log call
+	// in mgmt_wire.go causes this assertion to fail.
 	if !scanForLine(&buf, knownSvtnIDHex, 2*time.Second) {
 		t.Errorf("AC-007 PC2: daemon log does not contain SVTN ID %q within 2s; log:\n%s",
 			knownSvtnIDHex, buf.String())
@@ -1506,11 +1515,12 @@ func TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged(t *testing.T) {
 // NodeIdentify outer header carrying FrameTypeData (0x01) instead of
 // FrameTypeCtl (0x03) is rejected with an error that names "frame_type".
 //
-// The decoder precondition guard is at node_identify_wire.go:285-288. Every
-// other existing test sends its outer header via encodeCtlHeaderRaw, which
-// hardcodes 0x03, so no existing test can detect removal of this guard.
+// The decoder precondition guard is the outer FrameType check in
+// nodeIdentifyHandshake (node_identify_wire.go). Every other existing test
+// sends its outer header via encodeCtlHeaderRaw, which hardcodes 0x03, so
+// no existing test can detect removal of this guard.
 //
-// Discriminating property: deleting the guard at 285-288 allows the frame to
+// Discriminating property: deleting the FrameType guard allows the frame to
 // proceed into decodeNodeIdentify. Because the outer PayloadLen is set to
 // nodeIdentifyPayloadSize (36), payload is 36 bytes. decodeNodeIdentify then
 // checks payload[0] for the NodeIdentify control_type discriminator. The
@@ -1575,11 +1585,12 @@ func TestNodeIdentifyHandshake_WrongOuterFrameType_Rejected(t *testing.T) {
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: the guard at node_identify_wire.go:285-288 emits
-	// "frame_type" in the error. If the guard is deleted, the driver proceeds into
-	// decodeNodeIdentify, which checks payload[0]; our zero payload causes it to
-	// emit "control_type" instead — NOT "frame_type". So this assertion fails
-	// immediately (no timeout required) when the guard is absent.
+	// Discriminating assertion: the outer FrameType guard in nodeIdentifyHandshake
+	// (node_identify_wire.go) emits "frame_type" in the error. If the guard is
+	// deleted, the driver proceeds into decodeNodeIdentify, which checks
+	// payload[0]; our zero payload causes it to emit "control_type" instead —
+	// NOT "frame_type". So this assertion fails immediately (no timeout
+	// required) when the guard is absent.
 	if !strings.Contains(res.err.Error(), "frame_type") {
 		t.Errorf("rulings §4: error does not name the offending field; want substring %q, got: %q",
 			"frame_type", res.err.Error())
@@ -1715,11 +1726,11 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
 // that when the ChallengeResponse svtn_id mismatch is detected, the daemon WARN
 // log emitted by onAccept contains the E-ADM-024 canonical string.
 //
-// Log seam: onAccept's default switch arm logs the raw error string via
-// routerLogger.Log. The error returned from nodeIdentifyHandshake with the guard
-// in place is "node_identify: ChallengeResponse svtn_id mismatch", so the default
-// arm emits: "runRouter: NODE_IDENTIFY handshake failed: node_identify:
-// ChallengeResponse svtn_id mismatch" — which contains the canonical substring.
+// Log seam: onAccept's DEDICATED `case errors.Is(hsErr, errCRSVTNIDMismatch):` arm
+// (mgmt_wire.go:724) logs via routerLogger.Log. With the fix in place the arm
+// emits: "node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=<hex>"
+// — which contains the canonical substring "node_identify: ChallengeResponse
+// svtn_id mismatch".
 //
 // RED GATE: FAILS without the BC-2.01.009 PC-9 guard.
 // Without the guard, the mismatched ChallengeResponse (with admitted key + valid
@@ -1779,14 +1790,116 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *test
 	// key); onAccept's error switch never fires; no WARN is emitted; scanForLine
 	// times out → FAIL.
 	//
-	// With the guard: the mismatch triggers the error path; onAccept's default arm
-	// emits "runRouter: NODE_IDENTIFY handshake failed: node_identify: ChallengeResponse
-	// svtn_id mismatch"; scanForLine finds the canonical substring → PASS.
+	// With the guard: the mismatch triggers the error path; onAccept's dedicated
+	// `case errors.Is(hsErr, errCRSVTNIDMismatch):` arm (mgmt_wire.go:724)
+	// emits "node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=<hex>";
+	// scanForLine finds the canonical substring → PASS.
 	const wantCanonical = "node_identify: ChallengeResponse svtn_id mismatch"
 	if !scanForLine(&buf, wantCanonical, 2*time.Second) {
 		t.Errorf("AC-003: daemon log does not contain canonical E-ADM-024 string %q within 2s "+
-			"(onAccept default arm must emit it when the guard returns the error); log:\n%s",
+			"(dedicated errCRSVTNIDMismatch arm (mgmt_wire.go) must emit it); log:\n%s",
 			wantCanonical, buf.String())
+	}
+}
+
+// TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode
+// verifies AC-003 PC-3: the daemon WARN log for the ChallengeResponse svtn_id
+// mismatch path (E-ADM-024) contains:
+//  1. The svtn context from the NodeIdentify outer header as `svtn=<hex>`,
+//     where <hex> is the lowercase hex of the ACTUAL (non-zero) NodeIdentify svtnID.
+//  2. The error code literal `E-ADM-024`, matching the sibling arms that
+//     each embed their own code literal for operator greppability.
+//
+// The NodeIdentify svtnID used in this test is from makeAdmittedNode, which
+// sets svtnID[0] = 0xAB (the "0xAB... deterministic test SVTN" documented in
+// router_drain_wire_test.go). In fmt.Sprintf("%x") format this is:
+//
+//	ab000000000000000000000000000000
+//
+// RED GATE: FAILS without the AC-003 PC-3 fix. Before the fix:
+//   - nodeIdentifyHandshake returns [16]byte{} (zeroed) on the mismatch path,
+//     so onAccept receives svtnID == [16]byte{} with no information.
+//   - onAccept falls through to the default arm, which logs:
+//     "runRouter: NODE_IDENTIFY handshake failed: node_identify: ChallengeResponse svtn_id mismatch"
+//     — this log contains NEITHER `svtn=ab000000000000000000000000000000`
+//     (PC-3, real svtnID) NOR `E-ADM-024` (code literal). Both assertions fail.
+//
+// After the fix onAccept's dedicated E-ADM-024 arm (mgmt_wire.go:724) logs:
+//
+//	`node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=ab000000000000000000000000000000`
+//
+// which satisfies both PC-3 assertions.
+//
+// Companion to TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024
+// (PC-1, canonical substring). Does NOT replace it — the PC-1 assertion remains
+// in the original test. This test adds the PC-3 assertions only.
+//
+// AC-003 PC-3 / BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — svtn context + code literal
+func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode(t *testing.T) {
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Same setup as AC-003 (WarnLogContainsE_ADM_024): pre-load an admitted node
+	// key so the mismatch path is exercised at the guard, not at admission.
+	info := makeAdmittedNode(t, cfg)
+
+	// Derive the expected svtn= substring from the ACTUAL NodeIdentify svtnID.
+	// makeAdmittedNode sets svtnID[0] = 0xAB → [16]byte{0xAB, 0x00...0x00}.
+	// fmt.Sprintf("%x", [16]byte{0xAB, 0, ..., 0}) == "ab000000000000000000000000000000".
+	// This assertion MUST use the real non-zero svtnID; a log with
+	// `svtn=00000000000000000000000000000000` must NOT satisfy it.
+	wantSVTNContext := fmt.Sprintf("svtn=%x", info.svtnID)
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	conn, err := net.DialTimeout("tcp", cfg.ListenAddr, 2*time.Second)
+	if err != nil {
+		t.Fatalf("AC-003 PC-3: dial %s: %v", cfg.ListenAddr, err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// mismatchSVTN must differ from info.svtnID (0xAB...) — same as AC-003 original.
+	var mismatchSVTN [16]byte
+	mismatchSVTN[0] = 0xCC
+
+	doHandshakeMismatchedCRSVTNID(conn, info.svtnID, info.nodePub, info.nodePriv, mismatchSVTN)
+
+	// PC-3 assertion 1: the log contains `svtn=<real hex>` where <real hex> is the
+	// actual NodeIdentify svtnID (ab000000000000000000000000000000). A log with
+	// `svtn=00000000000000000000000000000000` does NOT match: wantSVTNContext starts
+	// with `svtn=ab` so it can only match when the non-zero svtnID is propagated.
+	//
+	// AC-003 PC-3 / BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — svtn context + code literal
+	if !scanForLine(&buf, wantSVTNContext, 2*time.Second) {
+		t.Errorf("AC-003 PC-3: daemon log does not contain svtn context %q within 2s "+
+			"(nodeIdentifyHandshake must return the real NodeIdentify svtnID on the mismatch path, "+
+			"and onAccept must include it in the E-ADM-024 log; "+
+			"a log with svtn=00000000000000000000000000000000 fails this assertion); log:\n%s",
+			wantSVTNContext, buf.String())
+	}
+
+	// PC-3 assertion 2: the log contains the error code literal `E-ADM-024`.
+	// The sibling arms (E-ADM-022, E-ADM-003, E-ADM-001, etc.) each embed their
+	// code literal for operator greppability; E-ADM-024 must follow the same
+	// convention after the fix adds a classified case arm in onAccept.
+	const wantCode = "E-ADM-024"
+	if !scanForLine(&buf, wantCode, 2*time.Second) {
+		t.Errorf("AC-003 PC-3: daemon log does not contain code literal %q within 2s "+
+			"(onAccept must add a classified E-ADM-024 case arm, not fall through to default); log:\n%s",
+			wantCode, buf.String())
 	}
 }
 
@@ -1796,12 +1909,14 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *test
 // that a ChallengeResponse outer header with PayloadLen != 68 is rejected with
 // an error that names "payload_len" and the size violation.
 //
-// The payload-length guard is at node_identify_wire.go:344-347. The existing
-// TestNodeIdentifyHandshake_MalformedChallengeResponse_ConnectionClosed tests a
-// wrong msg_kind at a CORRECT payload_len=68 — it never exercises the
+// The payload-length guard is the outer PayloadLen check in
+// nodeIdentifyHandshake for the ChallengeResponse read (node_identify_wire.go).
+// The existing TestNodeIdentifyHandshake_MalformedChallengeResponse_ConnectionClosed
+// tests a wrong msg_kind at a CORRECT payload_len=68 — it never exercises the
 // payload-length path.
 //
-// Discriminating property: deleting the guard at 344-347 means the driver calls
+// Discriminating property: deleting the outer ChallengeResponse payload_len
+// guard means the driver calls
 // frame.ReadOuterFrame, which reads the outer header and then tries to read
 // crHdr.PayloadLen bytes (40 in this test) as the payload. decodeChallengeResponse
 // is then called with a 40-byte slice; its first check `len(payload) !=
@@ -1852,8 +1967,9 @@ func TestNodeIdentifyHandshake_MalformedChallengeResponse_WrongPayloadLen(t *tes
 		}
 
 		// Message 3: send a ChallengeResponse outer header with PayloadLen=40
-		// (NOT 68). The outer PayloadLen guard at node_identify_wire.go:344-347
-		// must reject this before decodeChallengeResponse is ever called.
+		// (NOT 68). The outer PayloadLen guard in nodeIdentifyHandshake
+		// (node_identify_wire.go) must reject this before decodeChallengeResponse
+		// is ever called.
 		//
 		// Use encodeCtlHeaderRaw (which writes FrameTypeCtl=0x03) so only the
 		// PayloadLen is wrong — isolating the payload-length guard from the
@@ -1873,11 +1989,12 @@ func TestNodeIdentifyHandshake_MalformedChallengeResponse_WrongPayloadLen(t *tes
 	if strings.Contains(res.err.Error(), "unimplemented") {
 		t.Errorf("nodeIdentifyHandshake: got stub error %q; want real malformed-frame error", res.err)
 	}
-	// Discriminating assertion: the guard at node_identify_wire.go:344-347 emits
-	// "payload_len" in the error. If the guard is deleted, decodeChallengeResponse
-	// is called with a 40-byte slice and emits "payload size 40 != 68" — which
-	// does NOT contain "payload_len". So this assertion fails immediately (no
-	// timeout required) when the outer-header payload-length guard is absent.
+	// Discriminating assertion: the outer ChallengeResponse payload_len guard in
+	// nodeIdentifyHandshake (node_identify_wire.go) emits "payload_len" in the
+	// error. If the guard is deleted, decodeChallengeResponse is called with a
+	// 40-byte slice and emits "payload size 40 != 68" — which does NOT contain
+	// "payload_len". So this assertion fails immediately (no timeout required)
+	// when the outer-header payload-length guard is absent.
 	if !strings.Contains(res.err.Error(), "payload_len") {
 		t.Errorf("rulings §6: error does not name the offending field; want substring %q, got: %q",
 			"payload_len", res.err.Error())
