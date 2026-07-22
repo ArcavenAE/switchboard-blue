@@ -1586,6 +1586,210 @@ func TestNodeIdentifyHandshake_WrongOuterFrameType_Rejected(t *testing.T) {
 	}
 }
 
+// ── S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY: SVTNID-consistency guard (BC-2.01.009 PC-9) ──
+
+// doHandshakeMismatchedCRSVTNID performs the node side of the NODE_IDENTIFY
+// handshake but intentionally sends a ChallengeResponse whose outer-header
+// svtn_id differs from the svtn_id in the NodeIdentify frame (EC-008). The
+// mismatchSVTN argument is used as the ChallengeResponse outer-header svtn_id.
+//
+// The NonceSig is computed correctly (signs the real challenge nonce with
+// nodePriv), so AdmitNode WOULD accept it on the matching-SVTNID path —
+// satisfying Decision 2 (discriminating constraint: admitted keyset in use).
+//
+// Used by AC-002 (unit) and AC-003 (integration) mismatch tests.
+func doHandshakeMismatchedCRSVTNID(
+	nodeConn net.Conn,
+	niSVTNID [16]byte,
+	nodePub ed25519.PublicKey,
+	nodePriv ed25519.PrivateKey,
+	mismatchSVTN [16]byte,
+) {
+	_ = nodeConn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	// Message 1: send NodeIdentify with the canonical svtnID.
+	niFrame := buildNodeIdentifyFrame(niSVTNID, nodePub)
+	if _, err := nodeConn.Write(niFrame); err != nil {
+		return
+	}
+
+	// Message 2: read Challenge (144 bytes); extract nonce from bytes [48:80].
+	buf := make([]byte, 144)
+	if _, err := io.ReadFull(nodeConn, buf); err != nil {
+		return
+	}
+	var nonce [32]byte
+	copy(nonce[:], buf[48:80])
+
+	// Message 3: send ChallengeResponse with mismatchSVTN in the outer header
+	// but a CORRECTLY SIGNED NonceSig. This exercises Decision 2: the key is
+	// admitted (AdmitNode would return nil on the matching path) but the outer
+	// svtn_id differs — proving the guard fires before AdmitNode is reached.
+	crFrame := buildChallengeResponseFrame(mismatchSVTN, nodePriv, nonce)
+	_, _ = nodeConn.Write(crFrame)
+}
+
+// ── AC-002: Mismatched ChallengeResponse svtn_id → connection closed before AdmitNode ──
+
+// TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
+// verifies that when the ChallengeResponse outer-header svtn_id differs from
+// the svtn_id in the NodeIdentify outer header, nodeIdentifyHandshake closes
+// the connection and returns a non-nil error BEFORE calling AdmitNode.
+//
+// RED GATE: FAILS without the BC-2.01.009 PC-9 guard in nodeIdentifyHandshake.
+// Without the guard, the mismatched ChallengeResponse is passed directly to
+// AdmitNode. Because the keyset contains the connecting node's key (admitted
+// key, Decision 2 discriminating constraint), AdmitNode returns nil and the
+// handshake completes successfully — res.err is nil, causing the first fatal
+// assertion below to fail immediately, before any other assertion fires.
+//
+// Discriminating property (Decision 2): the admitted keyset MUST contain the
+// connecting node's public key so that AdmitNode would return nil on the
+// matching-SVTNID path. This proves the guard fires BEFORE AdmitNode (not
+// merely that AdmitNode rejected the key for some other reason).
+//
+// AC-002 / BC-2.01.009 PC-9 / EC-008
+func TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode(t *testing.T) {
+	t.Parallel()
+
+	_, routerPriv := mustGenKeyHandshake(t)
+	nodePub, nodePriv := mustGenKeyHandshake(t)
+	svtnID := mustSVTNHandshake(0x50) // canonical SVTN for NodeIdentify
+
+	// Admitted keyset: the key IS registered for svtnID, so AdmitNode WOULD
+	// return nil on the matching-SVTNID path. Decision 2: this is the discriminating
+	// constraint that proves the guard fires before AdmitNode when the test fails
+	// without the guard (if AdmitNode were the rejection point, this keyset would
+	// cause it to return nil and the whole handshake would succeed).
+	ks := admission.NewAdmittedKeySet()
+	ks.RegisterKey(svtnID, nodePub, admission.RoleAccess)
+	r := routing.NewRouter(ks)
+
+	routerConn, nodeConn := net.Pipe()
+	t.Cleanup(func() { _ = routerConn.Close(); _ = nodeConn.Close() })
+
+	const ifaceID routing.InterfaceID = 60
+	h := newTestHandle(ifaceID)
+	resCh := runRouterSide(routerConn, r, routerPriv, ks, h)
+
+	// mismatchSVTN is any value that differs from svtnID byte-by-byte.
+	mismatchSVTN := mustSVTNHandshake(0x51)
+
+	var nodeWG sync.WaitGroup
+	nodeWG.Add(1)
+	go func() {
+		defer nodeWG.Done()
+		doHandshakeMismatchedCRSVTNID(nodeConn, svtnID, nodePub, nodePriv, mismatchSVTN)
+	}()
+
+	res := <-resCh
+	nodeWG.Wait()
+
+	// (a) nodeIdentifyHandshake MUST return a non-nil error on mismatch.
+	// Without the guard this assertion FAILS: AdmitNode returns nil (admitted key),
+	// the handshake completes, and res.err is nil.
+	if res.err == nil {
+		t.Fatal("AC-002: nodeIdentifyHandshake returned nil error for mismatched ChallengeResponse svtn_id; " +
+			"want non-nil error (BC-2.01.009 PC-9 guard not implemented)")
+	}
+
+	// (b) The error MUST contain the canonical E-ADM-024 string (substring match).
+	const wantCanonical = "node_identify: ChallengeResponse svtn_id mismatch"
+	if !strings.Contains(res.err.Error(), wantCanonical) {
+		t.Errorf("AC-002: error does not contain canonical E-ADM-024 string; want substring %q, got: %q",
+			wantCanonical, res.err.Error())
+	}
+
+	// (c) No binding recorded — AdmitNode was NOT reached, so BindInterface was
+	// not called. LookupInterface must return (0, false).
+	nodeAddr := nodeAddrHandshake(svtnID, nodePub)
+	if _, ok := r.LookupInterface(svtnID, nodeAddr); ok {
+		t.Error("AC-002: LookupInterface after mismatch returned (_, true); " +
+			"AdmitNode must NOT have been reached (BC-2.01.009 PC-9, Decision 2)")
+	}
+}
+
+// ── AC-003: Mismatch path WARN log contains E-ADM-024 canonical string ────────
+
+// TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024 verifies
+// that when the ChallengeResponse svtn_id mismatch is detected, the daemon WARN
+// log emitted by onAccept contains the E-ADM-024 canonical string.
+//
+// Log seam: onAccept's default switch arm logs the raw error string via
+// routerLogger.Log. The error returned from nodeIdentifyHandshake with the guard
+// in place is "node_identify: ChallengeResponse svtn_id mismatch", so the default
+// arm emits: "runRouter: NODE_IDENTIFY handshake failed: node_identify:
+// ChallengeResponse svtn_id mismatch" — which contains the canonical substring.
+//
+// RED GATE: FAILS without the BC-2.01.009 PC-9 guard.
+// Without the guard, the mismatched ChallengeResponse (with admitted key + valid
+// NonceSig) passes straight to AdmitNode, which returns nil. The handshake
+// completes successfully, onAccept's error switch never fires, and no WARN log
+// containing the canonical string is emitted. scanForLine times out → FAIL.
+//
+// NOT t.Parallel(): drives the production runRouter daemon and captures its log
+// output via startRunRouterWithConfig; uses the same isolation pattern as
+// TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged.
+//
+// AC-003 / BC-2.01.009 PC-9 / EC-008 / error-taxonomy v5.2 E-ADM-024
+func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *testing.T) {
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Pre-load an admitted node key so AdmitNode WOULD accept it on the
+	// matching-SVTNID path (Decision 2 discriminating constraint).
+	info := makeAdmittedNode(t, cfg)
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	// Dial a connection and perform the mismatch handshake: NodeIdentify uses
+	// info.svtnID; ChallengeResponse uses a different svtn_id in the outer header.
+	// The NonceSig is computed correctly (admitted key, valid signature) so
+	// AdmitNode would accept it on the matching path — proving the guard fires
+	// before AdmitNode when the canonical test PASSES.
+	conn, err := net.DialTimeout("tcp", cfg.ListenAddr, 2*time.Second)
+	if err != nil {
+		t.Fatalf("AC-003: dial %s: %v", cfg.ListenAddr, err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// mismatchSVTN must differ from info.svtnID (0xAB... from makeAdmittedNode).
+	var mismatchSVTN [16]byte
+	mismatchSVTN[0] = 0xCC // anything that is not 0xAB
+
+	doHandshakeMismatchedCRSVTNID(conn, info.svtnID, info.nodePub, info.nodePriv, mismatchSVTN)
+
+	// ASSERT: the daemon WARN log contains the canonical E-ADM-024 string within
+	// a bounded deadline.
+	//
+	// Without the guard: the mismatch is not detected; AdmitNode returns nil (admitted
+	// key); onAccept's error switch never fires; no WARN is emitted; scanForLine
+	// times out → FAIL.
+	//
+	// With the guard: the mismatch triggers the error path; onAccept's default arm
+	// emits "runRouter: NODE_IDENTIFY handshake failed: node_identify: ChallengeResponse
+	// svtn_id mismatch"; scanForLine finds the canonical substring → PASS.
+	const wantCanonical = "node_identify: ChallengeResponse svtn_id mismatch"
+	if !scanForLine(&buf, wantCanonical, 2*time.Second) {
+		t.Errorf("AC-003: daemon log does not contain canonical E-ADM-024 string %q within 2s "+
+			"(onAccept default arm must emit it when the guard returns the error); log:\n%s",
+			wantCanonical, buf.String())
+	}
+}
+
 // ── Defense-in-depth: ChallengeResponse payload-length guard (rulings §6) ────
 
 // TestNodeIdentifyHandshake_MalformedChallengeResponse_WrongPayloadLen verifies

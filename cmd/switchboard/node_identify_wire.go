@@ -346,6 +346,14 @@ func nodeIdentifyHandshake(
 		return svtnID, [8]byte{}, fmt.Errorf("node_identify: malformed ChallengeResponse: payload_len=%d want %d", crHdr.PayloadLen, challengeResponsePayloadSize)
 	}
 
+	// BC-2.01.009 PC-9 / E-ADM-024: ChallengeResponse outer-header svtn_id MUST
+	// match the svtn_id from the NodeIdentify outer header (message 1). A mismatch
+	// blocks a cross-SVTN credential substitution attack before AdmitNode is reached.
+	if crHdr.SVTNID != svtnID {
+		_ = conn.Close()
+		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: ChallengeResponse svtn_id mismatch")
+	}
+
 	// Decode ChallengeResponse payload.
 	resp, err := decodeChallengeResponse(crPayload)
 	if err != nil {
