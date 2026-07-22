@@ -3,12 +3,12 @@ artifact_id: S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY
 document_type: story
 level: ops
 story_id: S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY
-version: "1.0"
+version: "1.4"
 title: "NODE_IDENTIFY hardening: ChallengeResponse SVTNID-consistency enforcement (BC-2.01.009 PC-9)"
 status: ready
 producer: story-writer
 timestamp: 2026-07-19T00:00:00Z
-modified: 2026-07-19T00:00:00Z
+modified: 2026-07-22T00:00:00Z
 phase: 2
 epic: E-7
 wave: backlog
@@ -102,19 +102,40 @@ The guard is a two-line check inserted at one point in `nodeIdentifyHandshake`:
 // Before: admission.AdmitNode(...)
 if crHdr.SVTNID != svtnID {
     _ = conn.Close()
-    return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: ChallengeResponse svtn_id mismatch")
+    return svtnID, [8]byte{}, errCRSVTNIDMismatch
 }
 ```
 
-The WARN log containing E-ADM-024 is emitted by the `onAccept` caller when it
-receives this error (consistent with how `onAccept` handles the other E-ADM-* errors
-returned from `nodeIdentifyHandshake` — the logging happens at the `onAccept`
-dispatch switch, not inside the handshake driver itself). Alternatively, the WARN
-may be emitted directly in `nodeIdentifyHandshake` before returning, mirroring how
-E-ADM-022 is logged. The implementer follows whichever pattern exists in the PR #127
-delivery for other pre-AdmitNode failure paths. The canonical string is
-`"node_identify: ChallengeResponse svtn_id mismatch"` — it MUST be byte-identical
-to the error-taxonomy v5.2 E-ADM-024 row.
+Where `errCRSVTNIDMismatch` is a package-level sentinel declared as:
+
+```go
+var errCRSVTNIDMismatch = errors.New("node_identify: ChallengeResponse svtn_id mismatch")
+```
+
+The sentinel string MUST be byte-identical to the error-taxonomy v5.2 E-ADM-024
+canonical string. **Why return the real `svtnID` instead of `[16]byte{}`:** the
+`onAccept` caller receives this error and must log `svtn=%x` (AC-003 PC-3) to aid
+operator diagnosis — returning the zeroed `[16]byte{}` would log `svtn=0000...`,
+hiding which SVTN was targeted. Returning the real `svtnID` captured from the
+NodeIdentify outer header provides the expected value in the log. **Why a sentinel
+(`errCRSVTNIDMismatch`) instead of inline `fmt.Errorf`:** a package-level sentinel
+supports `errors.Is` classification in `onAccept` (per go.md — never string-match;
+use `errors.Is`/`errors.As` for error inspection), making the E-ADM-024 arm greppable
+and unambiguous.
+
+The WARN log containing E-ADM-024 is emitted by a **dedicated `onAccept`
+classification arm** that matches `errCRSVTNIDMismatch` via `errors.Is` — mirroring
+the sibling arms for E-ADM-022, E-ADM-003, E-ADM-005, E-ADM-015, E-ADM-008, and
+E-ADM-001. The arm format is:
+`node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=%x`
+**Why canonical-substring-first:** the contiguous string `"node_identify: ChallengeResponse
+svtn_id mismatch"` must appear byte-identically in the log so that AC-003 PC-1 and the
+Architecture Compliance Rule (canonical error string, error-taxonomy v5.2 E-ADM-024) can
+assert it as a substring. Placing `E-ADM-024` between `node_identify:` and
+`ChallengeResponse` would break the contiguous canonical substring and cause the shipped
+AC-003 test to fail. The code literal `E-ADM-024` and the `svtn=%x` context follow the
+canonical substring. The WARN is NOT handled by the generic `default` fallthrough;
+it has its own named arm so the error code appears literally in the source.
 
 ### Decision 2 — No AdmitNode call on mismatch (discriminating property)
 
@@ -143,10 +164,12 @@ The guard short-circuits BEFORE `admission.AdmitNode` is reached. This means:
    byte-for-byte on the matching-SVTNID path.
 
 **Test name:**
-- `TestNodeIdentifyHandshake_CRSVTNIDMatch_ProceedsToAdmitNode` — extend or
-  verify an existing PR #127 success-path test: send a ChallengeResponse with
-  `svtn_id == NodeIdentify.svtn_id`; assert handshake completes, binding is
-  recorded, no connection closure from the guard.
+- `TestNodeIdentifyHandshake_Success_BindingRecorded` — the existing PR #127
+  success-path test (Task-1 authorizes satisfying AC-001 with this test). It
+  sends a ChallengeResponse with `svtn_id == NodeIdentify.svtn_id` and asserts
+  that the handshake completes, the binding is recorded, and no connection
+  closure occurs from the guard. (AC-001 is discharged by this existing PR #127
+  success-path test per Task-1; no new test is required.)
 
 ---
 
@@ -186,21 +209,32 @@ The guard short-circuits BEFORE `admission.AdmitNode` is reached. This means:
 **Postconditions:**
 1. The WARN log emitted on the mismatch path (whether from inside
    `nodeIdentifyHandshake` or from the `onAccept` caller, consistent with how
-   PR #127 handles other E-ADM-* paths) contains the substring
-   `"node_identify: ChallengeResponse svtn_id mismatch"` (byte-identical to
-   error-taxonomy v5.2 E-ADM-024 canonical string) and/or the substring
-   `"E-ADM-024"`.
+   PR #127 handles other E-ADM-* paths) MUST contain the contiguous substring
+   `"node_identify: ChallengeResponse svtn_id mismatch"` byte-identically (this
+   is the canonical string from error-taxonomy v5.2 E-ADM-024; no paraphrase or
+   reordering is acceptable). The code literal `"E-ADM-024"` SHOULD also appear
+   in the log (per PC-3 and the dedicated onAccept arm format), but the
+   contiguous canonical substring is the required assertion.
 2. The log is at WARN severity (not ERROR or INFO) — matching E-ADM-022 and
    E-ADM-023 log-level precedent.
 3. The log includes the SVTNID context from the NodeIdentify outer header (the
    expected value) to aid operator diagnosis — following the `svtn={svtnID}`
    pattern from E-ADM-022 or equivalent per the PR #127 log format convention.
 
-**Test name:**
+**Test names:**
 - `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024`
-  — capture log output during the mismatch scenario (AC-002 setup); assert the
-  captured log contains `"node_identify: ChallengeResponse svtn_id mismatch"`
-  or `"E-ADM-024"` at WARN level.
+  — verifies **PC-1**: capture log output during the mismatch scenario (AC-002
+  setup); assert the captured log contains the contiguous canonical substring
+  `"node_identify: ChallengeResponse svtn_id mismatch"` (byte-identical) at
+  WARN level. This is the required assertion for the contiguous canonical
+  substring — consistent with PC-1.
+- `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode`
+  — verifies **PC-3**: assert that the real `svtn=<hex>` context (the SVTNID
+  from the NodeIdentify outer header, formatted as `svtn=%x`) AND the greppable
+  code literal `"E-ADM-024"` are co-present in the same WARN log line emitted
+  on the mismatch path. This discriminator confirms the dedicated `onAccept` arm
+  emits both the SVTNID context and the code literal, not just the canonical
+  substring.
 
 ---
 
@@ -230,6 +264,13 @@ No new imports required beyond what `nodeIdentifyHandshake` already uses.
 | (regression) | ChallengeResponse outer-header `svtn_id` == NodeIdentify outer-header `svtn_id` (all bytes identical) | Guard does NOT fire. Handshake proceeds to AdmitNode as in PR #127. Covered by AC-001. |
 | (edge) | ChallengeResponse `svtn_id` is all-zero bytes (different from a non-zero NodeIdentify `svtn_id`) | Guard fires (all-zero != non-zero); closed with E-ADM-024. The earlier zero-SVTNID check (BC-2.01.009 PC-5 / AC-003 of parent story) already rejected NodeIdentify with all-zero SVTNID, so this case can only arise if the ChallengeResponse has all-zero SVTNID while the NodeIdentify had a valid non-zero one. Same treatment: mismatch → E-ADM-024. |
 
+## Purity Classification
+
+| Module | Classification | Justification |
+|--------|---------------|---------------|
+| `cmd/switchboard/node_identify_wire.go` (SVTNID-consistency guard) | effectful-shell | Inserted into the existing effectful `nodeIdentifyHandshake` function; reads `crHdr.SVTNID` decoded from a live TCP connection; closes `conn` on mismatch — TCP I/O side-effect |
+| `cmd/switchboard/node_identify_wire.go` or `cmd/switchboard/mgmt_wire.go` (WARN log emission) | effectful-shell | Log I/O; follows existing E-ADM-* log placement in `onAccept` switch |
+
 ## Token Budget Estimate (MANDATORY)
 
 | Context Source | Estimated Tokens |
@@ -249,11 +290,11 @@ No new imports required beyond what `nodeIdentifyHandshake` already uses.
 Red Gate discipline: all test functions must be written FIRST (test-writer step)
 and FAIL before any implementation code is written (implementer step).
 
-1. [ ] Write failing test for AC-001: `TestNodeIdentifyHandshake_CRSVTNIDMatch_ProceedsToAdmitNode` — confirm matching SVTNID in ChallengeResponse outer header does not trigger the new guard; handshake completes; binding recorded. (May be satisfied by an existing PR #127 success-path test if it already validates the full matching path end-to-end; the test-writer verifies and adds if absent.) — test-writer
+1. [ ] Verify AC-001 regression coverage: AC-001 is discharged by the existing PR #127 success-path test `TestNodeIdentifyHandshake_Success_BindingRecorded` — the test-writer verified this test covers the matching-SVTNID→AdmitNode→binding path end-to-end; no new test is required for AC-001. — test-writer
 2. [ ] Write failing test for AC-002: `TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode` — construct a valid handshake except mutate the ChallengeResponse outer-header `svtn_id`; use an admitted keyset that would grant admission on the matching path; assert: (a) connection closed, (b) error message contains canonical E-ADM-024 string, (c) `LookupInterface` returns `(0, false)` — AdmitNode was NOT reached. — test-writer
-3. [ ] Write failing test for AC-003: `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024` — capture WARN log on the mismatch path; assert log contains `"node_identify: ChallengeResponse svtn_id mismatch"` or `"E-ADM-024"`. — test-writer
+3. [ ] Write failing tests for AC-003 (two tests, one AC): (a) `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024` — capture WARN log on the mismatch path; assert log contains the contiguous canonical substring `"node_identify: ChallengeResponse svtn_id mismatch"` (byte-identical; the "and/or E-ADM-024" alternative is no longer acceptable per PC-1 tightening) — verifies PC-1; (b) `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode` — capture WARN log on the mismatch path; assert the real `svtn=<hex>` context (SVTNID from NodeIdentify outer header, `svtn=%x` format) AND the greppable code literal `"E-ADM-024"` are co-present in the same WARN log line — verifies PC-3. — test-writer
 4. [ ] Verify Red Gate: `go test ./cmd/switchboard/... -run TestNodeIdentifyHandshake_CRSVTNID` fails with compile errors or test failures for all 3 new AC tests — implementer
-5. [ ] Add the SVTNID-consistency guard in `nodeIdentifyHandshake` (`cmd/switchboard/node_identify_wire.go`): after reading and decoding the ChallengeResponse outer header (`crHdr`), immediately before the `admission.AdmitNode(...)` call, insert: `if crHdr.SVTNID != svtnID { _ = conn.Close(); return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: ChallengeResponse svtn_id mismatch") }`. Emit a WARN log consistent with the E-ADM-022/E-ADM-023 log pattern in `onAccept` (either from inside `nodeIdentifyHandshake` before returning, or from the `onAccept` error dispatch switch after receiving the error — follow the existing PR #127 convention). Canonical string MUST be byte-identical to error-taxonomy v5.2 E-ADM-024: `"node_identify: ChallengeResponse svtn_id mismatch"`. — implementer [BC-2.01.009 PC-9; error-taxonomy v5.2 E-ADM-024]
+5. [ ] Add the SVTNID-consistency guard in `nodeIdentifyHandshake` (`cmd/switchboard/node_identify_wire.go`): (a) declare a package-level sentinel `var errCRSVTNIDMismatch = errors.New("node_identify: ChallengeResponse svtn_id mismatch")` (ensure `errors` is imported in `node_identify_wire.go`); (b) after reading and decoding the ChallengeResponse outer header (`crHdr`), immediately before the `admission.AdmitNode(...)` call, insert: `if crHdr.SVTNID != svtnID { _ = conn.Close(); return svtnID, [8]byte{}, errCRSVTNIDMismatch }` — return the real `svtnID` (not `[16]byte{}`) so the `onAccept` caller can log `svtn=%x` per AC-003 PC-3; (c) add a **dedicated `errors.Is(err, errCRSVTNIDMismatch)` arm** in the `onAccept` error-classification switch (in `mgmt_wire.go` or wherever the E-ADM-022/E-ADM-023 sibling arms live), emitting a WARN log with format `node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=%x` — do NOT rely on the `default` fallthrough for this error; it needs its own arm so `E-ADM-024` appears literally in source and the svtnID context is logged. Canonical string MUST be byte-identical to error-taxonomy v5.2 E-ADM-024: `"node_identify: ChallengeResponse svtn_id mismatch"`. — implementer [BC-2.01.009 PC-9; error-taxonomy v5.2 E-ADM-024]
 6. [ ] Run `go test ./cmd/switchboard/... -race`; confirm all 3 new AC test functions pass and no regressions in existing PR #127 tests
 7. [ ] Update STATE.md (state-manager)
 
@@ -266,23 +307,23 @@ and FAIL before any implementation code is written (implementer step).
 | DI-002 — private keys never transit | Guard operates on the ChallengeResponse outer-header `svtn_id` field (a 16-byte SVTN identifier), not on any key material. No security-perimeter impact. | Code review |
 | Canonical error string (error-taxonomy v5.2 E-ADM-024) | The error returned from `nodeIdentifyHandshake` and/or the WARN log string MUST contain `"node_identify: ChallengeResponse svtn_id mismatch"` byte-identically. No paraphrase, no extra wrapping text that obscures the canonical string. | AC-002 and AC-003 tests (substring match) |
 | go.md rule 3 — always check error returns | The `conn.Close()` call on the mismatch path: `_ = conn.Close()` (blank-identifier discard is acceptable here because the connection is already being abandoned; this mirrors the PR #127 fail-closed error-path pattern for this same function). | Code review |
-| Forbidden dependency: no new imports in `cmd/switchboard` beyond what PR #127 introduced | `fmt.Errorf` and the comparison `crHdr.SVTNID != svtnID` use only packages already imported by `node_identify_wire.go`. | `go list -deps ./cmd/switchboard` |
+| Forbidden dependency: no new imports in `cmd/switchboard` beyond what PR #127 introduced | The comparison `crHdr.SVTNID != svtnID` uses primitive Go built-ins already in scope. The `errCRSVTNIDMismatch` sentinel uses `errors.New` — `errors` must be imported in `node_identify_wire.go` if not already present (it is stdlib; no new external dependency). | `go list -deps ./cmd/switchboard` |
 
 ## Library & Framework Requirements (MANDATORY)
 
 | Tool / Package | Version | Purpose |
 |----------------|---------|---------|
 | Go | 1.25.4 (per `go.mod`) | Language runtime |
-| `fmt` | stdlib | `fmt.Errorf` for canonical error message |
+| `errors` | stdlib | `errors.New` for package-level `errCRSVTNIDMismatch` sentinel; `errors.Is` classification in `onAccept` arm |
 | `net` | stdlib | `conn.Close()` on mismatch path |
-| (all other imports) | unchanged from PR #127 | The guard uses no new packages; all types (`[16]byte` SVTNID comparison) are primitive Go built-ins |
+| (all other imports) | unchanged from PR #127 | The guard uses no new external packages; all types (`[16]byte` SVTNID comparison) are primitive Go built-ins; `errors` is stdlib |
 
 ## File Structure Requirements (MANDATORY)
 
 | File | Action | Purpose |
 |------|--------|---------|
 | `cmd/switchboard/node_identify_wire.go` | **modify** | Add 2-line SVTNID-consistency guard in `nodeIdentifyHandshake` after ChallengeResponse outer-header decode, before `admission.AdmitNode` call. Add WARN log consistent with E-ADM-022/E-ADM-023 precedent. |
-| `cmd/switchboard/node_identify_wire_test.go` | **modify** | Add `TestNodeIdentifyHandshake_CRSVTNIDMatch_ProceedsToAdmitNode` (AC-001), `TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode` (AC-002), `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024` (AC-003) |
+| `cmd/switchboard/node_identify_wire_test.go` | **modify** | Add `TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode` (AC-002), `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024` (AC-003 PC-1), `TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode` (AC-003 PC-3). AC-001 is covered by the pre-existing `TestNodeIdentifyHandshake_Success_BindingRecorded` (not added by this story). |
 
 No other files are modified by this story.
 
@@ -301,4 +342,8 @@ No other files are modified by this story.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.4 | 2026-07-22 | Enumerate the AC-003 PC-3 companion test TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode in the AC-003 Test-name bullet, Task-3, and File Structure table (the story previously named only the PC-1 test WarnLogContainsE_ADM_024, though the shipped code + demo evidence already carry both). Traceability-completeness fix found by post-merge reconvergence R4. No code change; no AC semantics changed; count stays 3 (this is one AC verified by two tests). |
+| 1.3 | 2026-07-22 | Sweep two residual doc contradictions the v1.2 edit missed: (1) AC-003 Test-name bullet still said canonical "or E-ADM-024" — tightened to require the contiguous canonical substring, consistent with PC-1 and the shipped test; (2) AC-001 Test-name named a nonexistent test — reconciled ALL references (AC-001 Test-name bullet, Task 1, File Structure table) to the actual satisfying test TestNodeIdentifyHandshake_Success_BindingRecorded (existing PR #127 success-path test; no new test added for AC-001). Found by post-merge reconvergence R3. No code change; no AC semantics changed. |
+| 1.2 | 2026-07-22 | Correct the onAccept WARN-log format ordering in Decision-1 and Task-5 from `node_identify: E-ADM-024 ChallengeResponse svtn_id mismatch svtn=%x` to canonical-substring-first `node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=%x` (matches shipped mgmt_wire.go and the AC-003 test's contiguous-substring assertion). Tighten AC-003 PC-1 from canonical-"and/or"-E-ADM-024 to REQUIRE the contiguous canonical substring (the prior looseness masked the ordering drift). Found by post-merge reconvergence pass on the PR #130 fix branch. No code change; no AC semantics changed beyond tightening PC-1 to match the shipped test. |
+| 1.1 | 2026-07-22 | Correct Decision-1/Task-5 guard-return snippet from `return [16]byte{}, [8]byte{}` to `return svtnID, [8]byte{}, errCRSVTNIDMismatch` (sentinel enables errors.Is classification; real svtnID enables AC-003 PC-3 svtn=%x logging). Decision-1 WARN guidance updated to a dedicated onAccept E-ADM-024 arm (not default fallthrough). Fixes story-internal contradiction where the snippet could not satisfy the story's own AC-003 PC-3; found by post-merge fresh-context convergence pass on PR #129. No AC semantics changed; PC-3 preserved. |
 | 1.0 | 2026-07-19 | Initial creation — SEC-NIDW-SVTNID-CONSISTENCY follow-up story per post-merge review of PR #127; BC-2.01.009 PC-9 source. |
