@@ -1715,11 +1715,11 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
 // that when the ChallengeResponse svtn_id mismatch is detected, the daemon WARN
 // log emitted by onAccept contains the E-ADM-024 canonical string.
 //
-// Log seam: onAccept's default switch arm logs the raw error string via
-// routerLogger.Log. The error returned from nodeIdentifyHandshake with the guard
-// in place is "node_identify: ChallengeResponse svtn_id mismatch", so the default
-// arm emits: "runRouter: NODE_IDENTIFY handshake failed: node_identify:
-// ChallengeResponse svtn_id mismatch" — which contains the canonical substring.
+// Log seam: onAccept's DEDICATED `case errors.Is(hsErr, errCRSVTNIDMismatch):` arm
+// (mgmt_wire.go:724) logs via routerLogger.Log. With the fix in place the arm
+// emits: "node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=<hex>"
+// — which contains the canonical substring "node_identify: ChallengeResponse
+// svtn_id mismatch".
 //
 // RED GATE: FAILS without the BC-2.01.009 PC-9 guard.
 // Without the guard, the mismatched ChallengeResponse (with admitted key + valid
@@ -1812,9 +1812,9 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *test
 //     — this log contains NEITHER `svtn=ab000000000000000000000000000000`
 //     (PC-3, real svtnID) NOR `E-ADM-024` (code literal). Both assertions fail.
 //
-// After the fix onAccept will have a classified E-ADM-024 case arm that logs:
+// After the fix onAccept's dedicated E-ADM-024 arm (mgmt_wire.go:724) logs:
 //
-//	`node_identify: E-ADM-024 <desc> svtn=ab000000000000000000000000000000`
+//	`node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=ab000000000000000000000000000000`
 //
 // which satisfies both PC-3 assertions.
 //
