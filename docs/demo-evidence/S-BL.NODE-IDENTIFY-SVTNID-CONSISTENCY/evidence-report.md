@@ -74,21 +74,17 @@ Two test functions cover the two post-conditions:
 
 **Command (both tests):**
 ```
-go test ./cmd/switchboard/ -run 'CRSVTNID' -count=1 -v
+go test ./cmd/switchboard/ -run 'CRSVTNIDMismatch_WarnLog' -count=1 -v
 ```
 
 **Observed output (PASS):**
 ```
-=== RUN   TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
-=== PAUSE TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
 === RUN   TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024
 --- PASS: TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024 (0.05s)
 === RUN   TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode
 --- PASS: TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode (0.05s)
-=== CONT  TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
---- PASS: TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode (0.00s)
 PASS
-ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.591s
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.513s
 ```
 
 **BC trace:** BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — the dedicated `errCRSVTNIDMismatch` arm at `mgmt_wire.go:724` is the normative emission point; PC-1 verifies the canonical substring; PC-3 verifies the svtn hex context and greppable code literal are co-present in the same log entry.
