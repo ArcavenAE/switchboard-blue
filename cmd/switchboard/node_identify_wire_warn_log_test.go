@@ -5,9 +5,9 @@
 // The existing direct-call tests in node_identify_wire_test.go verify the
 // returned error sentinels but CANNOT observe the daemon-level WARN log
 // because they call nodeIdentifyHandshake directly, bypassing the
-// onAccept classification switch in mgmt_wire.go (lines 717-720: the
+// onAccept classification switch in mgmt_wire.go — specifically the
 // default arm that handles unclassified errors such as malformed frames
-// and zero-SVTN rejections).
+// and zero-SVTN rejections.
 //
 // Strategy: identical to the existing AC-004..AC-009 daemon-level log
 // companions in node_identify_wire_log_test.go — drive the full
@@ -42,7 +42,7 @@ import (
 //
 // onAccept's classification switch does not have a dedicated case for the
 // zero-SVTN error (it is not an admission sentinel), so the error falls to
-// the default arm (mgmt_wire.go:717-720):
+// the default arm of onAccept's classification switch in mgmt_wire.go:
 //
 //	default:
 //	    routerLogger.Log(fmt.Sprintf("runRouter: NODE_IDENTIFY handshake failed: %v", hsErr))
@@ -118,7 +118,7 @@ func TestNodeIdentifyHandshake_ZeroSVTNID_LogsWarn(t *testing.T) {
 // log is emitted containing the error text (AC-002 PC-4 postcondition).
 //
 // Malformed-frame errors are not admission sentinels, so they fall to the
-// default arm in onAccept's switch (mgmt_wire.go:717-720):
+// default arm in onAccept's switch (mgmt_wire.go):
 //
 //	default:
 //	    routerLogger.Log(fmt.Sprintf("runRouter: NODE_IDENTIFY handshake failed: %v", hsErr))
