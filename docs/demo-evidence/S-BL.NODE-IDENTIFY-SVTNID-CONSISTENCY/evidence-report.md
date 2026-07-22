@@ -1,6 +1,6 @@
 # Demo Evidence Report — S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY
 
-**Story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.2 — SVTNID consistency guard: ChallengeResponse svtn_id MUST match the NodeIdentify outer header svtn_id before AdmitNode is reached.
+**Story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.4 — SVTNID consistency guard: ChallengeResponse svtn_id MUST match the NodeIdentify outer header svtn_id before AdmitNode is reached.
 **Code-complete at:** 8b667ce (guard + tests); demo/doc refinements in later commits on branch fix/node-identify-eadm024-log-context
 **BC anchor:** BC-2.01.009 PC-9 / EC-008; error-taxonomy v5.2 E-ADM-024
 **E-ADM-024 canonical string:** `node_identify: ChallengeResponse svtn_id mismatch`
