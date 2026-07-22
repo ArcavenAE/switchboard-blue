@@ -1393,13 +1393,13 @@ func TestNodeIdentifyHandshake_CleanupFunc_UnbindInterface_Called(t *testing.T) 
 	// Close from the client side — triggers the daemon's per-conn ServeConn to
 	// return, which invokes the onAccept cleanup func:
 	//   sendMap.Delete(h.IfaceID)
-	//   router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)  ← line 778 under test
+	//   router.UnbindInterface(svtnID, nodeAddr, h.IfaceID)  ← the UnbindInterface call in the cleanup closure (mgmt_wire.go)
 	//   nodeConnHook(nodeConnRemoved, h.IfaceID)
 	_ = nodeConn.Close()
 
 	// Wait for the cleanup closure to complete (bounded deadline).
-	// nodeConnRemoved fires synchronously at line 780, AFTER UnbindInterface
-	// at line 778 — so when this returns, the binding is already gone.
+	// nodeConnRemoved fires synchronously AFTER UnbindInterface in the same
+	// cleanup closure — so when this returns, the binding is already gone.
 	awaitNodeConnEvent(t, events, nodeConnRemoved, 2*time.Second)
 
 	// ASSERT: binding is removed after cleanup.
@@ -1816,7 +1816,7 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *test
 //
 //	ab000000000000000000000000000000
 //
-// RED GATE: FAILS without the AC-003 PC-3 fix. Current code:
+// RED GATE: FAILS without the AC-003 PC-3 fix. Before the fix:
 //   - nodeIdentifyHandshake returns [16]byte{} (zeroed) on the mismatch path,
 //     so onAccept receives svtnID == [16]byte{} with no information.
 //   - onAccept falls through to the default arm, which logs:
