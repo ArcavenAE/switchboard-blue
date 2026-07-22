@@ -16,7 +16,7 @@ Type "clear"
 Enter
 Show
 
-Type "# AC-003: Mismatched svtn_id → WARN log surfaces canonical E-ADM-024 string via onAccept default arm"
+Type "# AC-003: Mismatched svtn_id → WARN log surfaces canonical E-ADM-024 string via dedicated errCRSVTNIDMismatch arm"
 Enter
 Type "# BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024"
 Enter

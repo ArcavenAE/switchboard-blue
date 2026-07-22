@@ -1,7 +1,7 @@
 # Demo Evidence Report — S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY
 
-**Story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.0 — SVTNID consistency guard: ChallengeResponse svtn_id MUST match the NodeIdentify outer header svtn_id before AdmitNode is reached.
-**HEAD:** 8db6c8535e47bee40c10500ee77898bab663b2ae
+**Story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.2 — SVTNID consistency guard: ChallengeResponse svtn_id MUST match the NodeIdentify outer header svtn_id before AdmitNode is reached.
+**HEAD:** 1b321ce03c9feeee600817b980c59e55250318bb
 **BC anchor:** BC-2.01.009 PC-9 / EC-008; error-taxonomy v5.2 E-ADM-024
 **E-ADM-024 canonical string:** `node_identify: ChallengeResponse svtn_id mismatch`
 **Status:** CONVERGED
@@ -13,7 +13,8 @@
 |----|-------|--------------|-----------|-----------|
 | AC-001 | Matching SVTNID in ChallengeResponse → handshake proceeds to AdmitNode, binding recorded (regression: guard MUST NOT fire on valid path) | TestNodeIdentifyHandshake_Success_BindingRecorded | AC-001-matching-svtnid-proceeds-to-admitnode.tape | PASS |
 | AC-002 | Mismatched ChallengeResponse svtn_id (admitted keyset) → connection closed BEFORE AdmitNode; LookupInterface returns (0,false) | TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode | AC-002-mismatched-svtnid-closed-before-admitnode.tape | PASS |
-| AC-003 | Mismatch path → WARN log surfaces canonical E-ADM-024 string via onAccept default arm | TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024 | AC-003-warn-log-eadm024.tape | PASS |
+| AC-003 (PC-1) | Mismatch path → WARN log contains canonical E-ADM-024 substring via dedicated errCRSVTNIDMismatch arm | TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024 | AC-003-warn-log-eadm024.tape | PASS |
+| AC-003 (PC-3) | Mismatch path → WARN log includes real svtn_id hex context + greppable E-ADM-024 code literal | TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode | AC-003-warn-log-eadm024.tape | PASS |
 
 ---
 
@@ -63,24 +64,34 @@ ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.480s
 
 ---
 
-## AC-003 — WARN log contains E-ADM-024 canonical string
+## AC-003 — WARN log contains E-ADM-024 canonical string (PC-1 + PC-3)
 
-**What it demonstrates:** On the mismatch path, the daemon emits a WARN log whose message contains the canonical error-taxonomy string `node_identify: ChallengeResponse svtn_id mismatch` (E-ADM-024). This log is produced via the `onAccept` default arm. The test asserts both that the log entry appears and that it contains the exact canonical string.
+**What it demonstrates:** On the mismatch path, the daemon emits a WARN log from the dedicated `errCRSVTNIDMismatch` arm introduced at `mgmt_wire.go:724`. This replaced the former `onAccept` default arm. The log message emits: `node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=<hex>` — canonical substring first, then the greppable E-ADM-024 code literal, then the real NodeIdentify svtn as hex.
 
-**Command:**
+Two test functions cover the two post-conditions:
+- **PC-1** (`TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024`): asserts the canonical substring `node_identify: ChallengeResponse svtn_id mismatch` is present.
+- **PC-3** (`TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode`): asserts the real svtn hex context (e.g. `svtn=ab00...`) AND the greppable `E-ADM-024` code literal are both present in the same log entry.
+
+**Command (both tests):**
 ```
-go test ./cmd/switchboard/ -run 'TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024' -count=1 -v
+go test ./cmd/switchboard/ -run 'CRSVTNID' -count=1 -v
 ```
 
 **Observed output (PASS):**
 ```
+=== RUN   TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
+=== PAUSE TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
 === RUN   TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024
 --- PASS: TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024 (0.05s)
+=== RUN   TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode
+--- PASS: TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode (0.05s)
+=== CONT  TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode
+--- PASS: TestNodeIdentifyHandshake_CRSVTNIDMismatch_ConnectionClosed_BeforeAdmitNode (0.00s)
 PASS
-ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.385s
+ok  	github.com/arcavenae/switchboard/cmd/switchboard	0.591s
 ```
 
-**BC trace:** BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — the canonical error string `node_identify: ChallengeResponse svtn_id mismatch` is the normative identifier for this error condition in the error taxonomy; the WARN log assertion verifies the daemon surfaces it correctly.
+**BC trace:** BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — the dedicated `errCRSVTNIDMismatch` arm at `mgmt_wire.go:724` is the normative emission point; PC-1 verifies the canonical substring; PC-3 verifies the svtn hex context and greppable code literal are co-present in the same log entry.
 
 ---
 
@@ -97,6 +108,6 @@ evidence-report.md
 
 - **Headless daemon story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY is an internal wire-protocol guard on a headless daemon. There is no operator-facing CLI command or TUI surface. The only honest demo medium is `go test -run <TestName> -v` showing each AC's test passing with its discriminating assertion — consistent with the S-BL.NODE-IDENTIFY-WIRE precedent.
 - **POL-004 compliance:** Only `.tape` scripts and `evidence-report.md` are committed. No `.gif`/`.webm`/`.mp4`/`.png`/`.jpg`/`.jpeg` binaries. The `.gitignore` at lines 58-63 excludes rendered artifacts from `docs/demo-evidence/**/*`; this directory structure ensures compliance.
-- **Evidence integrity:** All three test runs were verified against HEAD `8db6c8535e47bee40c10500ee77898bab663b2ae` with `go test ... -count=1 -v` immediately before tape creation. Actual captured output is pasted verbatim in each AC section above.
+- **Evidence integrity:** All test runs were verified against fix-branch HEAD `1b321ce03c9feeee600817b980c59e55250318bb` with `go test ... -count=1 -v`. Actual captured output is pasted verbatim in each AC section above.
 - **AC-002 discriminating property:** The test uses an ADMITTED keyset deliberately — this proves the guard fires on svtn_id mismatch alone, not because the key is unknown. `LookupInterface` returning `(0, false)` is the strict assertion that AdmitNode was never called (no binding was ever recorded).
-- **AC-003 onAccept arm:** The canonical E-ADM-024 string is emitted by the `onAccept` default arm in the daemon's connection-accept loop. The test captures the WARN log and asserts the exact substring is present.
+- **AC-003 dedicated arm:** The canonical E-ADM-024 string is emitted by the dedicated `errCRSVTNIDMismatch` arm at `mgmt_wire.go:724`, which replaced the former `onAccept` default arm. Two test functions cover PC-1 (canonical substring) and PC-3 (svtn hex context + greppable code literal) independently.
