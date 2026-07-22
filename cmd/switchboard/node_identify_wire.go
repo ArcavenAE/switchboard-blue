@@ -24,6 +24,7 @@ package main
 
 import (
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -33,6 +34,13 @@ import (
 	"github.com/arcavenae/switchboard/internal/netingress"
 	"github.com/arcavenae/switchboard/internal/routing"
 )
+
+// errCRSVTNIDMismatch is returned by nodeIdentifyHandshake when the
+// ChallengeResponse (message 3) outer-header svtn_id does not match the
+// NodeIdentify (message 1) svtn_id. Classified in onAccept as E-ADM-024
+// (BC-2.01.009 PC-9 / EC-008). Sentinel enables errors.Is classification
+// per go.md (never string-match error messages).
+var errCRSVTNIDMismatch = errors.New("node_identify: ChallengeResponse svtn_id mismatch")
 
 // nodeIdentifyHandshakeTimeout is the deadline for the complete NODE_IDENTIFY
 // three-message exchange. Set via conn.SetDeadline before the first io.ReadFull;
@@ -349,9 +357,11 @@ func nodeIdentifyHandshake(
 	// BC-2.01.009 PC-9 / E-ADM-024: ChallengeResponse outer-header svtn_id MUST
 	// match the svtn_id from the NodeIdentify outer header (message 1). A mismatch
 	// blocks a cross-SVTN credential substitution attack before AdmitNode is reached.
+	// Return the captured svtnID (non-zero, from NodeIdentify) so onAccept can emit
+	// the real svtn context in the E-ADM-024 WARN log (AC-003 PC-3).
 	if crHdr.SVTNID != svtnID {
 		_ = conn.Close()
-		return [16]byte{}, [8]byte{}, fmt.Errorf("node_identify: ChallengeResponse svtn_id mismatch")
+		return svtnID, [8]byte{}, errCRSVTNIDMismatch
 	}
 
 	// Decode ChallengeResponse payload.

@@ -715,6 +715,13 @@ func runRouter(ctx context.Context, w io.Writer, cfg *config.Config, configPath 
 			case errors.Is(hsErr, admission.ErrSignatureVerificationFailed):
 				// E-ADM-001: ChallengeResponse signature did not verify (AC-008 PC2).
 				routerLogger.Log(fmt.Sprintf("node_identify: E-ADM-001 sig verify failed svtn=%x", svtnID))
+			case errors.Is(hsErr, errCRSVTNIDMismatch):
+				// E-ADM-024: ChallengeResponse outer-header svtn_id != NodeIdentify svtn_id
+				// (BC-2.01.009 PC-9 / EC-008; AC-003 PC-3). svtnID is the NodeIdentify value.
+				// Log format: canonical substring first (PC-1), then code literal and svtn
+				// context (PC-3). "node_identify: ChallengeResponse svtn_id mismatch" is the
+				// AC-003 canonical string; E-ADM-024 and svtn= follow for operator greppability.
+				routerLogger.Log(fmt.Sprintf("node_identify: ChallengeResponse svtn_id mismatch E-ADM-024 svtn=%x", svtnID))
 			default:
 				// Unclassified error (e.g. raw I/O failure on write, SetDeadline error).
 				// Log the underlying error so nothing is silently swallowed.

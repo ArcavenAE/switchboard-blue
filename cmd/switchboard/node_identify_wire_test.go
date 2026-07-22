@@ -1790,6 +1790,107 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *test
 	}
 }
 
+// TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode
+// verifies AC-003 PC-3: the daemon WARN log for the ChallengeResponse svtn_id
+// mismatch path (E-ADM-024) contains:
+//  1. The svtn context from the NodeIdentify outer header as `svtn=<hex>`,
+//     where <hex> is the lowercase hex of the ACTUAL (non-zero) NodeIdentify svtnID.
+//  2. The error code literal `E-ADM-024`, matching the sibling arms that
+//     each embed their own code literal for operator greppability.
+//
+// The NodeIdentify svtnID used in this test is from makeAdmittedNode, which
+// sets svtnID[0] = 0xAB (the "0xAB... deterministic test SVTN" documented in
+// router_drain_wire_test.go). In fmt.Sprintf("%x") format this is:
+//
+//	ab000000000000000000000000000000
+//
+// RED GATE: FAILS without the AC-003 PC-3 fix. Current code:
+//   - nodeIdentifyHandshake returns [16]byte{} (zeroed) on the mismatch path,
+//     so onAccept receives svtnID == [16]byte{} with no information.
+//   - onAccept falls through to the default arm, which logs:
+//     "runRouter: NODE_IDENTIFY handshake failed: node_identify: ChallengeResponse svtn_id mismatch"
+//     — this log contains NEITHER `svtn=ab000000000000000000000000000000`
+//     (PC-3, real svtnID) NOR `E-ADM-024` (code literal). Both assertions fail.
+//
+// After the fix onAccept will have a classified E-ADM-024 case arm that logs:
+//
+//	`node_identify: E-ADM-024 <desc> svtn=ab000000000000000000000000000000`
+//
+// which satisfies both PC-3 assertions.
+//
+// Companion to TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024
+// (PC-1, canonical substring). Does NOT replace it — the PC-1 assertion remains
+// in the original test. This test adds the PC-3 assertions only.
+//
+// AC-003 PC-3 / BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — svtn context + code literal
+func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCode(t *testing.T) {
+	dataAddr := probeDataAddr(t)
+	sockPath := tempSockPath(t)
+	cfg := &config.Config{
+		ListenAddr:       dataAddr,
+		TickInterval:     10 * time.Millisecond,
+		ManagementSocket: sockPath,
+	}
+
+	// Same setup as AC-003 (WarnLogContainsE_ADM_024): pre-load an admitted node
+	// key so the mismatch path is exercised at the guard, not at admission.
+	info := makeAdmittedNode(t, cfg)
+
+	// Derive the expected svtn= substring from the ACTUAL NodeIdentify svtnID.
+	// makeAdmittedNode sets svtnID[0] = 0xAB → [16]byte{0xAB, 0x00...0x00}.
+	// fmt.Sprintf("%x", [16]byte{0xAB, 0, ..., 0}) == "ab000000000000000000000000000000".
+	// This assertion MUST use the real non-zero svtnID; a log with
+	// `svtn=00000000000000000000000000000000` must NOT satisfy it.
+	wantSVTNContext := fmt.Sprintf("svtn=%x", info.svtnID)
+
+	var buf syncBuffer
+	errCh, cancel := startRunRouterWithConfig(t, cfg, &buf)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-errCh:
+		case <-time.After(4 * time.Second):
+		}
+	})
+
+	conn, err := net.DialTimeout("tcp", cfg.ListenAddr, 2*time.Second)
+	if err != nil {
+		t.Fatalf("AC-003 PC-3: dial %s: %v", cfg.ListenAddr, err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// mismatchSVTN must differ from info.svtnID (0xAB...) — same as AC-003 original.
+	var mismatchSVTN [16]byte
+	mismatchSVTN[0] = 0xCC
+
+	doHandshakeMismatchedCRSVTNID(conn, info.svtnID, info.nodePub, info.nodePriv, mismatchSVTN)
+
+	// PC-3 assertion 1: the log contains `svtn=<real hex>` where <real hex> is the
+	// actual NodeIdentify svtnID (ab000000000000000000000000000000). A log with
+	// `svtn=00000000000000000000000000000000` does NOT match: wantSVTNContext starts
+	// with `svtn=ab` so it can only match when the non-zero svtnID is propagated.
+	//
+	// AC-003 PC-3 / BC-2.01.009 EC-008 / error-taxonomy v5.2 E-ADM-024 — svtn context + code literal
+	if !scanForLine(&buf, wantSVTNContext, 2*time.Second) {
+		t.Errorf("AC-003 PC-3: daemon log does not contain svtn context %q within 2s "+
+			"(nodeIdentifyHandshake must return the real NodeIdentify svtnID on the mismatch path, "+
+			"and onAccept must include it in the E-ADM-024 log; "+
+			"a log with svtn=00000000000000000000000000000000 fails this assertion); log:\n%s",
+			wantSVTNContext, buf.String())
+	}
+
+	// PC-3 assertion 2: the log contains the error code literal `E-ADM-024`.
+	// The sibling arms (E-ADM-022, E-ADM-003, E-ADM-001, etc.) each embed their
+	// code literal for operator greppability; E-ADM-024 must follow the same
+	// convention after the fix adds a classified case arm in onAccept.
+	const wantCode = "E-ADM-024"
+	if !scanForLine(&buf, wantCode, 2*time.Second) {
+		t.Errorf("AC-003 PC-3: daemon log does not contain code literal %q within 2s "+
+			"(onAccept must add a classified E-ADM-024 case arm, not fall through to default); log:\n%s",
+			wantCode, buf.String())
+	}
+}
+
 // ── Defense-in-depth: ChallengeResponse payload-length guard (rulings §6) ────
 
 // TestNodeIdentifyHandshake_MalformedChallengeResponse_WrongPayloadLen verifies
