@@ -10,7 +10,7 @@ Set Theme "Dracula"
 Set Padding 20
 
 Hide
-Type "cd /Users/skippy/work/aae-orc/run/switchboard-blue/.worktrees/S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY"
+Type "cd /Users/skippy/work/aae-orc/run/switchboard-blue"
 Enter
 Type "clear"
 Enter

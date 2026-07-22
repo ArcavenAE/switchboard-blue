@@ -1,7 +1,7 @@
 # Demo Evidence Report — S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY
 
 **Story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY v1.2 — SVTNID consistency guard: ChallengeResponse svtn_id MUST match the NodeIdentify outer header svtn_id before AdmitNode is reached.
-**HEAD:** 1b321ce03c9feeee600817b980c59e55250318bb
+**Code-complete at:** 8b667ce (guard + tests); demo/doc refinements in later commits on branch fix/node-identify-eadm024-log-context
 **BC anchor:** BC-2.01.009 PC-9 / EC-008; error-taxonomy v5.2 E-ADM-024
 **E-ADM-024 canonical string:** `node_identify: ChallengeResponse svtn_id mismatch`
 **Status:** CONVERGED
@@ -108,6 +108,6 @@ evidence-report.md
 
 - **Headless daemon story:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY is an internal wire-protocol guard on a headless daemon. There is no operator-facing CLI command or TUI surface. The only honest demo medium is `go test -run <TestName> -v` showing each AC's test passing with its discriminating assertion — consistent with the S-BL.NODE-IDENTIFY-WIRE precedent.
 - **POL-004 compliance:** Only `.tape` scripts and `evidence-report.md` are committed. No `.gif`/`.webm`/`.mp4`/`.png`/`.jpg`/`.jpeg` binaries. The `.gitignore` at lines 58-63 excludes rendered artifacts from `docs/demo-evidence/**/*`; this directory structure ensures compliance.
-- **Evidence integrity:** All test runs were verified against fix-branch HEAD `1b321ce03c9feeee600817b980c59e55250318bb` with `go test ... -count=1 -v`. Actual captured output is pasted verbatim in each AC section above.
+- **Evidence integrity:** All test runs were verified against the code-complete state (guard commit 8b667ce; tests unchanged since). Subsequent commits on this branch are documentation-only (evidence-report + comment refreshes) and do not affect test behavior. Actual captured output is pasted verbatim in each AC section above.
 - **AC-002 discriminating property:** The test uses an ADMITTED keyset deliberately — this proves the guard fires on svtn_id mismatch alone, not because the key is unknown. `LookupInterface` returning `(0, false)` is the strict assertion that AdmitNode was never called (no binding was ever recorded).
 - **AC-003 dedicated arm:** The canonical E-ADM-024 string is emitted by the dedicated `errCRSVTNIDMismatch` arm at `mgmt_wire.go:724`, which replaced the former `onAccept` default arm. Two test functions cover PC-1 (canonical substring) and PC-3 (svtn hex context + greppable code literal) independently.
