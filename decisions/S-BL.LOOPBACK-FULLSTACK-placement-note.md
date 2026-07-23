@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.5"
+version: "1.6"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.6 | R4 re-review repair (2026-07-22): F-B-LENSB-01 — resolved upstream-ticker/AC-017 timing tension using the preferred direct-seam approach: `onUpstreamTick()` named as a binding directly-callable package-private seam (symmetric to `onDownstreamTick()` / AC-016); AC-017 test specified to invoke `onUpstreamTick()` directly/synchronously (no ticker goroutine started), making AC-017 ticker-timing-independent; "MAY start at construction" preserved as valid but no longer load-bearing for AC-017 correctness; upstream seam guidance block added after §B-3/AC-016 section. L-C-1 — §H2 concrete-shape block comment lead-ins L1044/L1060 reworded from stale "onTick callback" form to reference `tickBody` wiring / seam method names (`startLoopbackTicker(env, ..., d.onUpstreamTick)` / `startLoopbackTicker(env, ..., d.onDownstreamTick)`). F-A-1 — RoundTrip doc-comment L337 purpose sentence reworded from `decodeRTID(payload)==rt.id` (1-value code token) to semantic English ("the delivered payload decodes to rt.id"). See "v1.6 R4 Re-Review Repair (2026-07-22)" section. |
 | 1.5 | R3 re-review repair (2026-07-22): F-B-1 — `startLoopbackTicker` rewritten tick-free (no `hc.Tick()` in helper; parameter changed from `onTick func(halfchannel.ChannelFrame)` to `tickBody func()`; `hc` param dropped); both directions wired through their internal-tick seam methods (`onUpstreamTick` / `onDownstreamTick`) as the ticker `tickBody`; false-composition claim at §M2/§B-3 L1240 retracted and reworded. F-B-4 — `driver.errCh` "acceptable alternative" dropped; `t.Errorf`-based `failLoud` is now the sole specified error-surface mechanism. F-B-2 — first-SendKeystroke "chanSeq=1" invariant qualified as config-dependent (holds only when downstream interval > upstream round-trip, as in VP-042). F-B-2b — CreateSession-time window prose corrected from "N empty ticks" to "N+1" (data tick itself increments seq). See "v1.5 R3 Re-Review Repair (2026-07-22)" section. |
 | 1.4 | R2 re-review repair (2026-07-22): B-1 — every `decodeRTID` call site in note corrected to 2-value form (`id, ok := decodeRTID(payload)`); `!ok` handling specified; rtSeq-starts-at-1 safety note added. B-2 — §M2 window-margin rationale corrected per-option (CreateSession-time: "few empty ticks before first send", not "chanSeq=1"; first-SendKeystroke: "chanSeq=1, nextExpected=0"); >3.2s-idle caveat documented; preferred option remains CreateSession-time for race-freedom. B-3 — AC-016 fault-injection method respecified: build driver, withhold downstream ticker, advance `downstreamHC` past 64 via empty `Tick()` calls, enqueue one payload, invoke `onDownstreamTick()` synchronously (no race); seam `onDownstreamTick()` named as REQUIRED package-private function. N-1 — §M2 "acceptable simpler alternative" paragraph removed; "no third option" invariant now holds without self-contradiction. See "v1.4 R2 Re-Review Repair (2026-07-22)" section. |
 | 1.3 | R1 re-review repair (2026-07-22): B-F1 — §H3 provisioning sequence missing `pub.Publish(sessionName)` before `Attach` (added; Attach gates on pub.Get); B-F2 — `encodeRTID` Q3 call site corrected to 2-arg whole-payload form matching §M4 definition; B-F3 — §M2 lazy-start decision tightened: prefer `CreateSession`-time start (single-threaded, race-free), `sync.Once` required if first-`SendKeystroke` start is chosen; C-F1 — Q3 pseudocode L161 `map[uint64]chan frame.OuterHeader` corrected to `map[uint64]chan []byte`; C-F2 — v1.1 Q4 Addendum "Required revision" L680 phantom `mpFrame.ChanSeq()` corrected to captured `chanSeq`. See "v1.3 R1 Re-Review Repair (2026-07-22)" section. |
@@ -334,7 +335,7 @@ frame buffer that `Env.CollectFrames` uses.**
 // [v1.2 correction — H1] done is chan []byte (was chan frame.OuterHeader).
 // frame.OuterHeader carries no payload; the round-trip id rides in the
 // payload bytes (encodeRTID/decodeRTID). WaitForEcho must return the
-// delivered payload so callers can assert decodeRTID(payload)==rt.id (AC-014).
+// delivered payload so callers can assert the delivered payload decodes to rt.id (AC-014 load-bearing part).
 type RoundTrip struct {
     id   uint64
     done chan []byte // buffered 1; written by the downstream ticker goroutine
@@ -1041,7 +1042,7 @@ func (lb *LoopbackEnv) SendKeystroke(...) RoundTrip {
     // ...
 }
 
-// In upstream ticker onTick callback:
+// Upstream ticker tickBody (wired as startLoopbackTicker(env, upstreamInterval, d.onUpstreamTick)):
 func (d *loopbackDriver) onUpstreamTick() {
     d.upstreamHCMu.Lock()
     f := d.upstreamHC.Tick()
@@ -1057,7 +1058,7 @@ func (s *loopbackSink) SendInput(payload []byte) error {
     return err
 }
 
-// In downstream ticker onTick callback:
+// Downstream ticker tickBody (wired as startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)):
 func (d *loopbackDriver) onDownstreamTick() {
     d.downstreamHCMu.Lock()
     f := d.downstreamHC.Tick()
@@ -1180,7 +1181,9 @@ Do not start the downstream ticker goroutine at `NewLoopback` time.
 `SendKeystroke` calls — there is no concurrency at that point, so starting
 the ticker there is race-free and requires no additional synchronization.
 The upstream ticker MAY start at construction (it has no `EnqueueSend`
-dependency).
+dependency). [v1.6 F-B-LENSB-01] This start-time freedom is PRESERVED but
+AC-017's fault-injection test MUST NOT depend on it — see **AC-017 fault-injection
+method and required upstream test seam** below.
 
 **Per-option window-safety invariant [v1.4 B-2]:**
 
@@ -1271,6 +1274,37 @@ the AC-016 test can invoke it synchronously without launching the ticker
 goroutine. The story-writer binds AC-016 to this seam; the implementer must
 expose it. (The method is already named `onDownstreamTick()` in the note's
 §H2 concrete shape — see above; this requirement locks that name as binding.)
+
+**AC-017 fault-injection method and required upstream test seam [v1.6 F-B-LENSB-01]:**
+
+AC-017 tests that `SendKeystroke` called BEFORE `CreateSession` surfaces
+`ErrConsoleNotFound` via `failLoud`. The upstream ticker's start timing MUST NOT
+be a prerequisite for this test to work deterministically: an implementer who
+starts the upstream ticker at `CreateSession` time (symmetric with the downstream
+preferred option) would make the pre-`CreateSession` `SendKeystroke` enqueue
+silently — the upstream ticker hasn't started yet, the enqueued keystroke is never
+processed through the upstream tick body, and AC-017 hangs to timeout instead of
+firing `failLoud`. The design resolves this tension by specifying that AC-017's
+fault-injection test invokes `onUpstreamTick()` DIRECTLY and SYNCHRONOUSLY,
+exactly as AC-016 invokes `onDownstreamTick()` directly — no upstream ticker
+goroutine is started during the AC-017 test:
+
+1. Do NOT start the upstream ticker goroutine.
+2. Call `SendKeystroke` before `CreateSession` — this enqueues a payload into
+   `upstreamHC` (no console registered yet).
+3. Call `driver.onUpstreamTick()` synchronously. This fires the upstream tick body:
+   `upstreamHC.Tick()` dequeues the payload, `accessNode.SendKeystroke(...)` is
+   called, returns `ErrConsoleNotFound` (no console registered), `failLoud` fires.
+4. Assert that `driver.failLoud` was called (surfaced via `t.Errorf`).
+
+This is single-goroutine throughout — no race, no ticker-timing dependency,
+ticker-start order is irrelevant to AC-017's correctness.
+
+**Required seam:** `onUpstreamTick()` must be a directly-callable **package-private
+method** on `loopbackDriver` (symmetric to `onDownstreamTick()`). [v1.6] This is
+already the method name in the §H2 concrete shape above; this requirement locks that
+name as binding for the AC-017 test, exactly as `onDownstreamTick()` is bound for
+AC-016. The story-writer binds AC-017 to this seam; the implementer must expose it.
 
 ---
 
@@ -1623,3 +1657,81 @@ the first `chanSeq` value.
 in rereview-R3-2026-07-22.md. `startLoopbackTicker` body (`onTick(hc.Tick())`),
 `onDownstreamTick`/`onUpstreamTick` signatures (no-arg, mutex-internal), and
 L256 binding rule all confirmed from source before this repair.
+
+---
+
+## v1.6 R4 Re-Review Repair (2026-07-22)
+
+Round 4 re-review found 2 LOW + 2 NITPICK (no HIGH, no MED). Architect-owned
+findings (note-side) are fixed inline above; this section records the design
+decisions made and rationale.
+
+### §F-B-LENSB-01 (LOW) — upstream ticker / AC-017 timing tension resolved
+
+**Defect (PAT-04 verified):** The §M2 prose at ~L1182 said "The upstream ticker
+MAY start at construction (it has no `EnqueueSend` dependency)." AC-017's
+fault-injection test (story L868-875, transcribed from this design) triggers
+`ErrConsoleNotFound` by calling `SendKeystroke` BEFORE `CreateSession`. This
+test only surfaces via `failLoud` if the upstream ticker is running to process
+the enqueued keystroke through the upstream tick body. An implementer who starts
+the upstream ticker at `CreateSession` time (symmetric with the downstream M2
+lazy-start preferred option) would make AC-017 enqueue-then-never-process →
+hang to timeout rather than firing `failLoud`. The design's own "MAY" permitted
+a choice that breaks one of its own ACs.
+
+**Design decision (preferred approach chosen):** Resolve the tension by making
+AC-017's test **ticker-timing-independent**, mirroring the AC-016/`onDownstreamTick()`
+pattern exactly. AC-017 invokes `onUpstreamTick()` **directly and synchronously**
+— no upstream ticker goroutine is started — so the upstream tick body runs
+`deliverUpstream` → `accessNode.SendKeystroke` → `ErrConsoleNotFound` →
+`failLoud`, deterministically, regardless of whether the upstream ticker would
+normally start at construction or at `CreateSession`.
+
+**Implementation:** `onUpstreamTick()` is declared a binding directly-callable
+package-private seam (symmetric to `onDownstreamTick()`). The "MAY start at
+construction" language at §M2 is preserved (the timing freedom is still valid for
+the normal/happy path); it is no longer load-bearing for AC-017 correctness. The
+upstream seam guidance block immediately following the §B-3/AC-016 section (added
+in this v1.6) specifies the 4-step AC-017 test procedure. The story-writer
+transcribes the seam binding and test procedure into AC-017.
+
+**Approach NOT taken:** changing "MAY" → "MUST start at construction" — rejected
+because (a) it would overconstrain the upstream ticker lifecycle without clear
+benefit (the upstream direction has no empty-tick window problem), and (b) the
+direct-seam approach removes the timing dependency entirely, which is strictly
+cleaner and matches the already-established AC-016 idiom in this codebase.
+
+### §L-C-1 (LOW) — stale `onTick callback` comment lead-ins in §H2 reworded
+
+**Defect:** §H2 concrete-shape block comment lead-ins used the retired "onTick"
+descriptor (a relic of v1.4's `onTick func(ChannelFrame)` shape that F-B-1 renamed
+to `tickBody func()`). The methods below them (`onUpstreamTick()`/`onDownstreamTick()`)
+were correctly named; only the comment lead-in word "onTick" was stale.
+
+**Fix:** L1044 reworded to:
+`// Upstream ticker tickBody (wired as startLoopbackTicker(env, upstreamInterval, d.onUpstreamTick)):`
+L1060 reworded to:
+`// Downstream ticker tickBody (wired as startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)):`
+
+These lead-ins now reference the `tickBody` parameter and the exact
+`startLoopbackTicker` call-site wiring, consistent with the v1.5 tick-free
+rewrite and §F-B-1's `tickBody func()` signature.
+
+### §F-A-1 (NITPICK) — RoundTrip doc-comment purpose sentence reworded
+
+**Defect:** RoundTrip doc-comment ~L337 purpose sentence contained the 1-value
+code token `decodeRTID(payload)==rt.id`. The binding 2-value assertion was
+correct immediately adjacent, but the 1-value form in the purpose sentence was
+a copyable wrong-arity token.
+
+**Fix:** Reworded to semantic English:
+`"WaitForEcho must return the delivered payload so callers can assert the delivered payload decodes to rt.id (AC-014 load-bearing part)."`
+No code expression in the purpose sentence; the 2-value binding assertion adjacent
+(L361) is unchanged.
+
+---
+
+**Ground truth source (v1.6):** Edits derived from rereview-R4-2026-07-22.md
+findings (disk-verified per PAT-04 protocol). No source re-reads required for
+these note-only doc/comment repairs; F-B-LENSB-01 design decision based on
+analysis of AC-016 seam pattern already in this note.
