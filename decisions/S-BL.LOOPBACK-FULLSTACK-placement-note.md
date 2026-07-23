@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.4"
+version: "1.5"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.5 | R3 re-review repair (2026-07-22): F-B-1 — `startLoopbackTicker` rewritten tick-free (no `hc.Tick()` in helper; parameter changed from `onTick func(halfchannel.ChannelFrame)` to `tickBody func()`; `hc` param dropped); both directions wired through their internal-tick seam methods (`onUpstreamTick` / `onDownstreamTick`) as the ticker `tickBody`; false-composition claim at §M2/§B-3 L1240 retracted and reworded. F-B-4 — `driver.errCh` "acceptable alternative" dropped; `t.Errorf`-based `failLoud` is now the sole specified error-surface mechanism. F-B-2 — first-SendKeystroke "chanSeq=1" invariant qualified as config-dependent (holds only when downstream interval > upstream round-trip, as in VP-042). F-B-2b — CreateSession-time window prose corrected from "N empty ticks" to "N+1" (data tick itself increments seq). See "v1.5 R3 Re-Review Repair (2026-07-22)" section. |
 | 1.4 | R2 re-review repair (2026-07-22): B-1 — every `decodeRTID` call site in note corrected to 2-value form (`id, ok := decodeRTID(payload)`); `!ok` handling specified; rtSeq-starts-at-1 safety note added. B-2 — §M2 window-margin rationale corrected per-option (CreateSession-time: "few empty ticks before first send", not "chanSeq=1"; first-SendKeystroke: "chanSeq=1, nextExpected=0"); >3.2s-idle caveat documented; preferred option remains CreateSession-time for race-freedom. B-3 — AC-016 fault-injection method respecified: build driver, withhold downstream ticker, advance `downstreamHC` past 64 via empty `Tick()` calls, enqueue one payload, invoke `onDownstreamTick()` synchronously (no race); seam `onDownstreamTick()` named as REQUIRED package-private function. N-1 — §M2 "acceptable simpler alternative" paragraph removed; "no third option" invariant now holds without self-contradiction. See "v1.4 R2 Re-Review Repair (2026-07-22)" section. |
 | 1.3 | R1 re-review repair (2026-07-22): B-F1 — §H3 provisioning sequence missing `pub.Publish(sessionName)` before `Attach` (added; Attach gates on pub.Get); B-F2 — `encodeRTID` Q3 call site corrected to 2-arg whole-payload form matching §M4 definition; B-F3 — §M2 lazy-start decision tightened: prefer `CreateSession`-time start (single-threaded, race-free), `sync.Once` required if first-`SendKeystroke` start is chosen; C-F1 — Q3 pseudocode L161 `map[uint64]chan frame.OuterHeader` corrected to `map[uint64]chan []byte`; C-F2 — v1.1 Q4 Addendum "Required revision" L680 phantom `mpFrame.ChanSeq()` corrected to captured `chanSeq`. See "v1.3 R1 Re-Review Repair (2026-07-22)" section. |
 | 1.2 | Design repair addendum (2026-07-22): B1 ChanSeq threading — corrected `mpFrame.ChanSeq()` phantom call to use captured `f.ChanSeq` from the originating `ChannelFrame`; H1 harness API shape — `RoundTrip.done` changed to `chan []byte`, `WaitForEcho` returns `([]byte, bool)`; H2 halfchannel synchronization — per-direction mutex strategy specified; H3 console provisioning — `RegisterKey`+`Attach`+`Allow` sequence specified as construction-time step; M2 OnAck error handling + empty-tick window — loud failure + don't-tick-until-enqueue mitigation specified; M4 helper signatures — enumerated with explicit obligations. See "v1.2 Design Repair Addendum (2026-07-22)" section. |
@@ -394,11 +395,14 @@ already used twice in this exact struct — rather than invent a second
 lifecycle mechanism:
 
 ```go
+// [v1.5 F-B-1] startLoopbackTicker is TICK-FREE: it does NOT call hc.Tick()
+// itself. The caller supplies a tickBody that owns the Tick() call under
+// the appropriate per-direction mutex (see §H2). The hc parameter is removed;
+// the caller closes over any half-channel reference via the tickBody closure.
 func startLoopbackTicker(
     env *Env,
-    hc *halfchannel.HalfChannel,
     interval time.Duration,
-    onTick func(halfchannel.ChannelFrame),
+    tickBody func(),
 ) {
     env.wg.Add(1)
     go func() {
@@ -410,18 +414,26 @@ func startLoopbackTicker(
             case <-env.closeCh:
                 return
             case <-ticker.C:
-                onTick(hc.Tick())
+                tickBody()
             }
         }
     }()
 }
 ```
 
-This is also the same shape as `cmd/switchboard/access.go:460`
+**Wiring (v1.5 F-B-1):** the upstream ticker's `tickBody` is `d.onUpstreamTick`
+and the downstream ticker's `tickBody` is `d.onDownstreamTick`. Each seam method
+owns its half-channel's `Tick()` call under the corresponding per-direction mutex
+(per §H2 and L256 binding rule), so every `Tick()` is mutex-guarded regardless
+of how the goroutine invokes the body.
+
+This is the same lifecycle shape as `cmd/switchboard/access.go:460`
 (`startSweepTicker`) and `:500` (`startFramesDroppedTicker`) — the
 production idiom for "ticker + WaitGroup + cancellation-channel" per
 go.md rule 12's spirit and the S-4.00 wg-join clarification (ARCH-08
-§6.5.1 obligations 3/6). No new Close() method is needed on `LoopbackEnv`;
+§6.5.1 obligations 3/6). The `hc` parameter is absent because the body
+closure carries any half-channel reference; the lifecycle contract is
+otherwise identical. No new Close() method is needed on `LoopbackEnv`;
 `b.Cleanup(env.Close)` (already registered by `newEnv`) tears everything
 down, and `wg.Wait()` blocks until both ticker goroutines have observed
 `closeCh` and returned — deterministic, no leaked goroutines, matching the
@@ -1142,9 +1154,13 @@ if err != nil {
 
 `driver.failLoud` calls `t.Errorf` (not `t.Fatalf`) to allow the ticker
 goroutine to return cleanly; the test is already doomed at this point.
-Alternatively, send on a dedicated `driver.errCh chan error` (buffered 1) and
-have a monitor goroutine or `WaitForEcho` check it — either pattern is
-acceptable; the key invariant is that the error is NOT discarded.
+[v1.5 F-B-4] The `driver.errCh chan error` (buffered 1) alternative previously
+mentioned here is DROPPED. With AC-017 adding an upstream failLoud path symmetric
+to AC-016's downstream, both ticker goroutines can call `failLoud` concurrently;
+a buffered-1 channel blocks the second sender if the first fills the buffer and
+nothing drains → `wg.Wait()` deadlock at teardown. The `t.Errorf`-based `failLoud`
+is the sole specified error-surface mechanism — it is goroutine-safe, non-blocking,
+and does not require a drain step.
 
 **Defect (empty-tick window coupling):** `halfchannel.Tick()` increments `seq`
 on EVERY tick, including empty ticks when there is no payload. `ErrAckOutOfWindow`
@@ -1169,12 +1185,15 @@ dependency).
 **Per-option window-safety invariant [v1.4 B-2]:**
 
 - **CreateSession-time start (PREFERRED):** `chanSeq` at the first data tick
-  equals the number of empty ticks elapsed between `CreateSession` and the
-  first `SendKeystroke`. This is NOT guaranteed to be 1 — empty ticks
-  accumulate freely from the moment the ticker starts. Window safety holds as
-  long as fewer than 64 empty ticks precede the first data frame (64 × 50ms =
-  3.2s at the standard interval). For the VP-042 benchmark, `CreateSession` is
-  immediately followed by the send loop, so this trivially holds. For
+  equals N+1, where N is the number of empty ticks elapsed between
+  `CreateSession` and the first `SendKeystroke` (the data tick itself
+  increments `seq` via the unconditional `h.seq++` in `halfchannel.Tick()`).
+  [v1.5 F-B-2b] This is NOT guaranteed to be 1 — empty ticks accumulate
+  freely from the moment the ticker starts. Window safety holds as long as
+  fewer than 64 empty ticks precede the first data frame, i.e. N < 64
+  (64 × 50ms = 3.2s at the standard interval). The ≤64 safety bound is
+  unaffected by the N+1 correction. For the VP-042 benchmark, `CreateSession`
+  is immediately followed by the send loop, so this trivially holds. For
   production-pattern tests with a delay between `CreateSession` and first
   `SendKeystroke`, a >3.2s idle gap will trigger `ErrAckOutOfWindow` — see
   the Edge Cases table row for that scenario. **The preferred option is chosen
@@ -1183,7 +1202,13 @@ dependency).
 - **First-`SendKeystroke` start with `sync.Once` (alternative):** the first
   data tick fires immediately after the first enqueue, so `chanSeq` = 1 and
   `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64` — the window margin is
-  maximal. The `sync.Once` guard is MANDATORY (see below).
+  maximal. [v1.5 F-B-2] This `chanSeq=1` invariant is config-dependent: it
+  holds only when the downstream interval exceeds the upstream round-trip
+  latency (so no empty downstream ticks precede the echo), which is true for
+  VP-042's config (downstream 50ms ≫ upstream round-trip ≈ 10ms). With a
+  downstream interval shorter than the upstream round-trip, empty ticks would
+  precede the echo and `chanSeq` > 1 at the first data tick. The `sync.Once`
+  guard is MANDATORY (see below).
 
 If the implementer chooses first-`SendKeystroke` start instead (e.g. for
 a future multi-session shape), a `sync.Once` guard on ticker launch is
@@ -1236,8 +1261,12 @@ no ticker goroutine competing for `downstreamARQ`.
 
 **Required seam:** `onDownstreamTick()` must be a directly-callable
 **package-private method** on `loopbackDriver` (or equivalent named function)
-that contains the downstream tick body logic — the same body that the ticker
-goroutine calls from `startLoopbackTicker`. This seam MUST be exposed so that
+that contains the downstream tick body logic. [v1.5 F-B-1] `startLoopbackTicker`
+is now a generic no-arg-callback ticker driver; the downstream tick body lives
+entirely in `onDownstreamTick()`. The ticker goroutine invokes this body via
+its `tickBody` argument (`startLoopbackTicker(env, interval, d.onDownstreamTick)`);
+the AC-016 test invokes `onDownstreamTick()` directly, synchronously, without
+starting the ticker goroutine — no race. This seam MUST be exposed so that
 the AC-016 test can invoke it synchronously without launching the ticker
 goroutine. The story-writer binds AC-016 to this seam; the implementer must
 expose it. (The method is already named `onDownstreamTick()` in the note's
@@ -1508,3 +1537,89 @@ without self-contradiction.
 
 **Ground truth source:** all PAT-04 claims transcribed from orchestrator-verified
 source reads before this repair. No additional file reads required for these fixes.
+
+---
+
+## v1.5 R3 Re-Review Repair (2026-07-22)
+
+Round 3 re-review found 1 HIGH + 1 MED (story-writer scope) + 2 LOW + 2 nitpicks.
+The architect-owned findings are fixed inline above; this section records the
+design decisions made and the rationale.
+
+### §F-B-1 (HIGH) — `startLoopbackTicker` made tick-free; directions wired via seam methods
+
+**Defect (PAT-04 verified):** The v1.4 Q6 `startLoopbackTicker` signature was
+`func startLoopbackTicker(env *Env, hc *halfchannel.HalfChannel, interval time.Duration, onTick func(halfchannel.ChannelFrame))`
+with body `onTick(hc.Tick())` — the HELPER called `hc.Tick()` inside the ticker
+goroutine, with no mutex. But §H2 (`onDownstreamTick`) and L256 require every
+`Tick()` call under the per-direction mutex. The downstream half-channel is also
+`Enqueue`'d from `loopbackSink.SendInput` under `downstreamHCMu` (from the
+upstream ticker goroutine). Two goroutines touching `downstreamHC` with mutex
+on only one → DATA RACE → fails AC-015 (`just test-race`).
+
+Additionally, v1.4 §M2/§B-3 (~L1240) claimed `onDownstreamTick()` is "the same
+body that the ticker goroutine calls from `startLoopbackTicker`" — which does not
+type-check (`func()` ≠ `func(ChannelFrame)`), and if adapted by wrapping would
+double-tick (seq 2×, ARQ window corruption) or run `hc.Tick()` outside the mutex.
+
+**Design decision:**
+1. `startLoopbackTicker` is rewritten to be TICK-FREE. New signature:
+   `func startLoopbackTicker(env *Env, interval time.Duration, tickBody func())`.
+   The `hc` parameter is removed. The body is `case <-ticker.C: tickBody()`.
+   The helper owns only goroutine lifecycle (wg, closeCh, ticker), not any
+   half-channel operation.
+2. Both directions route through the internal-tick seam methods:
+   - Upstream ticker: `startLoopbackTicker(env, upstreamInterval, d.onUpstreamTick)`
+   - Downstream ticker: `startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)`
+   Each seam method calls `<dir>HCMu.Lock(); f := d.<dir>HC.Tick(); <dir>HCMu.Unlock()`
+   then the direction's flow logic. Every `Tick()` is therefore mutex-guarded
+   (satisfies §H2 + L256). `onDownstreamTick()` is the single directly-callable
+   seam AC-016 requires — the AC-016 test invokes it synchronously without starting
+   any goroutine → no race.
+3. The false-composition sentence retracted and replaced (see §M2/§B-3 above).
+
+The "same shape as `cmd/switchboard/access.go:460`" comparison is updated to note
+the `hc` parameter is absent; the lifecycle contract (wg/closeCh/ticker pattern)
+remains the same.
+
+### §F-B-4 (LOW) — `errCh` alternative dropped
+
+**Defect:** The `driver.errCh chan error` (buffered 1) offered as an acceptable
+alternative to `failLoud` can deadlock with AC-017's symmetric upstream error
+path: both ticker goroutines call `failLoud` concurrently; the first fills the
+buffer-1 channel; the second blocks forever; `wg.Wait()` hangs.
+
+**Decision:** The errCh alternative is dropped entirely. The `t.Errorf`-based
+`failLoud` is the sole specified error-surface mechanism. It is goroutine-safe,
+non-blocking by specification, and requires no drain step. If a future need arises
+for cross-goroutine error aggregation, buffered-≥2 + guaranteed drain would be
+required, but that need does not arise from the current AC set.
+
+### §F-B-2 (LOW→nitpick) — "chanSeq=1" qualified as config-dependent
+
+**Defect:** The first-`SendKeystroke`-start option stated `chanSeq=1` as if it
+were a general invariant. It holds only when downstream interval > upstream
+round-trip latency (VP-042: 50ms ≫ ~10ms). A shorter downstream interval would
+permit empty ticks to precede the echo, yielding `chanSeq > 1`.
+
+**Fix:** Prose qualified: "holds for VP-042's interval config (downstream 50ms ≫
+upstream round-trip); a downstream interval shorter than the upstream round-trip
+would yield chanSeq > 1."
+
+### §F-B-2b (NITPICK) — CreateSession-time chanSeq off-by-one corrected
+
+**Defect:** "chanSeq at the first data tick equals the number of empty ticks
+elapsed" — incorrect because the data tick itself increments `seq`
+(`halfchannel.Tick()`: unconditional `h.seq++` before the payload branch).
+First data `chanSeq` = N+1, not N.
+
+**Fix:** Prose corrected to N+1. The ≤64 safety bound (N < 64) is unaffected;
+the correction is cosmetic but necessary for accuracy when callers reason about
+the first `chanSeq` value.
+
+---
+
+**Ground truth source (v1.5):** PAT-04 verified against source reads documented
+in rereview-R3-2026-07-22.md. `startLoopbackTicker` body (`onTick(hc.Tick())`),
+`onDownstreamTick`/`onUpstreamTick` signatures (no-arg, mutex-internal), and
+L256 binding rule all confirmed from source before this repair.
