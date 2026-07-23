@@ -8,7 +8,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
-version: "1.4"
+version: "1.5"
 phase: 2
 epic: E-1
 wave: backlog
@@ -20,7 +20,7 @@ inputs:
   - .factory/specs/verification-properties/VP-042.md
   - .factory/specs/architecture/ARCH-08-dependency-graph.md
   - .factory/specs/architecture/ARCH-03-routing-engine.md
-input-hash: "8ef2387"
+input-hash: "50d0b05"
 traces_to: .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
 behavioral_contracts:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
@@ -54,7 +54,7 @@ cycle: v1.0.0-greenfield
 depends_on: []   # S-BL.TESTENV already MERGED (PR #110, 62e38d3) — this story extends its NewLoopback/LoopbackEnv API; it is not blocked on that story, it builds on shipped code
 blocks: []
 inputDocuments:
-  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.4 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4) + v1.3 R1 Re-Review Repair (B-F1/B-F2/B-F3/C-F1/C-F2) + v1.4 R2 Re-Review Repair (B-1/B-2/B-3/N-1). Where this story and the note diverge, the note governs.
+  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.5 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4) + v1.3 R1 Re-Review Repair (B-F1/B-F2/B-F3/C-F1/C-F2) + v1.4 R2 Re-Review Repair (B-1/B-2/B-3/N-1) + v1.5 R3 Re-Review Repair (F-B-1/F-B-4/F-B-2/F-B-2b). Where this story and the note diverge, the note governs.
   - '.factory/specs/verification-properties/VP-042.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'   # v2.13 — this story's merge finalizes the PROSPECTIVE pos-23 import-set amendment
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
@@ -69,7 +69,7 @@ backlog_origin:
 
 # S-BL.LOOPBACK-FULLSTACK: Full-Stack Loopback Testenv Extension for VP-042
 
-> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. **v1.3 (2026-07-22):** note v1.3 transcription + R1 story fixes applied (B-F1/B-F2/B-F3/A-M1/A-M2/A-L1/A-L2) — consistent with placement-note v1.3. **v1.4 (2026-07-22):** note v1.4 transcription + R2 story fixes applied (B-1 decodeRTID 2-value, B-3 AC-016 sound injection via onDownstreamTick seam, B-4 new AC-017 upstream-error-loud, A-N2/C-LOW1) — consistent with placement-note v1.4. Do not implement from Q4's original code blocks alone — the Addendum and v1.2/v1.3/v1.4 corrections govern.
+> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. **v1.3 (2026-07-22):** note v1.3 transcription + R1 story fixes applied (B-F1/B-F2/B-F3/A-M1/A-M2/A-L1/A-L2) — consistent with placement-note v1.3. **v1.4 (2026-07-22):** note v1.4 transcription + R2 story fixes applied (B-1 decodeRTID 2-value, B-3 AC-016 sound injection via onDownstreamTick seam, B-4 new AC-017 upstream-error-loud, A-N2/C-LOW1) — consistent with placement-note v1.4. **v1.5 (2026-07-22):** note v1.5 transcription + R3 story fixes applied (F-B-1 tick-free startLoopbackTicker + seam wiring, F-B-4 errCh dropped, F-1 decodeRTID/changelog, F-2/C task-ref, F-2/A AC-017 cross-ref) — consistent with placement-note v1.5. Do not implement from Q4's original code blocks alone — the Addendum and v1.2/v1.3/v1.4/v1.5 corrections govern.
 
 ## Narrative
 
@@ -97,7 +97,7 @@ a testenv-integrated measurement post S-BL.TESTENV."
 
 This story is that testenv-integrated measurement. It is scoped and designed entirely by the architect
 design note listed as this story's binding input
-(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.4) — **story-writer's job here is
+(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.5) — **story-writer's job here is
 transcription, not re-derivation.** Where this story and the placement note appear to diverge, the note
 governs; where this story and VP-042.md's older proof-harness skeleton diverge (the skeleton's two-call
 `env.SendKeystroke`/`env.WaitForEcho` shape vs. this story's token-based `RoundTrip` API), the placement
@@ -388,8 +388,10 @@ if err != nil {
 ```
 
 `driver.failLoud` calls `t.Errorf` (not `t.Fatalf`) so the ticker goroutine can return cleanly; the
-test is already doomed at this point. An alternative acceptable pattern: send on a `driver.errCh chan
-error` (buffered 1) and have `WaitForEcho` check it.
+test is already doomed at this point. [v1.5 F-B-4] The `driver.errCh chan error` alternative is dropped:
+a buffered-1 channel deadlocks when both ticker goroutines call `failLoud` concurrently (first fills the
+buffer; second blocks forever; `wg.Wait()` hangs). `t.Errorf`-based `failLoud` is the sole specified
+error-surface mechanism — goroutine-safe, non-blocking by specification, requires no drain step.
 
 **[M2 — v1.3 B-F3] Empty-tick window mitigation (downstream ticker start timing).** `halfchannel.HalfChannel`
 increments its sequence counter on EVERY `Tick()` call, including empty ticks when no payload is
@@ -416,11 +418,13 @@ launch duplicate tickers, double-consuming `ChanSeq` values and corrupting the A
 `sync.Once` idiom is already house convention in this design (`closeOnce sync.Once`). There is no third
 option: `CreateSession`-time start (preferred) or `sync.Once`-guarded first-`SendKeystroke` start.
 
-**[v1.4 B-3] Required seam:** the downstream tick body MUST be factored into a package-private method
-`onDownstreamTick()` on `loopbackDriver` (or equivalent named function) that can be called synchronously
-without the ticker goroutine running. This seam is required by AC-016's fault-injection test. The method
-name `onDownstreamTick()` is BINDING per note §M2 §B-3 — it is already used in the note's §H2 concrete
-shape and is locked here.
+**[v1.4 B-3, updated v1.5 F-B-1] Required seam:** the downstream tick body MUST be factored into a
+package-private method `onDownstreamTick()` on `loopbackDriver` that can be called synchronously without
+the ticker goroutine running. [v1.5] `startLoopbackTicker` is now a generic no-arg-callback driver; the
+downstream tick body lives entirely in `onDownstreamTick()`. The downstream ticker goroutine invokes this
+body via `startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)` (the `tickBody` argument);
+the AC-016 test invokes `onDownstreamTick()` directly, synchronously, without starting the ticker
+goroutine — no race. The method name `onDownstreamTick()` is BINDING per note §M2 §B-3.
 
 ### RoundTrip Token API — Fixing the CollectFrames Accumulation Short-Circuit (Q5)
 
@@ -485,11 +489,14 @@ return; ... } }()`) — the loopback tickers use the identical pattern rather th
 lifecycle mechanism:
 
 ```go
+// [v1.5 F-B-1] startLoopbackTicker is TICK-FREE: it does NOT call hc.Tick()
+// itself. The caller supplies a tickBody that owns the Tick() call under
+// the appropriate per-direction mutex (see §H2). The hc parameter is removed;
+// the caller closes over any half-channel reference via the tickBody closure.
 func startLoopbackTicker(
     env *Env,
-    hc *halfchannel.HalfChannel,
     interval time.Duration,
-    onTick func(halfchannel.ChannelFrame),
+    tickBody func(),
 ) {
     env.wg.Add(1)
     go func() {
@@ -501,19 +508,28 @@ func startLoopbackTicker(
             case <-env.closeCh:
                 return
             case <-ticker.C:
-                onTick(hc.Tick())
+                tickBody()
             }
         }
     }()
 }
 ```
 
-This is also the same shape as `cmd/switchboard/access.go`'s `startSweepTicker`/
-`startFramesDroppedTicker` — the production idiom for "ticker + WaitGroup + cancellation-channel." No
-new `Close()` method is needed on `LoopbackEnv`; `t.Cleanup(env.Close)` (already registered by `newEnv`)
-tears everything down, and `wg.Wait()` blocks until both ticker goroutines have observed `closeCh` and
-returned — deterministic, no leaked goroutines, matching the existing `AttachConsole`/`AttachProbe`
-guarantee.
+**Wiring (v1.5 F-B-1):** the upstream ticker's `tickBody` is `d.onUpstreamTick` and the downstream
+ticker's `tickBody` is `d.onDownstreamTick`. Each seam method owns its half-channel's `Tick()` call under
+the corresponding per-direction mutex (per §H2 and the L256 binding rule), so every `Tick()` is
+mutex-guarded regardless of how the goroutine invokes the body:
+
+- `startLoopbackTicker(env, upstreamInterval, d.onUpstreamTick)` — upstream ticker
+- `startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)` — downstream ticker
+
+This is the same lifecycle shape as `cmd/switchboard/access.go`'s `startSweepTicker`/
+`startFramesDroppedTicker` — the production idiom for "ticker + WaitGroup + cancellation-channel."
+The `hc` parameter is absent because the body closure carries any half-channel reference; the lifecycle
+contract is otherwise identical. No new `Close()` method is needed on `LoopbackEnv`; `t.Cleanup(env.Close)`
+(already registered by `newEnv`) tears everything down, and `wg.Wait()` blocks until both ticker goroutines
+have observed `closeCh` and returned — deterministic, no leaked goroutines, matching the existing
+`AttachConsole`/`AttachProbe` guarantee.
 
 `NewLoopback` must validate `cfg.TickIntervalUpstream`/`TickIntervalDownstream` against
 `halfchannel.MinTickInterval`/`MaxTickInterval` (5ms–50ms) and `b.Fatalf` on an out-of-bounds value,
@@ -812,9 +828,9 @@ If `driver.downstreamARQ.OnAck` returns an error, the harness MUST surface it as
 silently convert it to a `WaitForEcho` timeout. This is the note §M2's explicit obligation ("the
 story-writer should add an AC for: if OnAck returns an error, the harness surfaces it as a loud failure
 (not a silent timeout)"). The mechanism is `driver.failLoud` (see §M2 Design Constraints): `t.Errorf`
-from the ticker goroutine, or a dedicated `driver.errCh chan error` (buffered 1) checked by
-`WaitForEcho`. A silent timeout, while observable, masks a harness construction bug as high latency —
-the loud failure is the load-bearing diagnostic contract.
+from the ticker goroutine. [v1.5 F-B-4] The `driver.errCh chan error` alternative is dropped — see §M2
+for rationale (deadlock with symmetric AC-017 upstream path). A silent timeout, while observable, masks a
+harness construction bug as high latency — the loud failure is the load-bearing diagnostic contract.
 
 **Fault-injection test (sound method — v1.4 B-3):** `TestLoopbackDriver_OnAckError_SurfacesLoud` —
 uses the `onDownstreamTick()` package-private seam (the directly-callable method on `loopbackDriver`
@@ -858,7 +874,7 @@ the console key is not provisioned and `SendKeystroke` returns `ErrConsoleNotFou
 unprovisioned console key / mismatched session. Assert that `driver.failLoud` fires rather than the
 test silently hanging on a `WaitForEcho` timeout.
 
-**Implements:** Task 5 (upstream flow including `deliverUpstream` error handling).
+**Implements:** Task 5 (upstream flow including `deliverUpstream` error handling), Task 13 (test `TestLoopbackDriver_UpstreamDeliveryError_SurfacesLoud`).
 
 Transcribed from the placement note. This story does NOT implement:
 
@@ -893,7 +909,7 @@ Transcribed from the placement note. This story does NOT implement:
 | `RoundTrip` (type) | `internal/testenv` | New | Opaque outside the package; carries `id uint64` + `done chan []byte` (buffered 1; H1 fix — was `chan frame.OuterHeader`) |
 | `loopbackSink` (type) | `internal/testenv` | New | Implements `session.KeystrokeSink`; echoes payload verbatim into `downstreamHC.Enqueue` |
 | `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` | `internal/testenv` | New (methods on `*LoopbackEnv`) | Do not collide with `*Env`'s method set (named field, not embedding); `WaitForEcho` returns `(payload []byte, ok bool)` (H1 fix); `CreateSession` provisions loopback console `RegisterKey`+`Attach` (H3 fix) |
-| `startLoopbackTicker` (helper) | `internal/testenv` | New | Registers on `Env.wg`/`Env.closeCh`; identical shape to `AttachConsole`/`AttachProbe` |
+| `startLoopbackTicker(env *Env, interval time.Duration, tickBody func())` (helper) | `internal/testenv` | New | [v1.5 F-B-1] Tick-free: registers on `Env.wg`/`Env.closeCh`; fires `tickBody()` on each tick; no `hc` param. Wired: upstream → `d.onUpstreamTick`, downstream → `d.onDownstreamTick`. Identical lifecycle shape to `AttachConsole`/`AttachProbe`. |
 | `newLoopbackPaths` (helper) | `internal/testenv` | New | Two `paths.RankedPath`s per direction; each backed by `paths.NewPathTracker(1.0, 0.125)`; `dropCacheCapacity` = `DefaultDropCacheSize` |
 | `toMPFrame(f halfchannel.ChannelFrame) multipath.Frame` (helper) | `internal/testenv` | New | Copies `f.Payload` into `multipath.Frame.Payload`; does NOT carry `f.ChanSeq` — caller captures `chanSeq := f.ChanSeq` BEFORE calling this (B1 fix). No `ChanSeq` field added to `multipath.Frame` |
 | `encodeRTID(key string, id uint64) []byte` (helper) | `internal/testenv` | New | Appends 8-byte big-endian `id` suffix to `[]byte(key)`; pure, package-private |
@@ -990,7 +1006,9 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 7. [ ] Implement `NewLoopback` config validation against `halfchannel.MinTickInterval`/
    `MaxTickInterval`, `b.Fatalf` on violation, with the 50ms-boundary comment (Q6, AC-002).
 8. [ ] Register both ticker goroutines on the existing `Env.wg`/`Env.closeCh` via `startLoopbackTicker`
-   (Q6, AC-012) — no new `WaitGroup`/close channel.
+   (Q6, AC-012) using the tick-free signature `(env, interval, tickBody func())` [v1.5 F-B-1]: wire
+   upstream as `startLoopbackTicker(env, upstreamInterval, d.onUpstreamTick)` and downstream as
+   `startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)` — no new `WaitGroup`/close channel.
 9. [ ] Implement synthetic path construction — two `paths.RankedPath`s per direction backed by
    `paths.NewPathTracker(1.0, 0.125)`, plus the `PathTracker.IsActive()` initial-state assertion (Q7,
    AC-010).
@@ -999,8 +1017,9 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
     shape (AC-013).
 11. [ ] Implement the regression guard against reintroducing the two-instance `arqServer`/`arqClient`
     shape (AC-014): a behavioral test that a full `SendKeystroke`/`WaitForEcho` round trip actually
-    completes — assert `ok == true` AND `decodeRTID(payload) == rt.id` (the H1-updated load-bearing
-    part). A structural exactly-one-`*arq.ARQ`-field assertion may be added as supplementary coverage
+    completes — assert `ok == true` AND `id, ok2 := decodeRTID(payload); ok2 && id == rt.id`
+    [v1.5 F-1] 2-value form required (v1.4 changelog claimed this was fixed here but was not; corrected
+    now). A structural exactly-one-`*arq.ARQ`-field assertion may be added as supplementary coverage
     but does not substitute for the behavioral assertion.
 12. [ ] Confirm `go test -race` / `just test-race` passes for the loopback driver (AC-015 — the
     per-direction mutexes added in Task 2 are the mechanism; this task verifies them under the race
@@ -1061,7 +1080,7 @@ result rather than reviewing stale state.
 
 ## Forward Obligation — VP-042 `verification_lock` (explicitly NOT part of this story)
 
-This story delivers the harness and, per AC-013/Task 12, is run once manually to produce evidence for
+This story delivers the harness and, per AC-013/Task 14 (the run-harness-once-manually task), is run once manually to produce evidence for
 VP-042.md's changelog. **Flipping `verification_lock: false → true` in VP-042.md's frontmatter is a
 separate, subsequent PO/architect act** — it requires explicit sign-off distinct from "the harness
 compiles and its own tests pass." Do not treat this story's merge, by itself, as a VP-042 lock event.
@@ -1074,6 +1093,7 @@ from a lock flip.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.5 | 2026-07-22 | Transcribe note v1.5 + R3 story fixes. F-B-1 (HIGH) — `startLoopbackTicker` code block replaced with tick-free form (`tickBody func()` param, no `hc` param, body `case <-ticker.C: tickBody()`); wiring prose updated: upstream ticker → `d.onUpstreamTick`, downstream ticker → `d.onDownstreamTick` as `tickBody`; "same shape as" comparison updated to note `hc` param absent; Required-seam paragraph (§M2 §B-3) reworded to reflect `startLoopbackTicker` as generic no-arg-callback driver and `tickBody` wiring; Task 8 wording updated; Architecture Mapping `startLoopbackTicker` row updated. F-B-4 (LOW) — `driver.errCh chan error` "acceptable alternative" removed from AC-016 body and §M2 Design Constraints; `t.Errorf`-based `failLoud` is the sole specified error-surface mechanism. F-1 (MED) — Task 11 body assertion corrected from 1-value `decodeRTID(payload) == rt.id` to 2-value form with `[v1.5 F-1]` tag; v1.4 changelog false-claim note added. F-2/C (LOW) — Forward Obligation "Task 12" corrected to "Task 14 (the run-harness-once-manually task)". F-2/A (NITPICK) — AC-017 "Implements: Task 5" corrected to "Implements: Task 5, Task 13". Status note blockquote updated with v1.5 entry. inputDocuments pin updated v1.4→v1.5. Points: 8 (unchanged — spec-correctness repairs). Input-hash recomputed. |
 | 1.4 | 2026-07-22 | Transcribe note v1.4 + R2 story fixes. B-1 — all `decodeRTID` call sites corrected to 2-value form (`id, ok := decodeRTID(payload)`); on `!ok` handling specified (skip — `rtSeq.Add(1)` ensures `id=0` never matches a real pending key); downstream-flow pseudocode, AC-014 test assertion, and Task-11 body updated to 2-value form. B-3 — AC-016 fault-injection respecified to sound method: build driver without downstream ticker goroutine; advance `downstreamHC` past 64 via 65+ synchronous empty `onDownstreamTick()` calls; enqueue one payload; call `onDownstreamTick()` once more → `ErrAckOutOfWindow`; assert `driver.failLoud` fires (loud, not silent timeout); removed both unsound prior approaches (ticker-at-NewLoopback contradicts B-F3; test-goroutine OnAck races ticker, violates arq single-writer / AC-015); `onDownstreamTick()` seam named as BINDING package-private method. B-4 — new AC-017 added: upstream-error loud failure symmetric with AC-016; `deliverUpstream`/`accessNode.SendKeystroke` error must be checked in the upstream tick path and surfaced via `driver.failLoud`; fault-injection test specified; traces to BC-2.01.001; AC count 16→17. A-N2 — v1.4 changelog row explicitly notes input-hash recomputed (note content changed v1.3→v1.4). C-LOW1 — AC-016 body gains explicit Task-6 cross-reference; AC-017 body gains explicit Task-5 cross-reference. NITPICK — `sh` receiver in H3 provisioning block annotated with one-line definition comment. Status note blockquote updated with v1.4 entry. inputDocuments pin and Context section note-version updated v1.3→v1.4. Points: 8 (unchanged — spec-correctness repairs, not scope growth). Input-hash recomputed. |
 | 1.3 | 2026-07-22 | Transcribe note v1.3 + R1 story fixes. B-F1 — §H3 provisioning: `sh.pub.Publish(sessionName)` inserted as step 1 before `RegisterKey`+`Attach` (Attach gates on pub.Get; driver builds its own Publisher); sequence now pub.Publish → RegisterKey → Attach. B-F2 — Q3 `encodeRTID` call site corrected from `append([]byte(key), encodeRTID(id)...)` to `payload := encodeRTID(key, id)` (2-arg whole-payload form matching §M4 canonical definition). B-F3 — M2 lazy-start tightened: `CreateSession`-time downstream ticker start is PREFERRED (single-threaded, race-free); if first-`SendKeystroke` start is used instead, `sync.Once` is MANDATORY; language "or at first SendKeystroke" without guard removed. A-M1 — stale Edge Cases row ("WaitForEcho never called for a RoundTrip ... t.Cleanup asserts map is empty") rewritten to reflect unconditional-drain reality (AC-009): pending is drained on delivery regardless of waiter; lingering entries only when decodeRTID fails; consistent with reframed AC-011. A-M2 — note version pin in Context (L100) updated from v1.1 to v1.3; Q4 Addendum citations at two body locations disambiguated to "introduced note v1.1, carried in v1.3." A-L1 — new AC-016 added: fault-injection test for OnAck error loud (mirrors AC-011 pattern; traces to BC-2.02.005; note §M2 explicit obligation). A-L2 — AC-001 body references to `arq.go:291` and `arq.go:339` converted from numeric line-refs to mechanism-anchors (`payloadFor` / instance-local inFlight lookup and `EnqueueSend`). AC count: 15 → 16. Points: 8 (unchanged). |
 | 1.2 | 2026-07-22 | Spec-review repairs (B1/H1/H2/H3/M1/M2/M3/M4 + LOW polish): B1 — downstream OnAck call now uses captured `chanSeq := f.ChanSeq` from `halfchannel.ChannelFrame`, not phantom `mpFrame.ChanSeq()`. H1 — `RoundTrip.done` changed to `chan []byte`; `WaitForEcho` returns `(payload []byte, ok bool)`; completion path sends raw payload; `frameFor` helper eliminated. H2 — `loopbackDriver` gains `upstreamHCMu`/`downstreamHCMu sync.Mutex` serializing Enqueue+Tick per direction; new AC-015 requires `just test-race` passes. H3 — `CreateSession`/driver construction must `RegisterKey(loopbackConsoleKey, RoleFull)` + `Attach(loopbackConsoleKey, sessionName)` before upstream `SendKeystroke` can succeed. M1 — AC-011 reframed: pending-map diagnostic is non-blocking `t.Cleanup` assertion against deterministic decode-mismatch scenario (consistent with unconditional drain in AC-009). M2 — `OnAck` error MUST be checked and fail loud (`driver.failLoud`); downstream ticker starts lazily (at `CreateSession`/first `SendKeystroke`) to prevent `ErrAckOutOfWindow` from idle-tick window drift. M3 — `ARCH-03-routing-engine.md` added to hash-bearing `inputs:` list; input-hash recomputed. M4 — helper signatures enumerated in Architecture Mapping and File Structure: `toMPFrame`, `encodeRTID`, `decodeRTID`, `zeroSACK` with explicit obligations; `frameFor` REMOVED. LOW — AC-002 split into (a)/(b); numeric line-refs converted to mechanism-anchors; `dropCacheCapacity`/`DefaultDropCacheSize` noted; AC-013 notes call-order alignment. AC count: 14 → 15. Points: 8 (unchanged — spec-correctness repairs, not scope growth). Consistent with placement-note v1.2. |
