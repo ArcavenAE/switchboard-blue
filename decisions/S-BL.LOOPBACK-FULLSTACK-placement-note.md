@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.1"
+version: "1.2"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.2 | Design repair addendum (2026-07-22): B1 ChanSeq threading — corrected `mpFrame.ChanSeq()` phantom call to use captured `f.ChanSeq` from the originating `ChannelFrame`; H1 harness API shape — `RoundTrip.done` changed to `chan []byte`, `WaitForEcho` returns `([]byte, bool)`; H2 halfchannel synchronization — per-direction mutex strategy specified; H3 console provisioning — `RegisterKey`+`Attach`+`Allow` sequence specified as construction-time step; M2 OnAck error handling + empty-tick window — loud failure + don't-tick-until-enqueue mitigation specified; M4 helper signatures — enumerated with explicit obligations. See "v1.2 Design Repair Addendum (2026-07-22)" section. |
 | 1.1 | AC-001 sign-off (S-BL.LOOPBACK-FULLSTACK Risk 1 / Q4): reviewed the proposed `arq.OnAck` call-contract against `internal/arq/arq.go`, its full test suite, `internal/arqsend`, and ARCH-03 §Downstream ARQ. Verdict: REVISED. The `ackSeq`/SACK value convention is CONFIRMED correct; the `driver.arqServer`/`driver.arqClient` two-instance shape is a structural defect — `OnAck`'s payload recovery reads only from the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by prior `EnqueueSend` calls on that SAME instance, so a never-`EnqueueSend`'d `arqClient` can never return a delivered payload and `WaitForEcho` would time out on every call. Required fix: collapse into one shared `*arq.ARQ` instance. See "Q4 Addendum — AC-001 Sign-off (2026-07-12)" below. Supersession banner added at the top of Q4. |
 | 1.0 | Initial release. Full design note (Q1–Q8) for the tick-driven loopback stack, VP-042 benchmark shape, Non-Goals, package impact summary, story-sizing estimate, and Risks/Open Questions requiring story-writer ACs. |
 
@@ -250,23 +251,44 @@ out.
 [async] downstream ticker goroutine, every cfg.TickIntervalDownstream:
     f := driver.downstreamHC.Tick()
     if f.FrameType == frame.FrameTypeData {
-        driver.arqServer.EnqueueSend(f.ChanSeq, f.Payload, time.Now())  // arq.go:339
+        driver.downstreamARQ.EnqueueSend(f.ChanSeq, f.Payload, time.Now())  // arq.go:339
+        // [v1.2 correction] f.ChanSeq is captured here from the originating
+        // halfchannel.ChannelFrame.  It is NOT recoverable from mpFrame later:
+        // multipath.Frame has only OuterHeader+Payload — no ChanSeq field or method.
+        chanSeq := f.ChanSeq
         driver.downstreamMP.Send(toMPFrame(f), driver.deliverDownstream)
+        // deliverDownstream runs synchronously within this goroutine (Q3 rationale);
+        // chanSeq remains valid at the OnAck call site below.
+        delivered, err := driver.downstreamARQ.OnAck(chanSeq, zeroSACK)  // arq.go:201
+        // [v1.2 correction] arqServer/arqClient renamed to single downstreamARQ instance (Addendum).
+        // [v1.2 correction] mpFrame.ChanSeq() was phantom — multipath.Frame has no ChanSeq;
+        //   use the captured f.ChanSeq from the ChannelFrame above.
+        // err MUST be checked and fail loud (M2 — SOUL.md #4):
+        if err != nil {
+            // surface via t.Errorf / log.Printf — do NOT swallow
+            driver.failLoud(err)
+            return
+        }
+        //  ackSeq = this frame's own ChanSeq (cumulative watermark == +1 in
+        //  no-loss harness); SACK bitmap all-zero (no reordering — Non-Goals).
+        for _, payload := range delivered:
+            id := decodeRTID(payload)
+            driver.mu.Lock(); ch := driver.pending[id]; delete(driver.pending, id); driver.mu.Unlock()
+            if ch != nil { ch <- payload }   // [v1.2 correction] sends []byte payload, not frameFor(payload)
+                                              // — WaitForEcho now returns payload for AC-014 assertion
     }
-    ▼
-driver.deliverDownstream(pathID, mpFrame) error
-    ▼
-driver.downstreamMP.Receive(mpFrame)    // endpoint dedup; first arrival only
-    ▼
-delivered, err := driver.arqClient.OnAck(mpFrame.ChanSeq(), zeroSACK)  // arq.go:201
-    │  ackSeq = this frame's own ChanSeq (see rationale below); SACK bitmap
-    │  is all-zero (nothing out-of-order to report — no loss is simulated)
-    ▼
-for each payload in delivered:
-    id := decodeRTID(payload)
-    driver.mu.Lock(); ch := driver.pending[id]; delete(driver.pending, id); driver.mu.Unlock()
-    if ch != nil { ch <- frameFor(payload) }   // unblocks WaitForEcho
 ```
+
+> **[v1.2 correction annotation — 2026-07-22]** Three corrections applied to
+> this pseudocode block vs. v1.1:
+> (1) `mpFrame.ChanSeq()` replaced with captured `f.ChanSeq` from
+> `halfchannel.ChannelFrame` — `multipath.Frame` has no `ChanSeq` method or
+> field (B1 fix; see v1.2 Addendum §B1).
+> (2) `arqServer`/`arqClient` renamed to `downstreamARQ` (single shared instance,
+> carried forward from the v1.1 Addendum).
+> (3) `ch <- frameFor(payload)` replaced with `ch <- payload` — `RoundTrip.done`
+> is now `chan []byte`; the raw payload is what `WaitForEcho` must return for
+> AC-014's `decodeRTID` assertion (H1 fix; see v1.2 Addendum §H1).
 
 **`arqClient.OnAck` call-contract decision (flagged for architect sign-off,
 see Risks):** no production code calls `OnAck` yet, so there is no existing
@@ -302,10 +324,16 @@ frame buffer that `Env.CollectFrames` uses.**
 // RoundTrip identifies one SendKeystroke → echo round trip in a loopback
 // environment. Returned by LoopbackEnv.SendKeystroke; consumed exactly once
 // by LoopbackEnv.WaitForEcho.
+//
+// [v1.2 correction — H1] done is chan []byte (was chan frame.OuterHeader).
+// frame.OuterHeader carries no payload; the round-trip id rides in the
+// payload bytes (encodeRTID/decodeRTID). WaitForEcho must return the
+// delivered payload so callers can assert decodeRTID(payload)==rt.id (AC-014).
 type RoundTrip struct {
     id   uint64
-    done chan frame.OuterHeader // buffered 1; written by the downstream
-                                 // ticker goroutine on delivery
+    done chan []byte // buffered 1; written by the downstream ticker goroutine
+                     // on delivery; carries the full echo payload (including
+                     // the 8-byte RT-ID suffix) — NOT an OuterHeader.
 }
 
 // SendKeystroke drives a keystroke through the full loopback protocol stack
@@ -319,7 +347,13 @@ func (lb *LoopbackEnv) SendKeystroke(t testing.TB, sessionID SessionID, key stri
 //036/039's "did anything arrive" semantics but wrong for VP-042's per-sample
 // semantics), this reads only rt's own completion channel — a concurrent or
 // stale round trip's frame cannot satisfy it.
-func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration)
+//
+// [v1.2 correction — H1] Returns ([]byte, bool): the delivered echo payload
+// (or nil) and a present-flag (false on timeout). Callers assert:
+//   payload, ok := lb.WaitForEcho(t, rt, timeout)
+//   if !ok { t.Fatalf(...) }
+//   if decodeRTID(payload) != rt.id { t.Errorf(...) }  // AC-014(b)
+func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration) (payload []byte, ok bool)
 ```
 
 This sidesteps the accumulation bug entirely rather than patching
@@ -461,7 +495,9 @@ func BenchmarkKeystrokeToEcho_P99(b *testing.B) {
     for i := 0; i < 500; i++ {
         start := time.Now()
         rt := lb.SendKeystroke(b, sessionID, "x")
-        lb.WaitForEcho(b, rt, 500*time.Millisecond)
+        payload, ok := lb.WaitForEcho(b, rt, 500*time.Millisecond) // [v1.2: returns ([]byte,bool)]
+        if !ok { b.Fatalf("WaitForEcho timed out on sample %d", i) }
+        _ = payload // AC-014: caller asserts decodeRTID(payload)==rt.id in full test
         latencies = append(latencies, time.Since(start))
     }
     b.StopTimer()
@@ -814,3 +850,353 @@ within a 500-sample benchmark at millisecond-scale tick intervals.
 production or test code anywhere in the repo constructs two `*arq.ARQ`
 instances in a sender/receiver split — confirmed via
 `grep -rn "arqServer\|arqClient\|arq\.New("` across the tree.
+
+---
+
+## v1.2 Design Repair Addendum (2026-07-22)
+
+**Scope:** Discharges the ARCHITECT-owned findings from the adversarial
+spec-review (`spec-review-2026-07-22.md`): B1 (BLOCKER), H1 (HIGH), H2 (HIGH),
+H3 (HIGH), M2 (MED), M4 (MED). Verdict on each finding follows. In-place
+pseudocode corrections are annotated in the sections above.
+
+**Source verification pass (PAT-04):** all ground-truth claims in the review
+were re-verified against shipped source before designing. No claim was wrong.
+Files read: `internal/multipath/multipath.go` (Frame struct, L38-43),
+`internal/halfchannel/halfchannel.go` (ChannelFrame L64-69, concurrency doc
+L89-90, Tick L117-137, Enqueue L143-154), `internal/frame/frame.go`
+(OuterHeader L66-84), `internal/session/upstream.go` (SendKeystroke L276-300),
+`internal/testenv/testenv.go` (attach idiom L646-648, NewLoopback L383-386),
+`internal/arq/arq.go` (OnAck L201, EnqueueSend L339, ErrAckOutOfWindow L66-71).
+
+---
+
+### §B1 — ChanSeq threading (BLOCKER)
+
+**Defect:** The Q4 downstream pseudocode called
+`driver.downstreamARQ.OnAck(mpFrame.ChanSeq(), zeroSACK)`. `multipath.Frame`
+has exactly two fields: `OuterHeader [44]byte` and `Payload []byte` — no
+`ChanSeq` method or field. Won't compile. `ChanSeq` exists only on the
+originating `halfchannel.ChannelFrame` (field `ChanSeq uint32`), which is in
+scope at the top of the downstream ticker body (`f := driver.downstreamHC.Tick()`)
+but is not transmitted through `toMPFrame`/`multipath.Frame` (the multipath
+encode/decode round trip is a declared Non-Goal; story declares multipath a
+read-only consumer with no new fields added).
+
+**Decision:** Capture `f.ChanSeq` into a local variable immediately after the
+`Tick()` call, before `toMPFrame(f)` is called, and pass that local to `OnAck`.
+This is valid because:
+
+1. The downstream ticker goroutine is single-goroutine for this half-channel
+   (H2 fix, below), so `f` is not modified after `Tick()` returns.
+2. `deliverDownstream` runs synchronously within the same goroutine tick (Q3
+   rationale — no per-path goroutine is spawned), so `chanSeq` is still valid
+   when `OnAck` is called at the end of the same tick.
+3. No field is added to `multipath.Frame` — the Non-Goal and read-only consumer
+   contract are preserved.
+
+**Corrected tick body (canonical form):**
+
+```go
+f := driver.downstreamHC.Tick()
+if f.FrameType == frame.FrameTypeData {
+    chanSeq := f.ChanSeq          // capture BEFORE toMPFrame — Frame has no ChanSeq
+    driver.downstreamARQ.EnqueueSend(chanSeq, f.Payload, time.Now())
+    driver.downstreamMP.Send(toMPFrame(f), driver.deliverDownstream)
+    // deliverDownstream runs synchronously (Q3); chanSeq still valid here
+    delivered, err := driver.downstreamARQ.OnAck(chanSeq, zeroSACK)
+    if err != nil {
+        driver.failLoud(fmt.Errorf("downstreamARQ.OnAck seq=%d: %w", chanSeq, err))
+        return
+    }
+    for _, payload := range delivered {
+        id := decodeRTID(payload)
+        driver.mu.Lock()
+        ch := driver.pending[id]
+        delete(driver.pending, id)
+        driver.mu.Unlock()
+        if ch != nil {
+            ch <- payload   // chan []byte — delivers echo payload to WaitForEcho
+        }
+    }
+}
+```
+
+**`toMPFrame` obligation (ties to M4):** `toMPFrame(f halfchannel.ChannelFrame) multipath.Frame`
+copies `f.Payload` into `multipath.Frame.Payload` and fills `OuterHeader` from
+channel metadata. It does NOT carry `ChanSeq` into the returned struct — this is
+intentional and correct; `ChanSeq` is captured separately before this call.
+
+---
+
+### §H1 — Harness API shape for AC-014
+
+**Defect:** `WaitForEcho` was void-returning; `RoundTrip.done` was
+`chan frame.OuterHeader`. `frame.OuterHeader` carries no payload (its fields are
+Version/FrameType/PayloadLen/SVTNID/SrcAddr/DstAddr/HMACTag — see
+`frame.go:66-84`). The round-trip id rides in payload bytes via `encodeRTID`/
+`decodeRTID`. AC-014(b) requires the caller to assert `decodeRTID(payload) ==
+rt.id`. This is impossible with a void-returning function and a payload-less
+carrier.
+
+**Decision:** The following type signatures are binding for this story:
+
+```go
+// RoundTrip identifies one SendKeystroke → echo round trip.
+// The done channel carries the delivered echo payload ([]byte), which includes
+// the 8-byte RT-ID suffix that WaitForEcho's caller uses for AC-014 assertion.
+type RoundTrip struct {
+    id   uint64
+    done chan []byte // buffered 1
+}
+
+// WaitForEcho blocks until the echo for rt arrives or timeout elapses.
+// Returns (payload, true) on delivery; (nil, false) on timeout.
+// On timeout the test should call t.Fatalf — WaitForEcho does NOT call
+// t.Fatalf itself so that benchmark callers can record the miss and continue
+// rather than abort the run (matches the existing Env.WaitForEcho pattern).
+// The returned payload is the verbatim echo payload; AC-014 callers assert:
+//   if decodeRTID(payload) != rt.id { t.Errorf(...) }
+func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration) (payload []byte, ok bool)
+```
+
+`RoundTrip.done` is buffered 1 so that a late delivery after a timeout does not
+block the downstream ticker goroutine (existing Risk 3 in the note, unchanged).
+The `frameFor` helper from the v1.1 Q4 pseudocode is eliminated — it was only
+needed to bridge payload to `frame.OuterHeader`; with `chan []byte` the payload
+passes directly, no bridge needed. `frameFor` is removed from M4's helper
+enumeration.
+
+---
+
+### §H2 — HalfChannel synchronization
+
+**Defect:** `halfchannel.HalfChannel` is explicitly not safe for concurrent use
+(doc: "Tick() and Enqueue() [must be] called from a single goroutine or under
+external synchronisation", `halfchannel.go:89-90`). The v1.1 design accessed
+each half-channel from two goroutines: `upstreamHC` was Enqueued from the
+test goroutine (`SendKeystroke`) while the upstream ticker goroutine called
+`Tick()`; `downstreamHC` was Enqueued from the upstream ticker goroutine
+(`loopbackSink.SendInput`) while the downstream ticker goroutine called `Tick()`.
+`driver.mu` guards only `driver.pending`, not the half-channels. `go test -race`
+will fail.
+
+**Decision:** Per-direction mutex serializing `Enqueue` and `Tick` on the same
+half-channel.
+
+Rationale for mutex over channel-funnel: the two half-channels are accessed from
+at most two goroutines each (test + upstream ticker for upstream; upstream ticker
++ downstream ticker for downstream). A `sync.Mutex` per half-channel wrapper is
+three lines at the call site and zero structural change to `loopbackDriver`. A
+buffered-channel funnel (redirecting enqueues into the ticker goroutine) is a
+more significant structural change: it requires a dedicated enqueue channel, a
+select loop in the ticker, and careful sizing; the benefit (true single-goroutine
+access) is not needed here because the lock window is tiny (a slice append for
+`Enqueue`; no I/O). The mutex is the simpler, less error-prone choice.
+
+**Concrete shape:**
+
+```go
+type loopbackDriver struct {
+    upstreamHCMu   sync.Mutex           // serializes upstreamHC.Enqueue + Tick
+    upstreamHC     *halfchannel.HalfChannel
+    downstreamHCMu sync.Mutex           // serializes downstreamHC.Enqueue + Tick
+    downstreamHC   *halfchannel.HalfChannel
+    // ... other fields unchanged
+}
+
+// In SendKeystroke (test goroutine):
+func (lb *LoopbackEnv) SendKeystroke(...) RoundTrip {
+    // ...
+    lb.driver.upstreamHCMu.Lock()
+    err := lb.driver.upstreamHC.Enqueue(payload)
+    lb.driver.upstreamHCMu.Unlock()
+    // ...
+}
+
+// In upstream ticker onTick callback:
+func (d *loopbackDriver) onUpstreamTick() {
+    d.upstreamHCMu.Lock()
+    f := d.upstreamHC.Tick()
+    d.upstreamHCMu.Unlock()
+    // ...
+}
+
+// In loopbackSink.SendInput (called from upstream ticker goroutine):
+func (s *loopbackSink) SendInput(payload []byte) error {
+    s.driver.downstreamHCMu.Lock()
+    err := s.driver.downstreamHC.Enqueue(payload)
+    s.driver.downstreamHCMu.Unlock()
+    return err
+}
+
+// In downstream ticker onTick callback:
+func (d *loopbackDriver) onDownstreamTick() {
+    d.downstreamHCMu.Lock()
+    f := d.downstreamHC.Tick()
+    d.downstreamHCMu.Unlock()
+    // ...
+}
+```
+
+**AC obligation:** The story-writer must add an acceptance criterion asserting
+`just test-race` passes (i.e. the CI race detector finds no data races in the
+loopback driver). This AC has no existing number in v1.1; the story-writer
+assigns it.
+
+---
+
+### §H3 — Console provisioning sequence
+
+**Defect:** `AccessNode.SendKeystroke` returns `ErrConsoleNotFound` unless the
+console key is registered and attached. The v1.1 design references the
+`AttachConsole` pattern but never specifies `RegisterKey`+`Attach`+authorizer
+`Allow` for the loopback console specifically. Without these, every upstream
+keystroke silently fails (`ErrConsoleNotFound` returned by `SendKeystroke`,
+never surfaced), AC-004/005/006/014 happy paths all time out.
+
+**Decision:** The loopback driver construction sequence (in `CreateSession` or
+in the `loopbackDriver` constructor) MUST include the following, matching the
+shipped `testenv.AttachConsole` idiom (`testenv.go:646-648`):
+
+```go
+// Construction-time provisioning — called once per CreateSession:
+loopbackConsoleKey := driver.env.newConsoleKey()  // opaque ConsoleKey
+sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)
+downstream, _, err := sh.access.Attach(loopbackConsoleKey, sessionName)
+if err != nil {
+    t.Fatalf("loopbackDriver: Attach loopback console: %v", err)
+}
+// The authorizer (sh.auth) already covers loopbackConsoleKey via RegisterKey;
+// no additional Allow configuration is needed — RegisterKey with RoleFull
+// is what makes sh.auth.Allow(loopbackConsoleKey, sessionName, _) return nil.
+_ = downstream  // downstream channel not used — echo delivery is via loopbackSink
+```
+
+`loopbackConsoleKey` is stored on `loopbackDriver` and passed to
+`driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in
+the upstream delivery callback (Q3 `accessNode.SendKeystroke` line).
+
+Note: the `downstream` channel returned by `Attach` is discarded because the
+loopback driver does not need a separate downstream-frame collector — echo
+delivery flows through `loopbackSink` → `downstreamHC.Enqueue` → downstream
+ticker → `driver.pending`, not through the `AccessNode.DeliverFrame` fan-out
+path. Discarding it is intentional and must be documented with a comment.
+
+---
+
+### §M2 — OnAck error handling and empty-tick window
+
+**Defect (error swallowing):** The v1.1 Q4 pseudocode captured `err` from
+`OnAck` but never checked it. SOUL.md §4 (no silent failure). If `OnAck`
+returns `ErrAckOutOfWindow`, `delivered` is nil, all pending round trips time
+out with no diagnostic, and the test reports "latency >100ms" when the real
+problem is a window violation.
+
+**Decision:** `OnAck`'s error MUST be checked and surfaced as a loud failure:
+
+```go
+delivered, err := driver.downstreamARQ.OnAck(chanSeq, zeroSACK)
+if err != nil {
+    // ErrAckOutOfWindow is the only expected error in this harness.
+    // Any error here is a harness construction bug, not a latency measurement.
+    driver.failLoud(fmt.Errorf("downstreamARQ.OnAck seq=%d: %w", chanSeq, err))
+    return
+}
+```
+
+`driver.failLoud` calls `t.Errorf` (not `t.Fatalf`) to allow the ticker
+goroutine to return cleanly; the test is already doomed at this point.
+Alternatively, send on a dedicated `driver.errCh chan error` (buffered 1) and
+have a monitor goroutine or `WaitForEcho` check it — either pattern is
+acceptable; the key invariant is that the error is NOT discarded.
+
+**Defect (empty-tick window coupling):** `halfchannel.Tick()` increments `seq`
+on EVERY tick, including empty ticks when there is no payload. `ErrAckOutOfWindow`
+fires when `ackSeq - nextExpected > 64` (`arq.go:66-71`). The downstream ticker
+starts at `NewLoopback` construction but `EnqueueSend` is only called on data
+ticks. If the test harness idles more than 64 downstream ticks (64 × 50ms = 3.2s
+at the standard interval) before the first `SendKeystroke`, the downstream
+`HalfChannel.seq` has advanced 64 positions, but `downstreamARQ.nextExpected`
+is still 0 — the first real data tick produces `chanSeq = 65` (or higher),
+making `OnAck(65, zeroSACK)` return `ErrAckOutOfWindow` (65 - 0 = 65 > 64),
+`delivered = nil`, and the first benchmark sample times out.
+
+**Mitigation decision:** Do not start the downstream ticker goroutine at
+`NewLoopback` time. Start it lazily — at the first `SendKeystroke` call (before
+`Enqueue`) OR at `CreateSession` time. The upstream ticker MAY start at
+construction (it has no `EnqueueSend` dependency), but the downstream ticker
+must not run until at least one data frame is imminent. This eliminates the idle
+window entirely: by the time the downstream ticker produces its first tick,
+`chanSeq` = 1 and `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64`.
+
+An acceptable simpler alternative: reset `downstreamARQ.nextExpected` to
+`downstreamHC.Seq()` at the moment the first `SendKeystroke` enqueues — but
+`arq.ARQ` exposes no `Reset` method today. The lazy-start approach requires no
+change to `internal/arq` and is the preferred design.
+
+The story-writer should add an AC for: "if `OnAck` returns an error, the harness
+surfaces it as a loud failure (not a silent timeout)."
+
+---
+
+### §M4 — Helper signatures
+
+The following conversion helpers must be implemented as package-private functions
+in `internal/testenv`. Their obligations are enumerated here for the story-writer
+to transcribe into tasks.
+
+```go
+// toMPFrame converts a halfchannel.ChannelFrame to a multipath.Frame.
+// OBLIGATION: copies f.Payload into Frame.Payload. Does NOT carry f.ChanSeq
+// into the returned struct (multipath.Frame has no ChanSeq field — B1 fix).
+// OuterHeader bytes are synthesized from loopback channel metadata (no wire
+// serialization; this is a Non-Goal).
+func toMPFrame(f halfchannel.ChannelFrame) multipath.Frame
+
+// encodeRTID encodes a round-trip id as an 8-byte big-endian suffix appended
+// to key. Returns the combined payload: append([]byte(key), id_bytes...).
+// Package-private. Pure function (no I/O).
+func encodeRTID(key string, id uint64) []byte
+
+// decodeRTID extracts the round-trip id from the last 8 bytes of payload.
+// Returns (id, true) if len(payload) >= 8; (0, false) otherwise.
+// Package-private. Pure function (no I/O).
+func decodeRTID(payload []byte) (id uint64, ok bool)
+
+// zeroSACK is the all-zero SACK bitmap passed to OnAck in the no-loss harness.
+// Correct because Non-Goals excludes packet loss and reordering; a future
+// loss-injection story must replace this with a real bitmap.
+var zeroSACK [arq.SACKBitmapBytes]byte  // zero value, never written
+
+// frameFor has been ELIMINATED in v1.2. It was only needed to bridge payload
+// to frame.OuterHeader for the chan frame.OuterHeader completion carrier.
+// RoundTrip.done is now chan []byte; payload passes directly, no bridge needed.
+```
+
+**`toMPFrame` ChanSeq-preservation obligation (B1 tie-in):** the function
+signature takes a `halfchannel.ChannelFrame`, which carries `ChanSeq`. The
+function does NOT embed ChanSeq into the returned `multipath.Frame`. This is
+the correct contract — the caller captures `chanSeq := f.ChanSeq` BEFORE calling
+`toMPFrame`, and uses that captured value for `OnAck`. Any future modification
+to `toMPFrame` that attempts to thread `ChanSeq` through `multipath.Frame`
+would require adding a field to that struct, which is prohibited (Non-Goal).
+
+**`WaitForEcho` payload/header consistency obligation (H1 tie-in):** the
+completion channel carries `[]byte` (the echo payload). `WaitForEcho` returns
+this slice directly to the caller. The caller asserts `decodeRTID(payload) ==
+rt.id`. The chain: `loopbackSink.SendInput` echoes the full payload (including
+RT-ID suffix) → `downstreamHC.Enqueue(payload)` → downstream ticker →
+`delivered` slice from `OnAck` → `ch <- payload` → `WaitForEcho` returns it.
+No transform is applied to payload bytes between sink and return. `decodeRTID`
+reads the last 8 bytes; `encodeRTID` appends them. These must be inverse
+functions: `decodeRTID(encodeRTID(key, id)) == id` for all `key`, `id`.
+
+---
+
+**Files consulted for this v1.2 addendum:** `internal/multipath/multipath.go`
+(Frame struct, confirmed no ChanSeq), `internal/halfchannel/halfchannel.go`
+(ChannelFrame, concurrency doc, Tick, Enqueue), `internal/frame/frame.go`
+(OuterHeader fields), `internal/session/upstream.go` (SendKeystroke),
+`internal/testenv/testenv.go` (AttachConsole idiom, NewLoopback),
+`internal/arq/arq.go` (OnAck, EnqueueSend, ErrAckOutOfWindow window guard).
