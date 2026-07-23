@@ -8,7 +8,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
-version: "1.2"
+version: "1.3"
 phase: 2
 epic: E-1
 wave: backlog
@@ -20,7 +20,7 @@ inputs:
   - .factory/specs/verification-properties/VP-042.md
   - .factory/specs/architecture/ARCH-08-dependency-graph.md
   - .factory/specs/architecture/ARCH-03-routing-engine.md
-input-hash: "41b1472"
+input-hash: "4c22ebb"
 traces_to: .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
 behavioral_contracts:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
@@ -54,13 +54,13 @@ cycle: v1.0.0-greenfield
 depends_on: []   # S-BL.TESTENV already MERGED (PR #110, 62e38d3) — this story extends its NewLoopback/LoopbackEnv API; it is not blocked on that story, it builds on shipped code
 blocks: []
 inputDocuments:
-  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.2 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4). Where this story and the note diverge, the note governs.
+  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.3 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4) + v1.3 R1 Re-Review Repair (B-F1/B-F2/B-F3/C-F1/C-F2). Where this story and the note diverge, the note governs.
   - '.factory/specs/verification-properties/VP-042.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'   # v2.13 — this story's merge finalizes the PROSPECTIVE pos-23 import-set amendment
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
   - '.factory/stories/S-BL.TESTENV.md'
   - '.factory/stories/S-BL.PE-RECEIVE-LOOP.md'   # precedent for the Env.wg/closeCh ticker-goroutine idiom (Q6) and story-writer conventions (grep-resolved symbols, no line-number citations)
-acceptance_criteria_count: 15
+acceptance_criteria_count: 16
 backlog_origin:
   source: architect design note
   adjudication: "Human disposition, 2026-07-12: author now, deliver later — status draft, unscheduled. Not an adversarial-pass or PO-adjudication origin; commissioned directly to answer the open design questions VP-042.md v1.3's own history flagged (\"lock deferred to a testenv-integrated measurement post S-BL.TESTENV\") and to finalize ARCH-08 v2.13's PROSPECTIVE registration."
@@ -69,7 +69,7 @@ backlog_origin:
 
 # S-BL.LOOPBACK-FULLSTACK: Full-Stack Loopback Testenv Extension for VP-042
 
-> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. Do not implement from Q4's original code blocks alone — the Addendum and v1.2 corrections govern.
+> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. **v1.3 (2026-07-22):** note v1.3 transcription + R1 story fixes applied (B-F1/B-F2/B-F3/A-M1/A-M2/A-L1/A-L2) — consistent with placement-note v1.3. Do not implement from Q4's original code blocks alone — the Addendum and v1.2/v1.3 corrections govern.
 
 ## Narrative
 
@@ -97,7 +97,7 @@ a testenv-integrated measurement post S-BL.TESTENV."
 
 This story is that testenv-integrated measurement. It is scoped and designed entirely by the architect
 design note listed as this story's binding input
-(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.1) — **story-writer's job here is
+(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.3) — **story-writer's job here is
 transcription, not re-derivation.** Where this story and the placement note appear to diverge, the note
 governs; where this story and VP-042.md's older proof-harness skeleton diverge (the skeleton's two-call
 `env.SendKeystroke`/`env.WaitForEcho` shape vs. this story's token-based `RoundTrip` API), the placement
@@ -177,13 +177,22 @@ A new unexported `loopbackDriver` type lives inside `internal/testenv`, owned by
 bench test does `env := lb.Env; env.CreateSession(b)`, never `lb.CreateSession(b)`) — so new
 `*LoopbackEnv` methods do not collide with or shadow `*Env`'s method set.
 
-**[H3 — v1.2] Console provisioning (required for upstream happy path).** `AccessNode.SendKeystroke`
+**[H3 — v1.3] Console provisioning (required for upstream happy path).** `AccessNode.SendKeystroke`
 returns `ErrConsoleNotFound` unless the console key is registered and attached. `LoopbackEnv.CreateSession`
 (or the `loopbackDriver` constructor) MUST include the following provisioning, matching the shipped
 `testenv.AttachConsole` idiom:
 
 ```go
 loopbackConsoleKey := driver.env.newConsoleKey()   // opaque ConsoleKey
+
+// [v1.3 B-F1] Publish into the driver's OWN dedicated Publisher BEFORE Attach.
+// AccessNode.Attach calls pub.Get(sessionName) as its first gate; if the session
+// is not published, Attach returns ErrSessionNotFound and t.Fatalf fires at
+// construction — the happy path is unreachable without this step.
+// Publisher.Publish signature: func (p *Publisher) Publish(sessionName string) error
+if err := sh.pub.Publish(sessionName); err != nil {
+    t.Fatalf("loopbackDriver: Publish session %q: %v", sessionName, err)
+}
 sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)
 downstream, _, err := sh.access.Attach(loopbackConsoleKey, sessionName)
 if err != nil {
@@ -192,6 +201,11 @@ if err != nil {
 _ = downstream  // downstream channel not used — echo delivery flows through
                  // loopbackSink → downstreamHC, not AccessNode.DeliverFrame fan-out
 ```
+
+**Complete provisioning sequence (v1.3 — steps MUST appear in this order):**
+1. `sh.pub.Publish(sessionName)` — publish into the driver's own dedicated Publisher so `Attach`'s `pub.Get` gate passes.
+2. `sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)` — register the console key so `SendKeystroke`'s authorizer check passes.
+3. `sh.access.Attach(loopbackConsoleKey, sessionName)` — attach the console to the session.
 
 `loopbackConsoleKey` is stored on the driver and passed to
 `driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in the upstream delivery
@@ -245,7 +259,7 @@ Every `Enqueue` and `Tick` call site on each half-channel acquires the correspon
 LoopbackEnv.SendKeystroke(t, sessionID, key)
     mints RoundTrip{id: driver.rtSeq.Add(1)}; registers a completion channel
     under that id in driver.pending, guarded by driver.mu
-    payload := append([]byte(key), encodeRTID(id)...)   // 8-byte BE suffix
+    payload := encodeRTID(key, id)   // [v1.3 B-F2] 2-arg whole-payload form (key + 8-byte BE id suffix)
     ↓
 driver.upstreamHC.Enqueue(payload)   // pure, non-blocking — returns to caller
                                       // immediately; SendKeystroke does NOT
@@ -372,16 +386,23 @@ if err != nil {
 test is already doomed at this point. An alternative acceptable pattern: send on a `driver.errCh chan
 error` (buffered 1) and have `WaitForEcho` check it.
 
-**[M2 — v1.2] Empty-tick window mitigation (lazy downstream ticker start).** `halfchannel.HalfChannel`
+**[M2 — v1.3 B-F3] Empty-tick window mitigation (downstream ticker start timing).** `halfchannel.HalfChannel`
 increments its sequence counter on EVERY `Tick()` call, including empty ticks when no payload is
 queued. `ErrAckOutOfWindow` fires when `chanSeq - downstreamARQ.nextExpected > 64`. If the downstream
 ticker starts at `NewLoopback` construction time but `CreateSession`/`SendKeystroke` are called more
 than 64 downstream tick intervals later (64 × 50ms = 3.2s at the standard interval), the first data
 tick produces a `chanSeq` exceeding `nextExpected` by more than 64, and the first `OnAck` returns
-`ErrAckOutOfWindow`. **Mitigation: start the downstream ticker goroutine lazily — at `CreateSession`
-time or at the first `SendKeystroke`, not at `NewLoopback` construction.** The upstream ticker may
-start at construction (it has no `EnqueueSend` dependency). This eliminates the idle window: when the
+`ErrAckOutOfWindow`. **Mitigation (PREFERRED): start the downstream ticker goroutine at `CreateSession`
+time — called once, from a single goroutine, before any `SendKeystroke` calls, so no additional
+synchronization is needed.** The upstream ticker may start at construction (it has no `EnqueueSend`
+dependency). This eliminates the idle window: when the
 downstream ticker first fires, `chanSeq` = 1 and `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64`.
+
+**If the implementer uses first-`SendKeystroke` start instead, a `sync.Once` guard on ticker launch is
+MANDATORY.** Without it, concurrent first `SendKeystroke` calls (AC-008) each observe not-started and
+launch duplicate tickers, double-consuming `ChanSeq` values and corrupting the ARQ window. The
+`sync.Once` idiom is already house convention in this design (`closeOnce sync.Once`). There is no third
+option: `CreateSession`-time start (preferred) or `sync.Once`-guarded first-`SendKeystroke` start.
 
 ### RoundTrip Token API — Fixing the CollectFrames Accumulation Short-Circuit (Q5)
 
@@ -529,13 +550,15 @@ The `arq.OnAck` call-contract proposed in Q4 (`ackSeq` = the locally-observed fr
 zero SACK in the no-loss happy path) had no existing production call site to copy — this design is the
 first proposed caller of `OnAck` in the codebase. Per Risk 1 option (a), an architect placement-note
 addendum reviewed the contract before this story could be scheduled: **"Q4 Addendum — AC-001 Sign-off
-(2026-07-12)"** in `S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.1, discharging this gate.
+(2026-07-12)"** (introduced note v1.1, carried in v1.3) in `S-BL.LOOPBACK-FULLSTACK-placement-note.md`,
+discharging this gate.
 
 **Verdict: REVISED.** The `ackSeq`/SACK value convention is CONFIRMED correct as proposed. The
 `driver.arqServer`/`driver.arqClient` **two-instance topology** Q4's original code blocks show is a
-structural defect: `OnAck`'s payload recovery (`payloadFor`, `arq.go:291`) reads only the calling
-instance's own `inFlight`/`reorderBuf` maps, populated exclusively by that SAME instance's prior
-`EnqueueSend` calls (`arq.go:339`). A separate `arqClient` that never receives `EnqueueSend` returns
+structural defect: `OnAck`'s payload recovery (`payloadFor` / instance-local inFlight lookup) reads only
+the calling instance's own `inFlight`/`reorderBuf` maps, populated exclusively by that SAME instance's
+prior `EnqueueSend` calls (`EnqueueSend` / instance-local inFlight write). A separate `arqClient` that
+never receives `EnqueueSend` returns
 `(nil, nil)` from `OnAck` on every call, silently — no error, `nextExpected` still advances — so every
 `WaitForEcho` in the harness would time out on every round trip. This is not a subtle edge case; it is
 a hard, silent benchmark failure the note's original Risk 1 framing ("getting this wrong doesn't break
@@ -764,6 +787,24 @@ is expected to appear in the CI `just test-race` output with a PASS result). Ver
 pipeline's `just test-race` step is the authoritative gate; this test is the per-story hook into that
 gate for this specific race class.
 
+### AC-016 (traces to BC-2.02.005 / §M2 note — OnAck error loud; added v1.3)
+
+If `driver.downstreamARQ.OnAck` returns an error, the harness MUST surface it as a loud failure — not
+silently convert it to a `WaitForEcho` timeout. This is the note §M2's explicit obligation ("the
+story-writer should add an AC for: if OnAck returns an error, the harness surfaces it as a loud failure
+(not a silent timeout)"). The mechanism is `driver.failLoud` (see §M2 Design Constraints): `t.Errorf`
+from the ticker goroutine, or a dedicated `driver.errCh chan error` (buffered 1) checked by
+`WaitForEcho`. A silent timeout, while observable, masks a harness construction bug as high latency —
+the loud failure is the load-bearing diagnostic contract.
+
+**Fault-injection test:** `TestLoopbackDriver_OnAckError_SurfacesLoud` — inject a condition that forces
+`OnAck` to return `ErrAckOutOfWindow` (e.g. start the downstream ticker at `NewLoopback` construction
+time and let it advance past the 64-tick window before the first `EnqueueSend`; or directly invoke
+`downstreamARQ.OnAck` with an out-of-window ackSeq via a test helper). Assert that `driver.failLoud`
+fires (or `errCh` receives the error) and that the failure is surfaced to the test runner — not merely
+that `WaitForEcho` returns `(nil, false)` on a timeout. Mirrors the AC-011 fault-injection pattern
+(synthetic stale entry to trigger the diagnostic).
+
 ---
 
 ## Non-Goals
@@ -820,7 +861,7 @@ Transcribed from the placement note. This story does NOT implement:
 | Edge Case | Handling |
 |-----------|----------|
 | `WaitForEcho` times out, echo arrives later | `RoundTrip.done` buffered 1; downstream ticker's send never blocks even if nobody reads it; `driver.pending` entry is still deleted (AC-009) |
-| `WaitForEcho` never called for a `RoundTrip` (test bug) | `driver.pending` would otherwise accumulate until `Env.Close()`; `t.Cleanup` asserts the map is empty at teardown (AC-011) |
+| `WaitForEcho` never called for a `RoundTrip` (test bug) | The downstream ticker's completion path unconditionally drains `driver.pending` at delivery (AC-009) — there is no leak in the no-loss harness. An entry lingers only if the echo never arrives (e.g. `decodeRTID` mismatch); the non-blocking `t.Cleanup` diagnostic (AC-011) reports any such undrained entry without aborting the test |
 | Duplicate frame arrival (same payload, two synthetic paths) | `multipath.Receive` returns `ErrDuplicate` on the second arrival — discarded before `accessNode`/`downstreamARQ` (AC-005) |
 | Tick interval exactly at `MaxTickInterval` (50ms) | Legal — VP-042's own `downstreamInterval` sits exactly here; validation site carries a boundary comment (AC-002) |
 | Fresh `paths.RankedPath` with no probe history | `NewPathTracker` defaults `active: true`; `Rank()` considers it eligible with zero `OnProbe` calls (AC-010) |
@@ -868,7 +909,7 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 ## Tasks (MANDATORY)
 
 1. [x] **GATE (DISCHARGED 2026-07-12):** AC-001 resolved via architect placement-note addendum ("Q4
-   Addendum — AC-001 Sign-off," v1.1) — verdict REVISED. Read the Addendum before Task 6: it supersedes
+   Addendum — AC-001 Sign-off," introduced note v1.1, carried in v1.3) — verdict REVISED. Read the Addendum before Task 6: it supersedes
    Q4's original `arqServer`/`arqClient` code blocks with a single shared `*arq.ARQ` instance
    (`driver.downstreamARQ`).
 2. [ ] Implement `loopbackDriver` inside `internal/testenv` with its own `Publisher`/`SessionAuth`/
@@ -879,8 +920,9 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
    `rtSeq atomic.Uint64` (Q5, AC-008, AC-009).
 4. [ ] Implement `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` on `*LoopbackEnv` (Q2, Q5).
    `WaitForEcho` returns `(payload []byte, ok bool)` (H1). `CreateSession` provisions the loopback
-   console via `RegisterKey`+`Attach` (H3, AC-007). Downstream ticker starts lazily in `CreateSession`
-   (M2 — not at `NewLoopback` construction).
+   console via `pub.Publish(sessionName)` → `RegisterKey`+`Attach` (H3/B-F1, AC-007). Downstream
+   ticker starts at `CreateSession` time, PREFERRED per B-F3 (single-threaded, race-free); if
+   first-`SendKeystroke` start is used instead, `sync.Once` is MANDATORY (M2 — not at `NewLoopback` construction).
 5. [ ] Implement upstream flow: `Enqueue` (under `upstreamHCMu`) → upstream ticker `Tick()` (under
    `upstreamHCMu`) → `upstreamMP.Send` → `deliverUpstream` → `upstreamMP.Receive` dedup →
    `accessNode.SendKeystroke` → `loopbackSink.SendInput` (Q3, AC-004, AC-005, H2).
@@ -973,6 +1015,7 @@ from a lock flip.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.3 | 2026-07-22 | Transcribe note v1.3 + R1 story fixes. B-F1 — §H3 provisioning: `sh.pub.Publish(sessionName)` inserted as step 1 before `RegisterKey`+`Attach` (Attach gates on pub.Get; driver builds its own Publisher); sequence now pub.Publish → RegisterKey → Attach. B-F2 — Q3 `encodeRTID` call site corrected from `append([]byte(key), encodeRTID(id)...)` to `payload := encodeRTID(key, id)` (2-arg whole-payload form matching §M4 canonical definition). B-F3 — M2 lazy-start tightened: `CreateSession`-time downstream ticker start is PREFERRED (single-threaded, race-free); if first-`SendKeystroke` start is used instead, `sync.Once` is MANDATORY; language "or at first SendKeystroke" without guard removed. A-M1 — stale Edge Cases row ("WaitForEcho never called for a RoundTrip ... t.Cleanup asserts map is empty") rewritten to reflect unconditional-drain reality (AC-009): pending is drained on delivery regardless of waiter; lingering entries only when decodeRTID fails; consistent with reframed AC-011. A-M2 — note version pin in Context (L100) updated from v1.1 to v1.3; Q4 Addendum citations at two body locations disambiguated to "introduced note v1.1, carried in v1.3." A-L1 — new AC-016 added: fault-injection test for OnAck error loud (mirrors AC-011 pattern; traces to BC-2.02.005; note §M2 explicit obligation). A-L2 — AC-001 body references to `arq.go:291` and `arq.go:339` converted from numeric line-refs to mechanism-anchors (`payloadFor` / instance-local inFlight lookup and `EnqueueSend`). AC count: 15 → 16. Points: 8 (unchanged). |
 | 1.2 | 2026-07-22 | Spec-review repairs (B1/H1/H2/H3/M1/M2/M3/M4 + LOW polish): B1 — downstream OnAck call now uses captured `chanSeq := f.ChanSeq` from `halfchannel.ChannelFrame`, not phantom `mpFrame.ChanSeq()`. H1 — `RoundTrip.done` changed to `chan []byte`; `WaitForEcho` returns `(payload []byte, ok bool)`; completion path sends raw payload; `frameFor` helper eliminated. H2 — `loopbackDriver` gains `upstreamHCMu`/`downstreamHCMu sync.Mutex` serializing Enqueue+Tick per direction; new AC-015 requires `just test-race` passes. H3 — `CreateSession`/driver construction must `RegisterKey(loopbackConsoleKey, RoleFull)` + `Attach(loopbackConsoleKey, sessionName)` before upstream `SendKeystroke` can succeed. M1 — AC-011 reframed: pending-map diagnostic is non-blocking `t.Cleanup` assertion against deterministic decode-mismatch scenario (consistent with unconditional drain in AC-009). M2 — `OnAck` error MUST be checked and fail loud (`driver.failLoud`); downstream ticker starts lazily (at `CreateSession`/first `SendKeystroke`) to prevent `ErrAckOutOfWindow` from idle-tick window drift. M3 — `ARCH-03-routing-engine.md` added to hash-bearing `inputs:` list; input-hash recomputed. M4 — helper signatures enumerated in Architecture Mapping and File Structure: `toMPFrame`, `encodeRTID`, `decodeRTID`, `zeroSACK` with explicit obligations; `frameFor` REMOVED. LOW — AC-002 split into (a)/(b); numeric line-refs converted to mechanism-anchors; `dropCacheCapacity`/`DefaultDropCacheSize` noted; AC-013 notes call-order alignment. AC count: 14 → 15. Points: 8 (unchanged — spec-correctness repairs, not scope growth). Consistent with placement-note v1.2. |
 | 1.1 | 2026-07-12 | AC-001 amendment consuming the placement note's Q4 Addendum — AC-001 Sign-off (v1.0 → v1.1), the architect review required by Risk 1 option (a) before this story could leave draft/unscheduled status. **Verdict: REVISED, not simple CONFIRMED.** The `ackSeq`/SACK value convention is CONFIRMED correct as originally proposed. The `driver.arqServer`/`driver.arqClient` two-instance topology Q4's original code blocks showed is a structural defect: `OnAck`'s payload recovery (`payloadFor`) reads only the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by that SAME instance's prior `EnqueueSend` calls — a never-`EnqueueSend`'d `arqClient` returns `(nil, nil)` from `OnAck` on every call, silently, so every `WaitForEcho` would time out on every round trip (a hard, silent benchmark failure, not the forgiving happy-path miss Risk 1's original framing assumed for this failure mode). **AC-001 status: DISCHARGED 2026-07-12** — reworded from a pre-implementation gate to a discharged record of the verdict, binding the implementer to one shared `*arq.ARQ` instance (`driver.downstreamARQ`); `EnqueueSend` and `OnAck` for a given `ChanSeq` MUST run on that same instance, in that order, within the same downstream-ticker tick. **New AC-014 added** (regression guard, not present in v1.0): a mandatory behavioral test that a full `SendKeystroke`→`WaitForEcho` round trip actually completes with non-empty delivery — guards specifically against the silent `(nil, nil)`-forever failure mode a bare "did it return" assertion would miss. The architect's alternative structural phrasing (assert the driver has exactly one `*arq.ARQ`-typed field) is accepted as supplementary coverage only; the behavioral round-trip-completes assertion is mandatory. **Mirrored throughout:** the Q4 Design Constraints subsection (heading, binding statement, downstream-ticker code block, and call-contract prose rewritten to the single-instance shape and cross-referenced to the Addendum); AC-005/AC-006 test bodies (`arqClient`/`arqServer` naming replaced with `driver.downstreamARQ`, AC-006 now cites AC-014); the Anchors Consumed table (BC-2.02.002/BC-2.02.005 rows); the Architecture Mapping and Edge Cases tables (new edge-case row for the ruled-out two-instance shape); Tasks (Task 1 marked discharged with a pointer to the Addendum, Task 6 rewritten to the single-instance wiring, new Task 11 for the AC-014 regression guard, former Task 11 renumbered to Task 12, Forward Obligation's cross-reference updated to match); Story-Sizing Rationale (new paragraph confirming the gate resolved pre-scheduling inside Task 6's existing scope — no scope growth, estimate stays 8 points); Context section (new paragraph summarizing the sign-off); the status-note blockquote (gate status updated from blocking-pending to discharged, with an explicit warning not to implement from Q4's original code blocks alone); frontmatter (`inputDocuments` placement-note pin `v1.0` → `v1.1` with the Addendum summarized inline, `acceptance_criteria_count` 13 → 14, `input-hash` recomputed to `d621ea4` per `compute-input-hash --update` — the placement note's content changed independent of this story's own edits). Package Impact Summary's "(Transcribed from the placement note)" table is left as-is by design — it mirrors the note's own Package Impact table, which the Addendum does not itself amend. |
 | 1.0 | 2026-07-12 | Initial story authored to full spec, draft/unscheduled per human disposition ("author now, deliver later"). Transcribes architect placement note v1.0 (Q1–Q8 binding design decisions, 5 Risks) faithfully — no design re-derivation. 8 points (architect range 5–8; upper bound selected for AC-001's pre-implementation sign-off gate plus three additional risk-derived ACs/decisions — AC-009/AC-010/AC-011). 13 ACs, AC-001 a hard pre-implementation gate on the `arq.OnAck` call-contract (no existing production precedent). 1 Forward Obligation (VP-042 `verification_lock` flip explicitly out of scope). `depends_on: []` — S-BL.TESTENV already merged (PR #110, `62e38d3`); this story extends its `NewLoopback`/`LoopbackEnv` surface rather than blocking on it. |
