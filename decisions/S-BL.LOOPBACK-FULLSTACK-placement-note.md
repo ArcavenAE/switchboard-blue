@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.2"
+version: "1.3"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.3 | R1 re-review repair (2026-07-22): B-F1 — §H3 provisioning sequence missing `pub.Publish(sessionName)` before `Attach` (added; Attach gates on pub.Get); B-F2 — `encodeRTID` Q3 call site corrected to 2-arg whole-payload form matching §M4 definition; B-F3 — §M2 lazy-start decision tightened: prefer `CreateSession`-time start (single-threaded, race-free), `sync.Once` required if first-`SendKeystroke` start is chosen; C-F1 — Q3 pseudocode L161 `map[uint64]chan frame.OuterHeader` corrected to `map[uint64]chan []byte`; C-F2 — v1.1 Q4 Addendum "Required revision" L680 phantom `mpFrame.ChanSeq()` corrected to captured `chanSeq`. See "v1.3 R1 Re-Review Repair (2026-07-22)" section. |
 | 1.2 | Design repair addendum (2026-07-22): B1 ChanSeq threading — corrected `mpFrame.ChanSeq()` phantom call to use captured `f.ChanSeq` from the originating `ChannelFrame`; H1 harness API shape — `RoundTrip.done` changed to `chan []byte`, `WaitForEcho` returns `([]byte, bool)`; H2 halfchannel synchronization — per-direction mutex strategy specified; H3 console provisioning — `RegisterKey`+`Attach`+`Allow` sequence specified as construction-time step; M2 OnAck error handling + empty-tick window — loud failure + don't-tick-until-enqueue mitigation specified; M4 helper signatures — enumerated with explicit obligations. See "v1.2 Design Repair Addendum (2026-07-22)" section. |
 | 1.1 | AC-001 sign-off (S-BL.LOOPBACK-FULLSTACK Risk 1 / Q4): reviewed the proposed `arq.OnAck` call-contract against `internal/arq/arq.go`, its full test suite, `internal/arqsend`, and ARCH-03 §Downstream ARQ. Verdict: REVISED. The `ackSeq`/SACK value convention is CONFIRMED correct; the `driver.arqServer`/`driver.arqClient` two-instance shape is a structural defect — `OnAck`'s payload recovery reads only from the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by prior `EnqueueSend` calls on that SAME instance, so a never-`EnqueueSend`'d `arqClient` can never return a delivered payload and `WaitForEcho` would time out on every call. Required fix: collapse into one shared `*arq.ARQ` instance. See "Q4 Addendum — AC-001 Sign-off (2026-07-12)" below. Supersession banner added at the top of Q4. |
 | 1.0 | Initial release. Full design note (Q1–Q8) for the tick-driven loopback stack, VP-042 benchmark shape, Non-Goals, package impact summary, story-sizing estimate, and Risks/Open Questions requiring story-writer ACs. |
@@ -158,9 +159,9 @@ loopback path; it does not touch `newShard` or any other VP's shard.
 ```
 LoopbackEnv.SendKeystroke(t, sessionID, key)
     │  mints RoundTrip{id: driver.rtSeq.Add(1)}; registers a completion
-    │  channel under that id in driver.pending (map[uint64]chan frame.OuterHeader,
-    │  guarded by driver.mu)
-    │  payload := append([]byte(key), encodeRTID(id)...)   // 8-byte BE suffix
+    │  channel under that id in driver.pending (map[uint64]chan []byte,
+    │  guarded by driver.mu)           // [v1.3 C-F1: was chan frame.OuterHeader; corrected to chan []byte, consistent with §H1]
+    │  payload := encodeRTID(key, id)  // [v1.3 B-F2: 2-arg whole-payload form — see §M4 definition]
     ▼
 driver.upstreamHC.Enqueue(payload)      // pure, non-blocking, halfchannel.go:143
     │  (returns to caller immediately — SendKeystroke does NOT block on
@@ -677,8 +678,12 @@ tick that produces a data frame, call `EnqueueSend(f.ChanSeq, f.Payload,
 now)` on that instance, then — after `Send` → `deliverDownstream` →
 `Receive` complete synchronously within the same tick and goroutine (Q3's
 own established rationale for not spawning per-path goroutines already
-guarantees this ordering) — call `OnAck(mpFrame.ChanSeq(), zeroSACK)` on
-the SAME instance. With that fix, the proposed `ackSeq`/SACK convention is
+guarantees this ordering) — call `OnAck(chanSeq, zeroSACK)` on
+the SAME instance, where `chanSeq` is captured as `chanSeq := f.ChanSeq`
+from the originating `ChannelFrame` before `toMPFrame` is called
+[v1.3 C-F2: corrected from `OnAck(mpFrame.ChanSeq(), zeroSACK)` —
+`multipath.Frame` has no `ChanSeq`; superseded in full by v1.2 §B1].
+With that fix, the proposed `ackSeq`/SACK convention is
 binding as originally written.
 
 ### Reasoning trail
@@ -1062,6 +1067,18 @@ shipped `testenv.AttachConsole` idiom (`testenv.go:646-648`):
 ```go
 // Construction-time provisioning — called once per CreateSession:
 loopbackConsoleKey := driver.env.newConsoleKey()  // opaque ConsoleKey
+
+// [v1.3 B-F1] Publish into the driver's OWN dedicated Publisher BEFORE Attach.
+// AccessNode.Attach calls pub.Get(sessionName) as its first gate
+// (internal/session/upstream.go:203-208); if the session is not published,
+// Attach returns ErrSessionNotFound and the driver's t.Fatalf fires at
+// construction — the happy path is unreachable.
+// The loopback driver builds its own Publisher/SessionAuth/AccessNode triple
+// (Q2), so this publishes into driver.pub, NOT env.defaultShard's publisher.
+// Publisher.Publish signature: func (p *Publisher) Publish(sessionName string) error
+if err := sh.pub.Publish(sessionName); err != nil {
+    t.Fatalf("loopbackDriver: Publish session %q: %v", sessionName, err)
+}
 sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)
 downstream, _, err := sh.access.Attach(loopbackConsoleKey, sessionName)
 if err != nil {
@@ -1072,6 +1089,14 @@ if err != nil {
 // is what makes sh.auth.Allow(loopbackConsoleKey, sessionName, _) return nil.
 _ = downstream  // downstream channel not used — echo delivery is via loopbackSink
 ```
+
+**Complete corrected provisioning sequence (v1.3):**
+
+1. `sh.pub.Publish(sessionName)` — publish into the driver's own dedicated Publisher so `Attach`'s `pub.Get` gate passes.
+2. `sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)` — register the console key so `SendKeystroke`'s authorizer check passes.
+3. `sh.access.Attach(loopbackConsoleKey, sessionName)` — attach the console to the session; succeeds now that the Publisher has the session.
+
+Steps 1–3 MUST appear in this order. `RegisterKey` before `Attach` was already required (from v1.2); `Publish` before `Attach` is the new v1.3 requirement.
 
 `loopbackConsoleKey` is stored on `loopbackDriver` and passed to
 `driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in
@@ -1122,13 +1147,26 @@ is still 0 — the first real data tick produces `chanSeq = 65` (or higher),
 making `OnAck(65, zeroSACK)` return `ErrAckOutOfWindow` (65 - 0 = 65 > 64),
 `delivered = nil`, and the first benchmark sample times out.
 
-**Mitigation decision:** Do not start the downstream ticker goroutine at
-`NewLoopback` time. Start it lazily — at the first `SendKeystroke` call (before
-`Enqueue`) OR at `CreateSession` time. The upstream ticker MAY start at
-construction (it has no `EnqueueSend` dependency), but the downstream ticker
-must not run until at least one data frame is imminent. This eliminates the idle
-window entirely: by the time the downstream ticker produces its first tick,
+**Mitigation decision [v1.3 B-F3 tightened]:** Do not start the downstream
+ticker goroutine at `NewLoopback` time. **PREFERRED: start the downstream
+ticker at `CreateSession` time.** `CreateSession` is called once, from a
+single goroutine, before any `SendKeystroke` calls — there is no concurrency
+at that point, so starting the ticker there is race-free and requires no
+additional synchronization. The upstream ticker MAY start at construction
+(it has no `EnqueueSend` dependency). This eliminates the idle window
+entirely: by the time the downstream ticker produces its first tick,
 `chanSeq` = 1 and `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64`.
+
+If the implementer chooses first-`SendKeystroke` start instead (e.g. for
+a future multi-session shape), a `sync.Once` guard on ticker launch is
+MANDATORY. Without it, concurrent first `SendKeystroke` calls (AC-008)
+each observe not-started and launch duplicate tickers, producing
+double-consumption of `ChanSeq` values and corrupting the ARQ window
+(`deliverDownstream` called twice for seq=1; `EnqueueSend` / `OnAck`
+sequence corrupted). The `sync.Once` idiom is already house convention
+in this design (`closeOnce sync.Once` in the note / story L442). There
+is no third option: `CreateSession`-time start (preferred) or
+`sync.Once`-guarded first-`SendKeystroke` start.
 
 An acceptable simpler alternative: reset `downstreamARQ.nextExpected` to
 `downstreamHC.Seq()` at the moment the first `SendKeystroke` enqueues — but
@@ -1200,3 +1238,114 @@ functions: `decodeRTID(encodeRTID(key, id)) == id` for all `key`, `id`.
 (OuterHeader fields), `internal/session/upstream.go` (SendKeystroke),
 `internal/testenv/testenv.go` (AttachConsole idiom, NewLoopback),
 `internal/arq/arq.go` (OnAck, EnqueueSend, ErrAckOutOfWindow window guard).
+
+---
+
+## v1.3 R1 Re-Review Repair (2026-07-22)
+
+**Scope:** Applies orchestrator-verified (PAT-04) findings from the R1 re-review
+pass: B-F1 (HIGH — missing `Publish` precondition in §H3), B-F2 (MED —
+`encodeRTID` arity mismatch Q3 vs §M4), B-F3 (MED — lazy-start races with AC-008),
+C-F1 (MED — stale `chan frame.OuterHeader` in Q3 pseudocode), C-F2 (MED — live
+phantom `mpFrame.ChanSeq()` in v1.1 Addendum "Required revision"). All five were
+confirmed real against source before this repair. Core design (B1/H1/H2/H3-core/M2-core)
+confirmed SOUND — these are propagation-edge and precondition defects only.
+
+**Source consulted for B-F1:** `internal/session/upstream.go:203-208`
+(`Attach` calls `a.pub.Get(sessionName)` before the auth gate — confirmed);
+`internal/session/session.go:137` (`func (p *Publisher) Publish(sessionName string) error`
+— canonical signature).
+
+---
+
+### §B-F1 — Missing `Publish` precondition in §H3 provisioning (HIGH)
+
+**Defect:** The §H3 provisioning sequence listed `newConsoleKey()` →
+`RegisterKey(sessionName, key, RoleFull)` → `Attach(key, sessionName)` as the
+complete sequence. But `AccessNode.Attach` (`upstream.go:203-208`) calls
+`a.pub.Get(sessionName)` as its FIRST gate — before the auth check. The loopback
+driver builds its own dedicated `Publisher`/`SessionAuth`/`AccessNode` triple (Q2),
+so that Publisher is empty at construction. Without a prior `Publish` call,
+`Attach` returns `ErrSessionNotFound` and `t.Fatalf` fires at driver construction —
+the H3 happy path is unreachable as written.
+
+**Fix:** `sh.pub.Publish(sessionName)` is inserted as step 1 of the provisioning
+sequence, before `RegisterKey` and `Attach`. See the corrected code block in §H3
+above.
+
+**`Publisher.Publish` signature (from source):** `func (p *Publisher) Publish(sessionName string) error`
+
+This call publishes into the DRIVER'S OWN Publisher (`sh.pub`), not into
+`env.defaultShard`'s publisher — consistent with Q2's explicit statement that the
+loopback driver builds its own independent triple.
+
+**Corrected complete provisioning sequence:**
+1. `sh.pub.Publish(sessionName)` — makes `pub.Get(sessionName)` succeed in `Attach`.
+2. `sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)` — makes the authorizer allow the key.
+3. `sh.access.Attach(loopbackConsoleKey, sessionName)` — attaches the console.
+
+---
+
+### §B-F2 — `encodeRTID` arity mismatch Q3 vs §M4 (MED)
+
+**Defect:** Q3 pseudocode called `encodeRTID(id)` (1-arg, implied suffix-only return);
+§M4 defined `func encodeRTID(key string, id uint64) []byte` (2-arg, whole-payload
+return). Contradictory: different arity, and Q3 also double-appended
+(`append([]byte(key), encodeRTID(id)...)`).
+
+**Fix:** The **2-arg whole-payload form** from §M4 is canonical:
+`func encodeRTID(key string, id uint64) []byte`. The Q3 call site is corrected
+in place (see above) to `payload := encodeRTID(key, id)` — single call, no
+manual append. §M4 definition is unchanged. Story-writer transcribes the 2-arg
+form for both definition and every call site.
+
+---
+
+### §B-F3 — Lazy-start option races with AC-008 (MED)
+
+**Defect:** §M2 offered first-`SendKeystroke` OR `CreateSession`-time lazy start
+with no synchronization specified. Under AC-008 (two concurrent `SendKeystroke`
+calls), first-`SendKeystroke` start lets multiple goroutines each observe
+not-started and launch duplicate tickers, double-consuming `ChanSeq` values
+and corrupting the ARQ window. `go test -race` (AC-015) would also catch the
+unguarded `started` flag race.
+
+**Fix (tightened in §M2 above):** PREFERRED: start the downstream ticker at
+`CreateSession` time (single-threaded, no concurrency yet, zero synchronization
+overhead). If first-`SendKeystroke` start is used, a `sync.Once` guard on ticker
+launch is MANDATORY — the `sync.Once` idiom is already house convention in this
+design (`closeOnce sync.Once`). No third option.
+
+---
+
+### §C-F1 — Stale `chan frame.OuterHeader` in Q3 pseudocode (MED)
+
+**Defect:** Q3 pseudocode narrated `driver.pending (map[uint64]chan frame.OuterHeader, ...)` — a live design statement, stale relative to the §H1 fix (`chan []byte`).
+
+**Fix:** Corrected in Q3 pseudocode (above) to `map[uint64]chan []byte`. The
+v1.1 Q4 pseudocode (`ch <- frameFor(payload)` with superseded annotation) and
+the §M4 `frameFor` elimination note are already correctly annotated as
+old/superseded — those were NOT changed.
+
+---
+
+### §C-F2 — Phantom `mpFrame.ChanSeq()` in v1.1 Q4 Addendum prose (MED)
+
+**Defect:** The v1.1 Q4 Addendum "Required revision" paragraph contained a live
+binding instruction ending with `... call \`OnAck(mpFrame.ChanSeq(), zeroSACK)\`
+on the SAME instance.` This used the B1 phantom (`multipath.Frame` has no
+`ChanSeq` method) as if it were settled API — a live phantom instruction in a
+"Required revision" section that the story-writer would transcribe.
+
+**Fix:** Corrected in place to `OnAck(chanSeq, zeroSACK)` with an inline
+`[v1.3 C-F2]` annotation explaining `chanSeq` is captured from the originating
+`ChannelFrame` before `toMPFrame`. The correction supersedes the B1 fix already
+applied to the Q4 code block — no live phantom instruction remains anywhere in
+the note.
+
+---
+
+**Files consulted for this v1.3 addendum:** `internal/session/upstream.go:203-208`
+(Attach pub.Get gate), `internal/session/session.go:137` (Publisher.Publish signature).
+All other ground-truth claims verified by orchestrator PAT-04 against source before
+this repair; no additional reads required.
