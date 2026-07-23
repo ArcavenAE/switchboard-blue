@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.3"
+version: "1.4"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.4 | R2 re-review repair (2026-07-22): B-1 — every `decodeRTID` call site in note corrected to 2-value form (`id, ok := decodeRTID(payload)`); `!ok` handling specified; rtSeq-starts-at-1 safety note added. B-2 — §M2 window-margin rationale corrected per-option (CreateSession-time: "few empty ticks before first send", not "chanSeq=1"; first-SendKeystroke: "chanSeq=1, nextExpected=0"); >3.2s-idle caveat documented; preferred option remains CreateSession-time for race-freedom. B-3 — AC-016 fault-injection method respecified: build driver, withhold downstream ticker, advance `downstreamHC` past 64 via empty `Tick()` calls, enqueue one payload, invoke `onDownstreamTick()` synchronously (no race); seam `onDownstreamTick()` named as REQUIRED package-private function. N-1 — §M2 "acceptable simpler alternative" paragraph removed; "no third option" invariant now holds without self-contradiction. See "v1.4 R2 Re-Review Repair (2026-07-22)" section. |
 | 1.3 | R1 re-review repair (2026-07-22): B-F1 — §H3 provisioning sequence missing `pub.Publish(sessionName)` before `Attach` (added; Attach gates on pub.Get); B-F2 — `encodeRTID` Q3 call site corrected to 2-arg whole-payload form matching §M4 definition; B-F3 — §M2 lazy-start decision tightened: prefer `CreateSession`-time start (single-threaded, race-free), `sync.Once` required if first-`SendKeystroke` start is chosen; C-F1 — Q3 pseudocode L161 `map[uint64]chan frame.OuterHeader` corrected to `map[uint64]chan []byte`; C-F2 — v1.1 Q4 Addendum "Required revision" L680 phantom `mpFrame.ChanSeq()` corrected to captured `chanSeq`. See "v1.3 R1 Re-Review Repair (2026-07-22)" section. |
 | 1.2 | Design repair addendum (2026-07-22): B1 ChanSeq threading — corrected `mpFrame.ChanSeq()` phantom call to use captured `f.ChanSeq` from the originating `ChannelFrame`; H1 harness API shape — `RoundTrip.done` changed to `chan []byte`, `WaitForEcho` returns `([]byte, bool)`; H2 halfchannel synchronization — per-direction mutex strategy specified; H3 console provisioning — `RegisterKey`+`Attach`+`Allow` sequence specified as construction-time step; M2 OnAck error handling + empty-tick window — loud failure + don't-tick-until-enqueue mitigation specified; M4 helper signatures — enumerated with explicit obligations. See "v1.2 Design Repair Addendum (2026-07-22)" section. |
 | 1.1 | AC-001 sign-off (S-BL.LOOPBACK-FULLSTACK Risk 1 / Q4): reviewed the proposed `arq.OnAck` call-contract against `internal/arq/arq.go`, its full test suite, `internal/arqsend`, and ARCH-03 §Downstream ARQ. Verdict: REVISED. The `ackSeq`/SACK value convention is CONFIRMED correct; the `driver.arqServer`/`driver.arqClient` two-instance shape is a structural defect — `OnAck`'s payload recovery reads only from the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by prior `EnqueueSend` calls on that SAME instance, so a never-`EnqueueSend`'d `arqClient` can never return a delivered payload and `WaitForEcho` would time out on every call. Required fix: collapse into one shared `*arq.ARQ` instance. See "Q4 Addendum — AC-001 Sign-off (2026-07-12)" below. Supersession banner added at the top of Q4. |
@@ -273,7 +274,10 @@ out.
         //  ackSeq = this frame's own ChanSeq (cumulative watermark == +1 in
         //  no-loss harness); SACK bitmap all-zero (no reordering — Non-Goals).
         for _, payload := range delivered:
-            id := decodeRTID(payload)
+            id, ok := decodeRTID(payload)    // [v1.4 B-1] 2-value; on !ok, no pending entry matches
+            if !ok { continue }              // decode failure: payload too short; skip (can't be a real
+                                              // pending key — rtSeq.Add(1) ensures ids start at 1,
+                                              // so id=0 never collides with any pending key)
             driver.mu.Lock(); ch := driver.pending[id]; delete(driver.pending, id); driver.mu.Unlock()
             if ch != nil { ch <- payload }   // [v1.2 correction] sends []byte payload, not frameFor(payload)
                                               // — WaitForEcho now returns payload for AC-014 assertion
@@ -353,7 +357,7 @@ func (lb *LoopbackEnv) SendKeystroke(t testing.TB, sessionID SessionID, key stri
 // (or nil) and a present-flag (false on timeout). Callers assert:
 //   payload, ok := lb.WaitForEcho(t, rt, timeout)
 //   if !ok { t.Fatalf(...) }
-//   if decodeRTID(payload) != rt.id { t.Errorf(...) }  // AC-014(b)
+//   id, ok2 := decodeRTID(payload); if !ok2 || id != rt.id { t.Errorf(...) }  // AC-014(b) [v1.4 B-1]
 func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration) (payload []byte, ok bool)
 ```
 
@@ -814,14 +818,19 @@ site must replace it with a bitmap reflecting true reorder state.
 **(c) Any interaction with RULING-003 window validation at the boundary
 (first frame, wraparound)?**
 
-None. `ErrAckOutOfWindow`'s guard (`ackSeq - a.nextExpected >
+None under the PREFERRED `CreateSession`-time start, subject to the
+timing caveat in §M2: `ErrAckOutOfWindow`'s guard (`ackSeq - a.nextExpected >
 sackWindowSize`, `arq.go:220`; RULING-003, `ARCH-03-routing-engine.md:
-203-209`) is never at risk here: the first downstream `ChanSeq` is 1 per
-RULING-001 §R1 (cited in `arq.go:231-234` and the note's own Q7), so the
-first call is `1 - 0 = 1 <= 64` — comfortably inside the window. 32-bit
-`ChanSeq` wraparound is explicitly out of MVP scope (`arq.go:231-234`,
-RULING-001 §R2, ~49–497-day wrap interval) and structurally unreachable
-within a 500-sample benchmark at millisecond-scale tick intervals.
+203-209`) is safe as long as fewer than 64 empty ticks precede the first
+data frame (64 × 50ms ≈ 3.2s at the standard interval). For the VP-042
+benchmark (CreateSession immediately followed by the send loop) this is
+trivially satisfied. [v1.4 B-2 correction: the first downstream ChanSeq is
+NOT guaranteed to be 1 under CreateSession-time start — it equals the number
+of empty ticks elapsed, not a constant. "chanSeq = 1" holds only for the
+first-SendKeystroke option where the ticker starts immediately before the
+first data tick.] 32-bit `ChanSeq` wraparound is explicitly out of MVP scope
+(`arq.go:231-234`, RULING-001 §R2, ~49–497-day wrap interval) and structurally
+unreachable within a 500-sample benchmark at millisecond-scale tick intervals.
 
 ### Constraints the implementer must observe
 
@@ -915,7 +924,8 @@ if f.FrameType == frame.FrameTypeData {
         return
     }
     for _, payload := range delivered {
-        id := decodeRTID(payload)
+        id, ok := decodeRTID(payload)     // [v1.4 B-1] 2-value; id=0 on !ok never matches a pending key
+        if !ok { continue }               // payload too short; skip
         driver.mu.Lock()
         ch := driver.pending[id]
         delete(driver.pending, id)
@@ -961,7 +971,7 @@ type RoundTrip struct {
 // t.Fatalf itself so that benchmark callers can record the miss and continue
 // rather than abort the run (matches the existing Env.WaitForEcho pattern).
 // The returned payload is the verbatim echo payload; AC-014 callers assert:
-//   if decodeRTID(payload) != rt.id { t.Errorf(...) }
+//   id, ok2 := decodeRTID(payload); if !ok2 || id != rt.id { t.Errorf(...) }  // [v1.4 B-1]
 func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration) (payload []byte, ok bool)
 ```
 
@@ -1147,15 +1157,33 @@ is still 0 — the first real data tick produces `chanSeq = 65` (or higher),
 making `OnAck(65, zeroSACK)` return `ErrAckOutOfWindow` (65 - 0 = 65 > 64),
 `delivered = nil`, and the first benchmark sample times out.
 
-**Mitigation decision [v1.3 B-F3 tightened]:** Do not start the downstream
-ticker goroutine at `NewLoopback` time. **PREFERRED: start the downstream
-ticker at `CreateSession` time.** `CreateSession` is called once, from a
-single goroutine, before any `SendKeystroke` calls — there is no concurrency
-at that point, so starting the ticker there is race-free and requires no
-additional synchronization. The upstream ticker MAY start at construction
-(it has no `EnqueueSend` dependency). This eliminates the idle window
-entirely: by the time the downstream ticker produces its first tick,
-`chanSeq` = 1 and `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64`.
+**Mitigation decision [v1.3 B-F3 tightened; v1.4 B-2 rationale corrected]:**
+Do not start the downstream ticker goroutine at `NewLoopback` time.
+**PREFERRED: start the downstream ticker at `CreateSession` time.**
+`CreateSession` is called once, from a single goroutine, before any
+`SendKeystroke` calls — there is no concurrency at that point, so starting
+the ticker there is race-free and requires no additional synchronization.
+The upstream ticker MAY start at construction (it has no `EnqueueSend`
+dependency).
+
+**Per-option window-safety invariant [v1.4 B-2]:**
+
+- **CreateSession-time start (PREFERRED):** `chanSeq` at the first data tick
+  equals the number of empty ticks elapsed between `CreateSession` and the
+  first `SendKeystroke`. This is NOT guaranteed to be 1 — empty ticks
+  accumulate freely from the moment the ticker starts. Window safety holds as
+  long as fewer than 64 empty ticks precede the first data frame (64 × 50ms =
+  3.2s at the standard interval). For the VP-042 benchmark, `CreateSession` is
+  immediately followed by the send loop, so this trivially holds. For
+  production-pattern tests with a delay between `CreateSession` and first
+  `SendKeystroke`, a >3.2s idle gap will trigger `ErrAckOutOfWindow` — see
+  the Edge Cases table row for that scenario. **The preferred option is chosen
+  for its RACE-FREEDOM (B-F3), not for a stronger window margin.**
+
+- **First-`SendKeystroke` start with `sync.Once` (alternative):** the first
+  data tick fires immediately after the first enqueue, so `chanSeq` = 1 and
+  `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64` — the window margin is
+  maximal. The `sync.Once` guard is MANDATORY (see below).
 
 If the implementer chooses first-`SendKeystroke` start instead (e.g. for
 a future multi-session shape), a `sync.Once` guard on ticker launch is
@@ -1168,13 +1196,52 @@ in this design (`closeOnce sync.Once` in the note / story L442). There
 is no third option: `CreateSession`-time start (preferred) or
 `sync.Once`-guarded first-`SendKeystroke` start.
 
-An acceptable simpler alternative: reset `downstreamARQ.nextExpected` to
-`downstreamHC.Seq()` at the moment the first `SendKeystroke` enqueues — but
-`arq.ARQ` exposes no `Reset` method today. The lazy-start approach requires no
-change to `internal/arq` and is the preferred design.
+A Reset-based approach is NOT available: `arq.ARQ` exposes no `Reset`
+method, so the two options above are exhaustive.
 
 The story-writer should add an AC for: "if `OnAck` returns an error, the harness
 surfaces it as a loud failure (not a silent timeout)."
+
+**AC-016 fault-injection method and required test seam [v1.4 B-3]:**
+
+The previously considered approaches for forcing `OnAck` → `ErrAckOutOfWindow`
+are BOTH unsound and must not be used:
+
+- **(A) Start ticker at `NewLoopback` time:** contradicts B-F3 (race with AC-008);
+  forbidden by the §M2 preferred design.
+- **(B) Test-goroutine `OnAck` call:** races the downstream ticker goroutine's
+  own `OnAck` call on the shared `downstreamARQ` — violates the `arq.ARQ`
+  single-writer contract ("must be called from a single goroutine … Concurrent
+  calls are NOT safe", `arq.go` package doc) and will be caught by
+  `go test -race` (AC-015). Both paths are off the table.
+
+**Sound method:** test exercises the downstream tick body synchronously with no
+ticker goroutine running:
+
+1. Build the `loopbackDriver` but do **not** start the downstream ticker goroutine.
+2. Advance `driver.downstreamHC` past the 64-frame window by calling
+   `driver.onDownstreamTick()` 65+ times synchronously (each empty tick — no
+   payload enqueued — increments `downstreamHC.seq` without calling
+   `EnqueueSend`, so `downstreamARQ.nextExpected` stays at 0).
+3. Enqueue ONE data payload into `downstreamHC` (via `downstreamHC.Enqueue`).
+4. Call `driver.onDownstreamTick()` one more time synchronously. This fires
+   `downstreamARQ.EnqueueSend(chanSeq)` then `downstreamARQ.OnAck(chanSeq, zeroSACK)`
+   with `chanSeq > 64` and `nextExpected = 0` — `OnAck` returns
+   `ErrAckOutOfWindow`.
+5. Assert that `driver.failLoud` was called (surfaced via `t.Errorf`, loud,
+   not a silent `WaitForEcho` timeout).
+
+This is single-goroutine throughout — no race, no `sync.Once` interaction,
+no ticker goroutine competing for `downstreamARQ`.
+
+**Required seam:** `onDownstreamTick()` must be a directly-callable
+**package-private method** on `loopbackDriver` (or equivalent named function)
+that contains the downstream tick body logic — the same body that the ticker
+goroutine calls from `startLoopbackTicker`. This seam MUST be exposed so that
+the AC-016 test can invoke it synchronously without launching the ticker
+goroutine. The story-writer binds AC-016 to this seam; the implementer must
+expose it. (The method is already named `onDownstreamTick()` in the note's
+§H2 concrete shape — see above; this requirement locks that name as binding.)
 
 ---
 
@@ -1200,6 +1267,9 @@ func encodeRTID(key string, id uint64) []byte
 // decodeRTID extracts the round-trip id from the last 8 bytes of payload.
 // Returns (id, true) if len(payload) >= 8; (0, false) otherwise.
 // Package-private. Pure function (no I/O).
+// Because rtSeq.Add(1) starts ids at 1, id=0 (the !ok sentinel value) never
+// collides with a real pending key — a decode failure is safely diagnosable,
+// not a false hit against driver.pending.
 func decodeRTID(payload []byte) (id uint64, ok bool)
 
 // zeroSACK is the all-zero SACK bitmap passed to OnAck in the no-loss harness.
@@ -1222,8 +1292,8 @@ would require adding a field to that struct, which is prohibited (Non-Goal).
 
 **`WaitForEcho` payload/header consistency obligation (H1 tie-in):** the
 completion channel carries `[]byte` (the echo payload). `WaitForEcho` returns
-this slice directly to the caller. The caller asserts `decodeRTID(payload) ==
-rt.id`. The chain: `loopbackSink.SendInput` echoes the full payload (including
+this slice directly to the caller. The caller asserts `id, ok2 := decodeRTID(payload); ok2 && id == rt.id`
+(AC-014(b); [v1.4 B-1] — 2-value call required). The chain: `loopbackSink.SendInput` echoes the full payload (including
 RT-ID suffix) → `downstreamHC.Enqueue(payload)` → downstream ticker →
 `delivered` slice from `OnAck` → `ch <- payload` → `WaitForEcho` returns it.
 No transform is applied to payload bytes between sink and return. `decodeRTID`
@@ -1349,3 +1419,92 @@ the note.
 (Attach pub.Get gate), `internal/session/session.go:137` (Publisher.Publish signature).
 All other ground-truth claims verified by orchestrator PAT-04 against source before
 this repair; no additional reads required.
+
+---
+
+## v1.4 R2 Re-Review Repair (2026-07-22)
+
+**Scope:** Applies orchestrator-verified (PAT-04) findings from the R2 re-review
+pass: B-1 (MED — `decodeRTID` arity mismatch: 1-value call sites throughout note),
+B-2 (MED — §M2 window rationale wrong for CreateSession-time preferred option),
+B-3 (MED — AC-016 fault-injection guidance unsound; both prior options race or
+contradict design invariants), N-1 (MED — §M2 self-contradiction "no third option"
+vs "acceptable simpler alternative"). All four confirmed real via PAT-04 ground
+truth before this repair. Core design (B-F1/B-F3/A-M1) reconfirmed SOUND — these
+are propagation-edge and rationale defects only.
+
+---
+
+### §B-1 — `decodeRTID` arity mismatch (MED)
+
+**Defect:** §M4 defines `decodeRTID(payload []byte) (id uint64, ok bool)` (2-value),
+but call sites in the note used 1-value form: `id := decodeRTID(payload)` in the
+Q4/downstream pseudocode blocks (two locations), and `decodeRTID(payload) == rt.id` /
+`!= rt.id` in the AC-014 assertion prose in §Q5 and §H1.
+
+**Fix:** All call sites corrected to 2-value form throughout the note:
+- Pseudocode blocks: `id, ok := decodeRTID(payload); if !ok { continue }`
+- AC-014 assertion prose: `id, ok2 := decodeRTID(payload); if !ok2 || id != rt.id { t.Errorf(...) }`
+- §M4 `decodeRTID` definition annotated with the `rtSeq.Add(1)` safety invariant:
+  because ids start at 1, `id=0` (the `!ok` sentinel) never collides with a real
+  pending key — decode failure is safely diagnosable, not a false hit.
+
+---
+
+### §B-2 — Window-margin rationale wrong for CreateSession-time option (MED)
+
+**Defect:** §M2 L1156-1158 claimed "by the time the downstream ticker produces
+its first tick, `chanSeq` = 1 and `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64`"
+as justification for CreateSession-time start. This is incorrect: `Tick()`
+increments `seq` on EVERY tick (including empty ticks, confirmed `halfchannel.go:118`
+unconditional `h.seq++`). Under CreateSession-time start, empty ticks accumulate
+freely from the moment the ticker starts — `chanSeq` at the first data tick equals
+the number of empty ticks elapsed, NOT 1. The "chanSeq = 1" invariant holds only
+for the first-`SendKeystroke` option (ticker starts immediately before first data
+tick). The same error appeared in the RULING-003 window analysis paragraph.
+
+**Fix:** Both locations corrected. Per-option window invariants now stated explicitly:
+- **CreateSession-time (PREFERRED):** window safe while fewer than 64 empty ticks
+  precede first data frame (≈ 3.2s at 50ms interval); trivially satisfied in VP-042
+  benchmark but caveat documented. Preferred for RACE-FREEDOM, not window margin.
+- **First-SendKeystroke (alternative):** `chanSeq = 1`, `nextExpected = 0` → margin
+  maximal. `sync.Once` MANDATORY.
+
+---
+
+### §B-3 — AC-016 fault-injection unsound; seam specified (MED)
+
+**Defect:** The note's §M2 story-writer guidance suggested forcing
+`OnAck` → `ErrAckOutOfWindow` via either (A) start ticker at `NewLoopback` (contradicts
+B-F3, forbidden) or (B) a test-goroutine `OnAck` call (races the ticker goroutine's
+`OnAck` on `downstreamARQ` — violates `arq.ARQ` single-writer contract, caught by
+`go test -race` / AC-015). Both options are unsound.
+
+**Fix:** Sound fault-injection method specified in §M2:
+1. Build driver without starting the downstream ticker goroutine.
+2. Advance `downstreamHC` past 64 via 65+ synchronous empty `onDownstreamTick()` calls.
+3. Enqueue one payload; call `onDownstreamTick()` once more — `OnAck(chanSeq, zeroSACK)`
+   fires with `chanSeq > 64`, `nextExpected = 0` → returns `ErrAckOutOfWindow`.
+4. Assert `driver.failLoud` was called (loud, not silent timeout).
+
+**Required seam:** `onDownstreamTick()` is named as a BINDING package-private method
+on `loopbackDriver` that exposes the downstream tick body for synchronous invocation.
+This seam must be implemented; the story-writer binds AC-016 to it.
+
+---
+
+### §N-1 — §M2 "no third option" self-contradiction (MED)
+
+**Defect:** §M2 stated "There is no third option" then immediately offered "An
+acceptable simpler alternative: reset `downstreamARQ.nextExpected` to
+`downstreamHC.Seq()` …" — a live contradiction from a v1.2-era leftover.
+
+**Fix:** The "acceptable simpler alternative" paragraph removed; replaced with:
+"A Reset-based approach is NOT available: `arq.ARQ` exposes no `Reset` method, so
+the two options above are exhaustive." The "no third option" invariant now holds
+without self-contradiction.
+
+---
+
+**Ground truth source:** all PAT-04 claims transcribed from orchestrator-verified
+source reads before this repair. No additional file reads required for these fixes.
