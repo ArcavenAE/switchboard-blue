@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.6"
+version: "1.7"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.7 | F-A-1 class propagation (2026-07-23): benchmark pseudocode L518 comment dropped the 1-value `decodeRTID(payload)==rt.id` code token — reworded to semantic English consistent with v1.6 L337 fix. Zero live 1-value `decodeRTID(payload)==` tokens remain outside dated history/defect-description sections. |
 | 1.6 | R4 re-review repair (2026-07-22): F-B-LENSB-01 — resolved upstream-ticker/AC-017 timing tension using the preferred direct-seam approach: `onUpstreamTick()` named as a binding directly-callable package-private seam (symmetric to `onDownstreamTick()` / AC-016); AC-017 test specified to invoke `onUpstreamTick()` directly/synchronously (no ticker goroutine started), making AC-017 ticker-timing-independent; "MAY start at construction" preserved as valid but no longer load-bearing for AC-017 correctness; upstream seam guidance block added after §B-3/AC-016 section. L-C-1 — §H2 concrete-shape block comment lead-ins L1044/L1060 reworded from stale "onTick callback" form to reference `tickBody` wiring / seam method names (`startLoopbackTicker(env, ..., d.onUpstreamTick)` / `startLoopbackTicker(env, ..., d.onDownstreamTick)`). F-A-1 — RoundTrip doc-comment L337 purpose sentence reworded from `decodeRTID(payload)==rt.id` (1-value code token) to semantic English ("the delivered payload decodes to rt.id"). See "v1.6 R4 Re-Review Repair (2026-07-22)" section. |
 | 1.5 | R3 re-review repair (2026-07-22): F-B-1 — `startLoopbackTicker` rewritten tick-free (no `hc.Tick()` in helper; parameter changed from `onTick func(halfchannel.ChannelFrame)` to `tickBody func()`; `hc` param dropped); both directions wired through their internal-tick seam methods (`onUpstreamTick` / `onDownstreamTick`) as the ticker `tickBody`; false-composition claim at §M2/§B-3 L1240 retracted and reworded. F-B-4 — `driver.errCh` "acceptable alternative" dropped; `t.Errorf`-based `failLoud` is now the sole specified error-surface mechanism. F-B-2 — first-SendKeystroke "chanSeq=1" invariant qualified as config-dependent (holds only when downstream interval > upstream round-trip, as in VP-042). F-B-2b — CreateSession-time window prose corrected from "N empty ticks" to "N+1" (data tick itself increments seq). See "v1.5 R3 Re-Review Repair (2026-07-22)" section. |
 | 1.4 | R2 re-review repair (2026-07-22): B-1 — every `decodeRTID` call site in note corrected to 2-value form (`id, ok := decodeRTID(payload)`); `!ok` handling specified; rtSeq-starts-at-1 safety note added. B-2 — §M2 window-margin rationale corrected per-option (CreateSession-time: "few empty ticks before first send", not "chanSeq=1"; first-SendKeystroke: "chanSeq=1, nextExpected=0"); >3.2s-idle caveat documented; preferred option remains CreateSession-time for race-freedom. B-3 — AC-016 fault-injection method respecified: build driver, withhold downstream ticker, advance `downstreamHC` past 64 via empty `Tick()` calls, enqueue one payload, invoke `onDownstreamTick()` synchronously (no race); seam `onDownstreamTick()` named as REQUIRED package-private function. N-1 — §M2 "acceptable simpler alternative" paragraph removed; "no third option" invariant now holds without self-contradiction. See "v1.4 R2 Re-Review Repair (2026-07-22)" section. |
@@ -515,7 +516,7 @@ func BenchmarkKeystrokeToEcho_P99(b *testing.B) {
         rt := lb.SendKeystroke(b, sessionID, "x")
         payload, ok := lb.WaitForEcho(b, rt, 500*time.Millisecond) // [v1.2: returns ([]byte,bool)]
         if !ok { b.Fatalf("WaitForEcho timed out on sample %d", i) }
-        _ = payload // AC-014: caller asserts decodeRTID(payload)==rt.id in full test
+        _ = payload // AC-014: full test asserts the delivered payload decodes to rt.id (2-value decodeRTID)
         latencies = append(latencies, time.Since(start))
     }
     b.StopTimer()
