@@ -8,7 +8,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
-version: "1.1"
+version: "1.2"
 phase: 2
 epic: E-1
 wave: backlog
@@ -19,7 +19,8 @@ inputs:
   - .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
   - .factory/specs/verification-properties/VP-042.md
   - .factory/specs/architecture/ARCH-08-dependency-graph.md
-input-hash: "d621ea4"
+  - .factory/specs/architecture/ARCH-03-routing-engine.md
+input-hash: "41b1472"
 traces_to: .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
 behavioral_contracts:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
@@ -53,13 +54,13 @@ cycle: v1.0.0-greenfield
 depends_on: []   # S-BL.TESTENV already MERGED (PR #110, 62e38d3) — this story extends its NewLoopback/LoopbackEnv API; it is not blocked on that story, it builds on shipped code
 blocks: []
 inputDocuments:
-  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.1 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS the Q4 Addendum — AC-001 Sign-off (2026-07-12): verdict REVISED — ackSeq/SACK value convention CONFIRMED, but the two-instance arqServer/arqClient topology is a structural defect (OnAck's payload recovery is instance-local and EnqueueSend-dependent); collapse into one shared *arq.ARQ (e.g. driver.downstreamARQ). Where this story and the note diverge, the note governs.
+  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.2 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4). Where this story and the note diverge, the note governs.
   - '.factory/specs/verification-properties/VP-042.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'   # v2.13 — this story's merge finalizes the PROSPECTIVE pos-23 import-set amendment
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
   - '.factory/stories/S-BL.TESTENV.md'
   - '.factory/stories/S-BL.PE-RECEIVE-LOOP.md'   # precedent for the Env.wg/closeCh ticker-goroutine idiom (Q6) and story-writer conventions (grep-resolved symbols, no line-number citations)
-acceptance_criteria_count: 14
+acceptance_criteria_count: 15
 backlog_origin:
   source: architect design note
   adjudication: "Human disposition, 2026-07-12: author now, deliver later — status draft, unscheduled. Not an adversarial-pass or PO-adjudication origin; commissioned directly to answer the open design questions VP-042.md v1.3's own history flagged (\"lock deferred to a testenv-integrated measurement post S-BL.TESTENV\") and to finalize ARCH-08 v2.13's PROSPECTIVE registration."
@@ -68,7 +69,7 @@ backlog_origin:
 
 # S-BL.LOOPBACK-FULLSTACK: Full-Stack Loopback Testenv Extension for VP-042
 
-> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." It has not been through story-writer's normal wave-planning promotion or an adversarial spec-review cycle. AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, but implementation is bound to the single-shared-instance topology from the placement note's Q4 Addendum, not the two-instance shape Q4's original code blocks show. Do not implement from the Q4 code blocks alone — read the Addendum first.
+> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. Do not implement from Q4's original code blocks alone — the Addendum and v1.2 corrections govern.
 
 ## Narrative
 
@@ -84,15 +85,15 @@ backlog_origin:
 ## Context
 
 `S-BL.TESTENV` (merged PR #110, `62e38d3`) shipped `internal/testenv` including `NewLoopback` and
-`LoopbackEnv`, but `NewLoopback` (`testenv.go:383`) discards its `LoopbackConfig` and calls
-`newEnv(ctx, b, 1)` — `LoopbackConfig.TickIntervalUpstream`/`TickIntervalDownstream` (`testenv.go:364`)
-are dead fields. `Env.SendKeystroke` (`testenv.go:744`) does not go through
-`session.AccessNode.SendKeystroke`/`KeystrokeSink` at all; it directly calls `sh.access.DeliverFrame(hdr)`,
-synthesizing a downstream fan-out frame under the name "SendKeystroke." There is no tick scheduler
-anywhere in the path. `S-BL.BENCH` (merged PR #109, `cd67394`) recorded VP-042 as **adopted-partial**:
-an honest lower-bound-only measurement (in-process loopback echo p99 ~0.002ms vs the 100ms limit) with
-a declared divergence — the inline echo path bypasses `arq`/`multipath`/tick-scheduling entirely. VP-042
-v1.3's own changelog states the lock is "deferred to a testenv-integrated measurement post S-BL.TESTENV."
+`LoopbackEnv`, but `NewLoopback` discards its `LoopbackConfig` and calls `newEnv(ctx, b, 1)` —
+`LoopbackConfig.TickIntervalUpstream`/`TickIntervalDownstream` are dead fields. `Env.SendKeystroke` does
+not go through `session.AccessNode.SendKeystroke`/`KeystrokeSink` at all; it directly calls
+`sh.access.DeliverFrame(hdr)`, synthesizing a downstream fan-out frame under the name "SendKeystroke."
+There is no tick scheduler anywhere in the path. `S-BL.BENCH` (merged PR #109, `cd67394`) recorded
+VP-042 as **adopted-partial**: an honest lower-bound-only measurement (in-process loopback echo p99
+~0.002ms vs the 100ms limit) with a declared divergence — the inline echo path bypasses
+`arq`/`multipath`/tick-scheduling entirely. VP-042 v1.3's own changelog states the lock is "deferred to
+a testenv-integrated measurement post S-BL.TESTENV."
 
 This story is that testenv-integrated measurement. It is scoped and designed entirely by the architect
 design note listed as this story's binding input
@@ -176,6 +177,27 @@ A new unexported `loopbackDriver` type lives inside `internal/testenv`, owned by
 bench test does `env := lb.Env; env.CreateSession(b)`, never `lb.CreateSession(b)`) — so new
 `*LoopbackEnv` methods do not collide with or shadow `*Env`'s method set.
 
+**[H3 — v1.2] Console provisioning (required for upstream happy path).** `AccessNode.SendKeystroke`
+returns `ErrConsoleNotFound` unless the console key is registered and attached. `LoopbackEnv.CreateSession`
+(or the `loopbackDriver` constructor) MUST include the following provisioning, matching the shipped
+`testenv.AttachConsole` idiom:
+
+```go
+loopbackConsoleKey := driver.env.newConsoleKey()   // opaque ConsoleKey
+sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)
+downstream, _, err := sh.access.Attach(loopbackConsoleKey, sessionName)
+if err != nil {
+    t.Fatalf("loopbackDriver: Attach loopback console: %v", err)
+}
+_ = downstream  // downstream channel not used — echo delivery flows through
+                 // loopbackSink → downstreamHC, not AccessNode.DeliverFrame fan-out
+```
+
+`loopbackConsoleKey` is stored on the driver and passed to
+`driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in the upstream delivery
+callback (Q3). Without this step every upstream keystroke returns `ErrConsoleNotFound` — AC-004/005/006/014
+happy paths all time out.
+
 `Env.SendKeystroke`/`Env.CollectFrames` are **not** extended in place: those methods back 10 other VPs
 via generic SVTN-shard fan-out semantics that none of them asked to become tick-driven or
 round-trip-tagged. `NewLoopback` keeps calling `newEnv(ctx, b, 1)` (so `lb.Env.Close()`/generic surface
@@ -191,6 +213,29 @@ driver instead builds its own `Publisher`/`SessionAuth`/`AccessNode` triple — 
 driver's own echo-generating sink (Q4). This duplication is isolated to the loopback path; it does not
 touch `newShard` or any other VP's shard, and it does not add a `SetSink` escape hatch to production
 `session.AccessNode`.
+
+**[H2 — v1.2] Per-direction HalfChannel mutex.** `halfchannel.HalfChannel` is not safe for concurrent
+use (`Tick` and `Enqueue` must be called from a single goroutine or under external synchronisation per
+the halfchannel concurrency contract). Each half-channel is accessed from two goroutines: `upstreamHC`
+from the test goroutine (`SendKeystroke` calls `Enqueue`) and the upstream ticker goroutine (calls
+`Tick`); `downstreamHC` from the upstream ticker goroutine (`loopbackSink.SendInput` calls `Enqueue`)
+and the downstream ticker goroutine (calls `Tick`). `driver.mu` guards only `driver.pending`. The
+`loopbackDriver` struct MUST carry per-direction mutexes:
+
+```go
+type loopbackDriver struct {
+    upstreamHCMu   sync.Mutex  // serializes upstreamHC.Enqueue (test goroutine)
+                                 //   + upstreamHC.Tick (upstream ticker goroutine)
+    upstreamHC     *halfchannel.HalfChannel
+    downstreamHCMu sync.Mutex  // serializes downstreamHC.Enqueue (upstream ticker,
+                                 //   via loopbackSink.SendInput)
+                                 //   + downstreamHC.Tick (downstream ticker goroutine)
+    downstreamHC   *halfchannel.HalfChannel
+    // ... other fields unchanged
+}
+```
+
+Every `Enqueue` and `Tick` call site on each half-channel acquires the corresponding mutex. See AC-015.
 
 ### Upstream Flow: Keystroke → Server Delivery (Q3)
 
@@ -263,10 +308,13 @@ lock"); `Enqueue` only touches the downstream `HalfChannel`'s own pending queue,
 is queued, not delivered synchronously; the downstream ticker decides when it actually goes out.
 
 ```
-[async] downstream ticker, every cfg.TickIntervalDownstream:
+[async] downstream ticker, every cfg.TickIntervalDownstream
+  (started lazily at CreateSession — see M2 mitigation):
     f := driver.downstreamHC.Tick()
     if f.FrameType == frame.FrameTypeData {
-        driver.downstreamARQ.EnqueueSend(f.ChanSeq, f.Payload, time.Now())
+        chanSeq := f.ChanSeq   // [B1] capture from ChannelFrame BEFORE toMPFrame;
+                                // multipath.Frame has no ChanSeq field/method
+        driver.downstreamARQ.EnqueueSend(chanSeq, f.Payload, time.Now())
         driver.downstreamMP.Send(toMPFrame(f), driver.deliverDownstream)
     }
     ↓
@@ -274,16 +322,18 @@ driver.deliverDownstream(pathID, mpFrame) error
     ↓
 driver.downstreamMP.Receive(mpFrame)   // endpoint dedup; first arrival only
     ↓
-delivered, err := driver.downstreamARQ.OnAck(mpFrame.ChanSeq(), zeroSACK)
+delivered, err := driver.downstreamARQ.OnAck(chanSeq, zeroSACK)
+    // [B1] uses captured chanSeq, not mpFrame.ChanSeq() (phantom — Frame has no ChanSeq)
+    // [M2] err MUST be checked and fail loud — not swallowed
     // SAME instance that received EnqueueSend above, called within the same
     // tick/goroutine — required per the Q4 Addendum (AC-001). ackSeq = this
-    // frame's own ChanSeq (locally-derived from arrival, not peer-supplied);
-    // SACK bitmap all-zero (no loss simulated)
+    // frame's own ChanSeq (locally-derived); SACK bitmap all-zero (no loss simulated)
+    if err != nil { driver.failLoud(err); return }
     ↓
 for each payload in delivered:
     id := decodeRTID(payload)
     driver.mu.Lock(); ch := driver.pending[id]; delete(driver.pending, id); driver.mu.Unlock()
-    if ch != nil { ch <- frameFor(payload) }   // unblocks WaitForEcho
+    if ch != nil { ch <- payload }   // [H1] chan []byte — sends raw echo payload; unblocks WaitForEcho
 ```
 
 **`arq.OnAck` call-contract — sign-off DISCHARGED (AC-001, 2026-07-12, verdict REVISED).** No production
@@ -305,11 +355,39 @@ every `WaitForEcho` in the harness would time out. `EnqueueSend` and `OnAck` MUS
 `downstreamARQ.inFlight` never accumulates a real gap; wiring an active poll for a condition that
 structurally cannot occur in this harness would be dead code (Non-Goals).
 
+**[M2 — v1.2] OnAck error handling (SOUL.md §4 — no silent failure).** The downstream ticker MUST
+check `OnAck`'s error return and fail loud — not swallow it. `ErrAckOutOfWindow` is the only expected
+error; if it fires, all pending round trips will silently time out, masking a harness construction bug
+as "high latency." Required shape:
+
+```go
+delivered, err := driver.downstreamARQ.OnAck(chanSeq, zeroSACK)
+if err != nil {
+    driver.failLoud(fmt.Errorf("downstreamARQ.OnAck seq=%d: %w", chanSeq, err))
+    return
+}
+```
+
+`driver.failLoud` calls `t.Errorf` (not `t.Fatalf`) so the ticker goroutine can return cleanly; the
+test is already doomed at this point. An alternative acceptable pattern: send on a `driver.errCh chan
+error` (buffered 1) and have `WaitForEcho` check it.
+
+**[M2 — v1.2] Empty-tick window mitigation (lazy downstream ticker start).** `halfchannel.HalfChannel`
+increments its sequence counter on EVERY `Tick()` call, including empty ticks when no payload is
+queued. `ErrAckOutOfWindow` fires when `chanSeq - downstreamARQ.nextExpected > 64`. If the downstream
+ticker starts at `NewLoopback` construction time but `CreateSession`/`SendKeystroke` are called more
+than 64 downstream tick intervals later (64 × 50ms = 3.2s at the standard interval), the first data
+tick produces a `chanSeq` exceeding `nextExpected` by more than 64, and the first `OnAck` returns
+`ErrAckOutOfWindow`. **Mitigation: start the downstream ticker goroutine lazily — at `CreateSession`
+time or at the first `SendKeystroke`, not at `NewLoopback` construction.** The upstream ticker may
+start at construction (it has no `EnqueueSend` dependency). This eliminates the idle window: when the
+downstream ticker first fires, `chanSeq` = 1 and `nextExpected` = 0, giving `1 - 0 = 1 ≤ 64`.
+
 ### RoundTrip Token API — Fixing the CollectFrames Accumulation Short-Circuit (Q5)
 
 **Binding (per placement note Q5).**
 
-`Env.CollectFrames` (`testenv.go:758`) and `Conn`/`Console.CollectFrames` poll an **accumulating**
+`Env.CollectFrames` and `Conn`/`Console.CollectFrames` poll an **accumulating**
 slice — `Env.WaitForEcho` returns as soon as the slice is non-empty, so a second concurrent or leftover
 round trip's frame satisfies a `WaitForEcho` call that isn't waiting for it. This is a distinct bug from
 the tick/protocol gap and is fixed independently of it, by sidestepping it entirely rather than patching
@@ -319,10 +397,16 @@ the tick/protocol gap and is fixed independently of it, by sidestepping it entir
 // RoundTrip identifies one SendKeystroke → echo round trip in a loopback
 // environment. Returned by LoopbackEnv.SendKeystroke; consumed exactly once
 // by LoopbackEnv.WaitForEcho.
+//
+// [H1 — v1.2] done is chan []byte (was chan frame.OuterHeader).
+// frame.OuterHeader carries no payload; the RT-ID rides in the payload bytes
+// (encodeRTID/decodeRTID). WaitForEcho must return the delivered payload so
+// callers can assert decodeRTID(payload) == rt.id (AC-014 load-bearing part).
 type RoundTrip struct {
     id   uint64
-    done chan frame.OuterHeader // buffered 1; written by the downstream
-                                 // ticker goroutine on delivery
+    done chan []byte // buffered 1; written by the downstream ticker goroutine
+                     // on delivery; carries the full echo payload (including
+                     // the 8-byte RT-ID suffix) — NOT a frame.OuterHeader
 }
 
 // SendKeystroke drives a keystroke through the full loopback protocol stack
@@ -330,11 +414,16 @@ type RoundTrip struct {
 func (lb *LoopbackEnv) SendKeystroke(t testing.TB, sessionID SessionID, key string) RoundTrip
 
 // WaitForEcho blocks until the echo tagged with rt arrives, or timeout
-// elapses (fails t via t.Fatalf/b.Errorf on timeout). Unlike Env.WaitForEcho,
-// which returns as soon as ANY frame is buffered on the session, this reads
-// only rt's own completion channel — a concurrent or stale round trip's
-// frame cannot satisfy it.
-func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration)
+// elapses. Returns (payload, true) on delivery; (nil, false) on timeout —
+// callers should t.Fatalf on timeout. Unlike Env.WaitForEcho, which returns
+// as soon as ANY frame is buffered on the session, this reads only rt's own
+// completion channel — a concurrent or stale round trip's frame cannot satisfy it.
+//
+// [H1 — v1.2] Returns ([]byte, bool). AC-014 callers assert:
+//   payload, ok := lb.WaitForEcho(t, rt, timeout)
+//   if !ok { t.Fatalf(...) }
+//   id, ok2 := decodeRTID(payload); if !ok2 || id != rt.id { t.Errorf(...) }
+func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration) (payload []byte, ok bool)
 ```
 
 No shared growing slice is in this path at all. `Env.CollectFrames`/`Conn`/`Console.CollectFrames` are
@@ -416,7 +505,9 @@ transitive requirement (referencing an exported type from an indirectly-imported
 direct import), not a scope expansion story-writer is choosing. ARCH-08 v2.13 already includes `paths` at
 position 11 for exactly this reason. Two `*multipath.Multipath` instances are constructed — one per
 direction (`upstreamMP`, `downstreamMP`) — each combining the pathSet used by whichever side is the
-sender for that direction and the `recvDedup` cache used by whichever side is the receiver.
+sender for that direction and the `recvDedup` cache used by whichever side is the receiver. Both
+instances use `dropCacheCapacity` = `multipath.DefaultDropCacheSize` (the standard sentinel; no custom
+sizing needed for the two-path loopback case).
 
 ### No New Package (Q8)
 
@@ -468,16 +559,19 @@ original two-instance code blocks in isolation.
 
 ### AC-002 (traces to BC-2.01.001; Q6)
 
-`NewLoopback` validates `cfg.TickIntervalUpstream` and `cfg.TickIntervalDownstream` against
-`halfchannel.MinTickInterval`/`MaxTickInterval` and `b.Fatalf`s on an out-of-bounds value. The validation
-site carries a comment noting that VP-042's own `downstreamInterval` (50ms) sits exactly at
-`MaxTickInterval` — legal, boundary case. Both ticker goroutines fire `HalfChannel.Tick()` on their
-configured schedule independent of `Enqueue` timing (a keystroke enqueued between ticks waits for the
-next tick, never triggers an out-of-band delivery).
+**(a) Interval validation:** `NewLoopback` validates `cfg.TickIntervalUpstream` and
+`cfg.TickIntervalDownstream` against `halfchannel.MinTickInterval`/`MaxTickInterval` and `b.Fatalf`s on
+an out-of-bounds value. The validation site carries a comment noting that VP-042's own
+`downstreamInterval` (50ms) sits exactly at `MaxTickInterval` — legal, boundary case.
 
-**Test:** `TestNewLoopback_RejectsOutOfBoundsTickInterval` (table-driven: below `MinTickInterval`, above
-`MaxTickInterval`, exactly at `MaxTickInterval` = legal); `TestLoopbackDriver_TicksFireOnSchedule`
-(enqueue between ticks, assert delivery does not precede the next tick boundary).
+**(b) Tick independence:** Both ticker goroutines fire `HalfChannel.Tick()` on their configured schedule
+independent of `Enqueue` timing — a keystroke enqueued between ticks waits for the next tick and never
+triggers an out-of-band delivery. (BC-2.01.001 compliance.)
+
+**Test (a):** `TestNewLoopback_RejectsOutOfBoundsTickInterval` (table-driven: below `MinTickInterval`,
+above `MaxTickInterval`, exactly at `MaxTickInterval` = legal).
+**Test (b):** `TestLoopbackDriver_TicksFireOnSchedule` (enqueue between ticks, assert delivery does not
+precede the next tick boundary).
 
 ### AC-003 (traces to BC-2.01.002; Non-Goals)
 
@@ -540,10 +634,10 @@ loopback driver never mutates it, and no `SetSink` method is added to production
 
 ### AC-008 (traces to Q5 — RoundTrip token API)
 
-`LoopbackEnv.SendKeystroke` returns a `RoundTrip` token. `LoopbackEnv.WaitForEcho` consumes exactly one
-token, reading only that token's own completion channel — it never reads `Env.CollectFrames`'
-accumulating buffer. A concurrent or stale round trip's frame cannot satisfy a `WaitForEcho` call for a
-different token.
+`LoopbackEnv.SendKeystroke` returns a `RoundTrip` token. `LoopbackEnv.WaitForEcho(t, rt, timeout)`
+returns `(payload []byte, ok bool)` — it consumes exactly one token, reading only that token's own
+`done chan []byte` completion channel. It never reads `Env.CollectFrames`' accumulating buffer. A
+concurrent or stale round trip's frame cannot satisfy a `WaitForEcho` call for a different token.
 
 **Test:** `TestLoopbackEnv_WaitForEcho_DoesNotConsumeOtherRoundTrips` — issue two concurrent
 `SendKeystroke` calls, `WaitForEcho` on the second token first, assert it does not return early on the
@@ -553,9 +647,11 @@ still waits for its own token.
 
 ### AC-009 (traces to Risk 3 — `RoundTrip.done` buffering and no-leak/no-block)
 
-`RoundTrip.done` is buffered 1. On a `WaitForEcho` timeout, `driver.pending`'s entry for that round trip
-is still deleted by the downstream ticker's eventual (or already-happened) send, and the buffered send
-into `done` does not block the ticker goroutine even if nobody ever reads from `done` again.
+`RoundTrip.done` is `chan []byte`, buffered 1. The downstream ticker's completion path unconditionally
+deletes the `driver.pending` entry and sends the echo payload into `done` — it does so whether or not
+`WaitForEcho` has been called. On a `WaitForEcho` timeout, the buffered send into `done` does not block
+the ticker goroutine even if nobody ever reads from `done` again (buffer capacity 1 absorbs the send).
+The `driver.pending` entry is always deleted at delivery, independent of any waiter.
 
 **Test:** `TestLoopbackEnv_WaitForEcho_TimeoutThenLateArrival_NoLeak` — issue `SendKeystroke`, call
 `WaitForEcho` with a timeout shorter than the configured tick cadence so it times out, then allow the
@@ -574,22 +670,29 @@ silently breaking the loopback's path activation and producing a confusing downs
 **Test:** `TestNewLoopbackPaths_TrackersActiveWithoutProbe` — construct `newLoopbackPaths()`, assert
 `IsActive()` is `true` on every returned `paths.RankedPath.Tracker` with zero `OnProbe` calls made.
 
-### AC-011 / DECISION (traces to Risk 4 — pending-map growth safeguard)
+### AC-011 / DECISION (traces to Risk 4 — pending-map diagnostic; v1.2 reframe)
 
-**Decision (story-writer, per the placement note's invitation to make this call): adopt the cheap
-safeguard.** If `WaitForEcho` is never called for a `RoundTrip` (a test bug), `driver.pending` would
-otherwise accumulate permanently until `Env.Close()`. Rather than leaving this as a docstring-only
-warning, `LoopbackEnv` construction registers a `t.Cleanup` that asserts `driver.pending` is empty at
-environment teardown — this is a `testing.TB`-only assertion (no runtime cost added to the driver's hot
-path) that turns a silent, hard-to-diagnose test bug into a loud, localized failure at the point of the
-bug's own test, rather than surfacing later as an unrelated flake or resource-leak symptom. This mirrors
-the existing `t.Cleanup(env.Close)` idiom already used throughout `internal/testenv`.
+**Context (v1.2 reframe per M1):** The downstream ticker's completion path unconditionally deletes each
+`driver.pending` entry at delivery, independent of whether `WaitForEcho` was called (AC-009). Therefore
+the original premise — "pending accumulates if `WaitForEcho` isn't called" — is false in the no-loss
+harness: every delivered round-trip entry is drained whether or not a waiter is present. AC-011 is
+reframed as a **non-blocking diagnostic**, not a leak-detector.
 
-**Test:** `TestLoopbackEnv_Cleanup_AssertsPendingMapEmpty` — construct a `LoopbackEnv`, issue a
-`SendKeystroke` without a matching `WaitForEcho`, assert the `t.Cleanup`-registered check fails loudly
-(verified via a sub-test harness that captures the assertion rather than fatal-ing the outer test);
-companion `TestLoopbackEnv_Cleanup_PassesWhenPendingDrained` — normal usage (every `SendKeystroke`
-followed by a `WaitForEcho`) leaves the map empty at teardown with no assertion failure.
+**Decision:** `LoopbackEnv` construction registers a `t.Cleanup` that, at teardown, logs/reports any
+entries still in `driver.pending`. In the no-loss harness, the map should always be empty at teardown
+(all deliveries drain it). A non-empty map at teardown indicates either a `WaitForEcho` that returned
+`(nil, false)` on timeout (entry was already drained by delivery before the waiter checked it, but that
+path is AC-009) or a logic error in the RT-ID decode path (entry not drained because `decodeRTID`
+failed). To make this deterministic rather than timing-dependent, the test verifies the diagnostic
+against an **injected decode-mismatch scenario**: a round trip is issued, a synthetic entry with a
+mismatched ID is injected into `driver.pending` directly (bypassing normal send), and the teardown
+assertion confirms it is reported. This makes the diagnostic a testable contract.
+
+**Test:** `TestLoopbackEnv_Cleanup_DiagnosticOnPendingLeak` — inject a synthetic stale entry into
+`driver.pending` before teardown; assert the `t.Cleanup`-registered diagnostic fires and logs it. Does
+NOT use `t.Fatalf` (diagnostic only — does not abort the test). Companion
+`TestLoopbackEnv_Cleanup_SilentWhenDrained` — normal round trip + `WaitForEcho` leaves the map empty
+at teardown with no diagnostic firing.
 
 ### AC-012 (traces to Q6 — goroutine lifecycle)
 
@@ -607,10 +710,12 @@ existing `AttachConsole`/`AttachProbe` leak-check pattern in this package).
 
 `internal/bench/keystroke_echo_testenv_bench_test.go` on branch `fix/vp-042-testenv-integrated-bench` is
 updated from its current two-call `env.SendKeystroke`/`env.WaitForEcho` shape (the VP-042.md skeleton
-shape, now superseded — see Context) to the token-based shape: `rt := lb.SendKeystroke(b, sessionID,
-"x"); lb.WaitForEcho(b, rt, 500*time.Millisecond)`. The package comment's "lower bound only" framing
-(inherited from S-BL.BENCH's honest-partial-evidence disclosure) is retired once this full stack lands,
-since the divergence it disclosed (bypassing arq/multipath/tick-scheduling) no longer exists.
+shape, now superseded — see Context) to the token-based shape:
+`rt := lb.SendKeystroke(b, sessionID, "x"); payload, ok := lb.WaitForEcho(b, rt, 500*time.Millisecond)`.
+The call matches the shipped `NewLoopback` signature order (ctx, b, LoopbackConfig) and the H1
+two-value `WaitForEcho` return. The package comment's "lower bound only" framing (inherited from
+S-BL.BENCH's honest-partial-evidence disclosure) is retired once this full stack lands, since the
+divergence it disclosed (bypassing arq/multipath/tick-scheduling) no longer exists.
 
 **Test:** no new test — this AC is a modification of an existing benchmark file. Verification is that
 `go build ./internal/bench/...` succeeds against the new `LoopbackEnv` API and `just bench` runs the
@@ -638,11 +743,26 @@ acceptable as ADDITIONAL coverage but does not substitute for the behavioral rou
 assertion above, which is mandatory.
 
 **Test:** `TestLoopbackEnv_RoundTripCompletes_SingleSharedARQInstance` — construct a `LoopbackEnv`,
-`SendKeystroke`, `WaitForEcho` with a generous timeout, assert (a) no timeout occurred, (b) the returned
-frame's payload decodes to the sent `RoundTrip` id, i.e. delivery actually happened, not merely that the
-call returned. Optionally paired with `TestLoopbackDriver_SingleARQInstanceField` (structural — reflects
-over the driver's fields, asserts exactly one `*arq.ARQ`-typed field) as supplementary, non-substituting
+`SendKeystroke`, `WaitForEcho` with a generous timeout, assert (a) `ok == true` (no timeout), (b)
+`decodeRTID(payload) == rt.id` — i.e. the returned `[]byte` payload contains the expected RT-ID,
+proving delivery actually happened on the correct round trip (not merely that the call returned).
+Optionally paired with `TestLoopbackDriver_SingleARQInstanceField` (structural — reflects over the
+driver's fields, asserts exactly one `*arq.ARQ`-typed field) as supplementary, non-substituting
 coverage.
+
+### AC-015 (traces to BC-2.01.001 / H2 — halfchannel synchronization; added v1.2)
+
+The loopback driver runs clean under `go test -race` / `just test-race`. No data race is detected on
+either `upstreamHC` or `downstreamHC` accesses. The per-direction mutexes (`upstreamHCMu`,
+`downstreamHCMu` — see Design Constraints Q2 §H2) ensure that `Enqueue` and `Tick` on each
+`HalfChannel` are never called concurrently from different goroutines without synchronisation, satisfying
+the halfchannel concurrency contract.
+
+**Test:** `TestLoopbackDriver_NoRaceUnderConcurrentSendEcho` — run a loopback benchmark with concurrent
+`SendKeystroke`/`WaitForEcho` pairs under `-race`; assert no `DATA RACE` annotation appears (this test
+is expected to appear in the CI `just test-race` output with a PASS result). Verification: the CI
+pipeline's `just test-race` step is the authoritative gate; this test is the per-story hook into that
+gate for this specific race class.
 
 ---
 
@@ -677,12 +797,17 @@ Transcribed from the placement note. This story does NOT implement:
 
 | Component | Package | New / Modified | Notes |
 |-----------|---------|-----------------|-------|
-| `loopbackDriver` (type) | `internal/testenv` | New | Owns dedicated `Publisher`/`SessionAuth`/`AccessNode`, both `Multipath` instances, both `HalfChannel`s, ONE shared `*arq.ARQ` instance for the downstream direction (`downstreamARQ` — AC-001 Addendum), `pending` map |
-| `RoundTrip` (type) | `internal/testenv` | New | Opaque outside the package; carries `id` + buffered-1 `done` channel |
+| `loopbackDriver` (type) | `internal/testenv` | New | Owns dedicated `Publisher`/`SessionAuth`/`AccessNode`, both `Multipath` instances, both `HalfChannel`s, ONE shared `*arq.ARQ` instance for the downstream direction (`downstreamARQ` — AC-001 Addendum), `pending` map, `upstreamHCMu`/`downstreamHCMu sync.Mutex` (H2 — serialize Enqueue+Tick per direction), `loopbackConsoleKey` (H3) |
+| `RoundTrip` (type) | `internal/testenv` | New | Opaque outside the package; carries `id uint64` + `done chan []byte` (buffered 1; H1 fix — was `chan frame.OuterHeader`) |
 | `loopbackSink` (type) | `internal/testenv` | New | Implements `session.KeystrokeSink`; echoes payload verbatim into `downstreamHC.Enqueue` |
-| `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` | `internal/testenv` | New (methods on `*LoopbackEnv`) | Do not collide with `*Env`'s method set (named field, not embedding) |
+| `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` | `internal/testenv` | New (methods on `*LoopbackEnv`) | Do not collide with `*Env`'s method set (named field, not embedding); `WaitForEcho` returns `(payload []byte, ok bool)` (H1 fix); `CreateSession` provisions loopback console `RegisterKey`+`Attach` (H3 fix) |
 | `startLoopbackTicker` (helper) | `internal/testenv` | New | Registers on `Env.wg`/`Env.closeCh`; identical shape to `AttachConsole`/`AttachProbe` |
-| `newLoopbackPaths` (helper) | `internal/testenv` | New | Two `paths.RankedPath`s per direction |
+| `newLoopbackPaths` (helper) | `internal/testenv` | New | Two `paths.RankedPath`s per direction; each backed by `paths.NewPathTracker(1.0, 0.125)`; `dropCacheCapacity` = `DefaultDropCacheSize` |
+| `toMPFrame(f halfchannel.ChannelFrame) multipath.Frame` (helper) | `internal/testenv` | New | Copies `f.Payload` into `multipath.Frame.Payload`; does NOT carry `f.ChanSeq` — caller captures `chanSeq := f.ChanSeq` BEFORE calling this (B1 fix). No `ChanSeq` field added to `multipath.Frame` |
+| `encodeRTID(key string, id uint64) []byte` (helper) | `internal/testenv` | New | Appends 8-byte big-endian `id` suffix to `[]byte(key)`; pure, package-private |
+| `decodeRTID(payload []byte) (id uint64, ok bool)` (helper) | `internal/testenv` | New | Reads last 8 bytes of `payload` as big-endian uint64; returns `(0, false)` if `len(payload) < 8`; pure, package-private |
+| `var zeroSACK [arq.SACKBitmapBytes]byte` | `internal/testenv` | New | All-zero SACK bitmap for `OnAck` no-loss calls; zero value, never written. Only valid inside this harness's Non-Goals envelope (no loss/reordering) |
+| `frameFor` | N/A | REMOVED (v1.2) | Eliminated — was only needed to bridge payload to `chan frame.OuterHeader`; `RoundTrip.done` is now `chan []byte` so payload passes directly (H1 fix) |
 | `NewLoopback` | `internal/testenv` | Modified | Wires halfchannel/arq/multipath/paths instead of discarding `LoopbackConfig`; adds Min/MaxTickInterval validation |
 | `halfchannel.HalfChannel` | `internal/halfchannel` | Read-only consumer | `New`, `Tick`, `Enqueue` |
 | `arq.ARQ` | `internal/arq` | Read-only consumer | `New`, `EnqueueSend`, `OnAck` — first production-adjacent `OnAck` call site; call contract DISCHARGED 2026-07-12, verdict REVISED (AC-001) |
@@ -699,7 +824,8 @@ Transcribed from the placement note. This story does NOT implement:
 | Duplicate frame arrival (same payload, two synthetic paths) | `multipath.Receive` returns `ErrDuplicate` on the second arrival — discarded before `accessNode`/`downstreamARQ` (AC-005) |
 | Tick interval exactly at `MaxTickInterval` (50ms) | Legal — VP-042's own `downstreamInterval` sits exactly here; validation site carries a boundary comment (AC-002) |
 | Fresh `paths.RankedPath` with no probe history | `NewPathTracker` defaults `active: true`; `Rank()` considers it eligible with zero `OnProbe` calls (AC-010) |
-| `OnAck` window-validation / `ErrAckOutOfWindow` path | Not exercised by this harness's no-loss happy path (single producer, strictly increasing `ChanSeq`); a future loss-injection story would exercise it (Non-Goals) |
+| `OnAck` window-validation / `ErrAckOutOfWindow` path | Normally unreachable in the no-loss happy path. Reachable if downstream ticker starts too early (before first `EnqueueSend`) and idles > 64 ticks — mitigated by lazy ticker start at `CreateSession` (M2). If `OnAck` returns this error it MUST be surfaced loud via `driver.failLoud`, not swallowed (M2, AC-006) |
+| `decodeRTID` failure (payload < 8 bytes or malformed) | Returns `(0, false)`; `driver.pending[0]` lookup returns nil channel; no send — round trip times out. The teardown diagnostic (AC-011) reports the pending entry as undrained |
 | Two concurrent `SendKeystroke`/`WaitForEcho` round trips | Each has its own `RoundTrip.id` and `done` channel; AC-008 guarantees no cross-talk |
 | `EnqueueSend`/`OnAck` called on separate `*arq.ARQ` instances (`arqServer`/`arqClient` split) | RULED OUT by AC-001 (Q4 Addendum, 2026-07-12) — `OnAck` on a never-`EnqueueSend`'d instance returns `(nil, nil)` on every call, silently; every round trip would time out. One shared `downstreamARQ` instance is required; AC-014 is the regression guard |
 
@@ -746,18 +872,25 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
    Q4's original `arqServer`/`arqClient` code blocks with a single shared `*arq.ARQ` instance
    (`driver.downstreamARQ`).
 2. [ ] Implement `loopbackDriver` inside `internal/testenv` with its own `Publisher`/`SessionAuth`/
-   `AccessNode` triple constructed via `session.WithKeystrokeSink(loopbackSink)` (Q2, AC-007).
-3. [ ] Implement `RoundTrip` + `driver.pending map[uint64]chan frame.OuterHeader` (buffered-1 channels)
-   + `rtSeq atomic.Uint64` (Q5, AC-008, AC-009).
+   `AccessNode` triple constructed via `session.WithKeystrokeSink(loopbackSink)` (Q2, AC-007). Include
+   `upstreamHCMu`/`downstreamHCMu sync.Mutex` fields for per-direction halfchannel serialization (H2,
+   AC-015).
+3. [ ] Implement `RoundTrip` + `driver.pending map[uint64]chan []byte` (buffered-1 channels; H1) +
+   `rtSeq atomic.Uint64` (Q5, AC-008, AC-009).
 4. [ ] Implement `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` on `*LoopbackEnv` (Q2, Q5).
-5. [ ] Implement upstream flow: `Enqueue` → upstream ticker `Tick()` → `upstreamMP.Send` →
-   `deliverUpstream` → `upstreamMP.Receive` dedup → `accessNode.SendKeystroke` → `loopbackSink.SendInput`
-   (Q3, AC-004, AC-005).
-6. [ ] Implement downstream flow: `loopbackSink.SendInput` → `downstreamHC.Enqueue` → downstream ticker
-   `Tick()` → `driver.downstreamARQ.EnqueueSend` + `downstreamMP.Send` → `deliverDownstream` →
-   `downstreamMP.Receive` dedup → the SAME `driver.downstreamARQ.OnAck` → `driver.pending` lookup →
-   completion send (Q4 as amended by the Q4 Addendum, AC-006) — **one shared `*arq.ARQ` field only; do
-   not split into `arqServer`/`arqClient`** (AC-001).
+   `WaitForEcho` returns `(payload []byte, ok bool)` (H1). `CreateSession` provisions the loopback
+   console via `RegisterKey`+`Attach` (H3, AC-007). Downstream ticker starts lazily in `CreateSession`
+   (M2 — not at `NewLoopback` construction).
+5. [ ] Implement upstream flow: `Enqueue` (under `upstreamHCMu`) → upstream ticker `Tick()` (under
+   `upstreamHCMu`) → `upstreamMP.Send` → `deliverUpstream` → `upstreamMP.Receive` dedup →
+   `accessNode.SendKeystroke` → `loopbackSink.SendInput` (Q3, AC-004, AC-005, H2).
+6. [ ] Implement downstream flow: `loopbackSink.SendInput` → `downstreamHC.Enqueue` (under
+   `downstreamHCMu`) → downstream ticker `Tick()` (under `downstreamHCMu`) → capture `chanSeq :=
+   f.ChanSeq` (B1) → `driver.downstreamARQ.EnqueueSend(chanSeq, ...)` + `downstreamMP.Send` →
+   `deliverDownstream` → `downstreamMP.Receive` dedup → the SAME `driver.downstreamARQ.OnAck(chanSeq,
+   zeroSACK)` → check err loudly (M2) → `driver.pending` lookup → `ch <- payload` (H1, `chan []byte`)
+   (Q4 as amended by the Q4 Addendum and v1.2 corrections, AC-006) — **one shared `*arq.ARQ` field
+   only; do not split into `arqServer`/`arqClient`** (AC-001).
 7. [ ] Implement `NewLoopback` config validation against `halfchannel.MinTickInterval`/
    `MaxTickInterval`, `b.Fatalf` on violation, with the 50ms-boundary comment (Q6, AC-002).
 8. [ ] Register both ticker goroutines on the existing `Env.wg`/`Env.closeCh` via `startLoopbackTicker`
@@ -770,10 +903,13 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
     shape (AC-013).
 11. [ ] Implement the regression guard against reintroducing the two-instance `arqServer`/`arqClient`
     shape (AC-014): a behavioral test that a full `SendKeystroke`/`WaitForEcho` round trip actually
-    completes with non-empty delivery, not merely that `WaitForEcho` returns. A structural
-    exactly-one-`*arq.ARQ`-field assertion may be added as supplementary coverage but does not
-    substitute for the behavioral assertion.
-12. [ ] Run the harness once manually to produce VP-042 evidence; hand off to PO/architect for the
+    completes — assert `ok == true` AND `decodeRTID(payload) == rt.id` (the H1-updated load-bearing
+    part). A structural exactly-one-`*arq.ARQ`-field assertion may be added as supplementary coverage
+    but does not substitute for the behavioral assertion.
+12. [ ] Confirm `go test -race` / `just test-race` passes for the loopback driver (AC-015 — the
+    per-direction mutexes added in Task 2 are the mechanism; this task verifies them under the race
+    detector).
+13. [ ] Run the harness once manually to produce VP-042 evidence; hand off to PO/architect for the
     `verification_lock` decision — **this is explicitly NOT this story's Definition of Done; see Forward
     Obligation.**
 
@@ -805,7 +941,7 @@ consumption). No new external dependency.
 
 | File | Change |
 |------|--------|
-| `internal/testenv/loopback.go` (new — implementer's choice of filename, or inline in `testenv.go`) | `loopbackDriver`, `RoundTrip`, `loopbackSink`, `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession`, `startLoopbackTicker`, `newLoopbackPaths` |
+| `internal/testenv/loopback.go` (new — implementer's choice of filename, or inline in `testenv.go`) | `loopbackDriver` (with `upstreamHCMu`/`downstreamHCMu` — H2), `RoundTrip` (`done chan []byte` — H1), `loopbackSink`, `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` (returns `([]byte,bool)` — H1; provisions console — H3), `startLoopbackTicker`, `newLoopbackPaths` (`DefaultDropCacheSize` — LOW), `toMPFrame`, `encodeRTID`, `decodeRTID`, `zeroSACK` (M4); `frameFor` REMOVED (H1/M4) |
 | `internal/testenv/testenv.go` | `NewLoopback` modified to wire halfchannel/arq/multipath/paths instead of discarding `LoopbackConfig` |
 | `internal/bench/keystroke_echo_testenv_bench_test.go` (branch `fix/vp-042-testenv-integrated-bench`) | Modified — token-based two-call shape (AC-013); "lower bound only" comment retired |
 | `.factory/specs/architecture/ARCH-08-dependency-graph.md` | §6.5 pos-23 row: PROSPECTIVE → machine-verified at merge (architect/implementer act at merge time, not a story-writer edit) |
@@ -837,5 +973,6 @@ from a lock flip.
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.2 | 2026-07-22 | Spec-review repairs (B1/H1/H2/H3/M1/M2/M3/M4 + LOW polish): B1 — downstream OnAck call now uses captured `chanSeq := f.ChanSeq` from `halfchannel.ChannelFrame`, not phantom `mpFrame.ChanSeq()`. H1 — `RoundTrip.done` changed to `chan []byte`; `WaitForEcho` returns `(payload []byte, ok bool)`; completion path sends raw payload; `frameFor` helper eliminated. H2 — `loopbackDriver` gains `upstreamHCMu`/`downstreamHCMu sync.Mutex` serializing Enqueue+Tick per direction; new AC-015 requires `just test-race` passes. H3 — `CreateSession`/driver construction must `RegisterKey(loopbackConsoleKey, RoleFull)` + `Attach(loopbackConsoleKey, sessionName)` before upstream `SendKeystroke` can succeed. M1 — AC-011 reframed: pending-map diagnostic is non-blocking `t.Cleanup` assertion against deterministic decode-mismatch scenario (consistent with unconditional drain in AC-009). M2 — `OnAck` error MUST be checked and fail loud (`driver.failLoud`); downstream ticker starts lazily (at `CreateSession`/first `SendKeystroke`) to prevent `ErrAckOutOfWindow` from idle-tick window drift. M3 — `ARCH-03-routing-engine.md` added to hash-bearing `inputs:` list; input-hash recomputed. M4 — helper signatures enumerated in Architecture Mapping and File Structure: `toMPFrame`, `encodeRTID`, `decodeRTID`, `zeroSACK` with explicit obligations; `frameFor` REMOVED. LOW — AC-002 split into (a)/(b); numeric line-refs converted to mechanism-anchors; `dropCacheCapacity`/`DefaultDropCacheSize` noted; AC-013 notes call-order alignment. AC count: 14 → 15. Points: 8 (unchanged — spec-correctness repairs, not scope growth). Consistent with placement-note v1.2. |
 | 1.1 | 2026-07-12 | AC-001 amendment consuming the placement note's Q4 Addendum — AC-001 Sign-off (v1.0 → v1.1), the architect review required by Risk 1 option (a) before this story could leave draft/unscheduled status. **Verdict: REVISED, not simple CONFIRMED.** The `ackSeq`/SACK value convention is CONFIRMED correct as originally proposed. The `driver.arqServer`/`driver.arqClient` two-instance topology Q4's original code blocks showed is a structural defect: `OnAck`'s payload recovery (`payloadFor`) reads only the calling instance's own `inFlight`/`reorderBuf`, populated exclusively by that SAME instance's prior `EnqueueSend` calls — a never-`EnqueueSend`'d `arqClient` returns `(nil, nil)` from `OnAck` on every call, silently, so every `WaitForEcho` would time out on every round trip (a hard, silent benchmark failure, not the forgiving happy-path miss Risk 1's original framing assumed for this failure mode). **AC-001 status: DISCHARGED 2026-07-12** — reworded from a pre-implementation gate to a discharged record of the verdict, binding the implementer to one shared `*arq.ARQ` instance (`driver.downstreamARQ`); `EnqueueSend` and `OnAck` for a given `ChanSeq` MUST run on that same instance, in that order, within the same downstream-ticker tick. **New AC-014 added** (regression guard, not present in v1.0): a mandatory behavioral test that a full `SendKeystroke`→`WaitForEcho` round trip actually completes with non-empty delivery — guards specifically against the silent `(nil, nil)`-forever failure mode a bare "did it return" assertion would miss. The architect's alternative structural phrasing (assert the driver has exactly one `*arq.ARQ`-typed field) is accepted as supplementary coverage only; the behavioral round-trip-completes assertion is mandatory. **Mirrored throughout:** the Q4 Design Constraints subsection (heading, binding statement, downstream-ticker code block, and call-contract prose rewritten to the single-instance shape and cross-referenced to the Addendum); AC-005/AC-006 test bodies (`arqClient`/`arqServer` naming replaced with `driver.downstreamARQ`, AC-006 now cites AC-014); the Anchors Consumed table (BC-2.02.002/BC-2.02.005 rows); the Architecture Mapping and Edge Cases tables (new edge-case row for the ruled-out two-instance shape); Tasks (Task 1 marked discharged with a pointer to the Addendum, Task 6 rewritten to the single-instance wiring, new Task 11 for the AC-014 regression guard, former Task 11 renumbered to Task 12, Forward Obligation's cross-reference updated to match); Story-Sizing Rationale (new paragraph confirming the gate resolved pre-scheduling inside Task 6's existing scope — no scope growth, estimate stays 8 points); Context section (new paragraph summarizing the sign-off); the status-note blockquote (gate status updated from blocking-pending to discharged, with an explicit warning not to implement from Q4's original code blocks alone); frontmatter (`inputDocuments` placement-note pin `v1.0` → `v1.1` with the Addendum summarized inline, `acceptance_criteria_count` 13 → 14, `input-hash` recomputed to `d621ea4` per `compute-input-hash --update` — the placement note's content changed independent of this story's own edits). Package Impact Summary's "(Transcribed from the placement note)" table is left as-is by design — it mirrors the note's own Package Impact table, which the Addendum does not itself amend. |
 | 1.0 | 2026-07-12 | Initial story authored to full spec, draft/unscheduled per human disposition ("author now, deliver later"). Transcribes architect placement note v1.0 (Q1–Q8 binding design decisions, 5 Risks) faithfully — no design re-derivation. 8 points (architect range 5–8; upper bound selected for AC-001's pre-implementation sign-off gate plus three additional risk-derived ACs/decisions — AC-009/AC-010/AC-011). 13 ACs, AC-001 a hard pre-implementation gate on the `arq.OnAck` call-contract (no existing production precedent). 1 Forward Obligation (VP-042 `verification_lock` flip explicitly out of scope). `depends_on: []` — S-BL.TESTENV already merged (PR #110, `62e38d3`); this story extends its `NewLoopback`/`LoopbackEnv` surface rather than blocking on it. |
