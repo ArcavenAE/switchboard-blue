@@ -23,9 +23,10 @@ content: |
   (`elem-mvp-scope-single-lan`). PE and P are designed but not built.
 edges:
   - target: elem-node-router-architecture
-    type: related
+    type: derives
+    note: "The three modes are modes of the router tier this architecture defines"
   - target: elem-mvp-scope-single-lan
-    type: related
+    type: supports
 provenance:
   created_by: human
   session: session-049

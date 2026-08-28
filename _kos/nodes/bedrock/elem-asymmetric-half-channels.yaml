@@ -23,9 +23,10 @@ content: |
   bedrock; the parameters are tuning.
 edges:
   - target: elem-timeslice-framing
-    type: related
+    type: supports
   - target: question-asymmetric-channels
-    type: leaves-open
+    type: partially_resolves
+    note: "Separation of the half-channels is settled; their differing parameters remain open"
 provenance:
   created_by: human
   session: session-049

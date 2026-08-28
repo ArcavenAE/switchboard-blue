@@ -24,7 +24,8 @@ content: |
   evolves through `question-vsn-routing`.
 edges:
   - target: question-vsn-routing
-    type: leaves-open
+    type: partially_resolves
+    note: "Dual-path forwarding is settled; the path-selection algorithm remains open"
 provenance:
   created_by: human
   session: session-049

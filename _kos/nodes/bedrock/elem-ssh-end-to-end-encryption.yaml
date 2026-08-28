@@ -22,9 +22,10 @@ content: |
   more is needed on top.
 edges:
   - target: question-encryption-model
-    type: leaves-open
+    type: partially_resolves
+    note: "SSH-as-baseline is settled; whether an additional layer is needed remains open"
   - target: elem-node-router-architecture
-    type: related
+    type: supports
 provenance:
   created_by: human
   session: session-049

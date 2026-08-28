@@ -8,7 +8,7 @@ edges:
   - target: aae-orc::elem-marvel-control-plane
     type: derives
   - target: elem-node-router-architecture
-    type: related
+    type: derives
 provenance:
   created_by: human
   session: null

@@ -26,9 +26,10 @@ content: |
   reopens. The MVP scope itself is bedrock; the *next* scope is open.
 edges:
   - target: question-edge-protocol
-    type: related
+    type: supports
   - target: question-vsn-routing
-    type: leaves-open
+    type: partially_resolves
+    note: "Scopes VSN routing out of MVP and names the promotion path; the routing model itself remains open"
 provenance:
   created_by: human
   session: session-049

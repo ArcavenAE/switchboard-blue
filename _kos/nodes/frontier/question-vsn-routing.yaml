@@ -26,9 +26,9 @@ edges:
   - target: elem-node-router-architecture
     type: derives
   - target: elem-single-binary-three-modes
-    type: related
+    type: derives
   - target: elem-dual-fastest-path-forwarding
-    type: related
+    type: derives
 provenance:
   created_by: human
   session: session-014
