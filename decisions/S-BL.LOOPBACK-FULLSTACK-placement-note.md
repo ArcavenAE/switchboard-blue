@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.7"
+version: "1.8"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.8 | R5 re-review repair (2026-07-24): F-LENSB-B-01 — §H3 provisioning-timing/lifecycle pin: removed the "(or the `loopbackDriver` constructor)" console-provisioning latitude that contradicted AC-017's un-provisioned premise; added a "Driver lifecycle pin" specifying the `loopbackDriver` constructor builds the AccessNode triple, both multipath instances, and both half-channels in an un-provisioned state at construction (not lazily at `CreateSession`), so `SendKeystroke`/`onUpstreamTick()`/`onDownstreamTick()` are all safely pre-`CreateSession`-callable with no nil-deref; console provisioning (Publish/RegisterKey/Attach) confirmed deferred to `CreateSession` only; propagated a cross-reference at the "Steps 1–3" sentence. F-LENSB-B-02 — Q3 and the SendKeystroke doc comment (§Q5) now state explicitly that `SendKeystroke` performs no session-existence validation, by design, for AC-017. F-LENSB-B-03 — §M2 adds one recording-`testing.TB`-stub requirement covering both AC-016 and AC-017's fault-injection tests, so `failLoud`'s `t.Errorf` is captured/asserted rather than failing the enclosing real `*testing.T`. A-L967 (nitpick) — §H1 "Defect" prose's last live 1-value `decodeRTID(payload)==rt.id` token reworded to semantic English ("the delivered payload decodes to `rt.id`"); the frozen v1.4 §B-1 historical description at a separate line is untouched per §2.9. See "v1.8 R5 Re-Review Repair (2026-07-24)" section. |
 | 1.7 | F-A-1 class propagation (2026-07-23): benchmark pseudocode L518 comment dropped the 1-value `decodeRTID(payload)==rt.id` code token — reworded to semantic English consistent with v1.6 L337 fix. Zero live 1-value `decodeRTID(payload)==` tokens remain outside dated history/defect-description sections. |
 | 1.6 | R4 re-review repair (2026-07-22): F-B-LENSB-01 — resolved upstream-ticker/AC-017 timing tension using the preferred direct-seam approach: `onUpstreamTick()` named as a binding directly-callable package-private seam (symmetric to `onDownstreamTick()` / AC-016); AC-017 test specified to invoke `onUpstreamTick()` directly/synchronously (no ticker goroutine started), making AC-017 ticker-timing-independent; "MAY start at construction" preserved as valid but no longer load-bearing for AC-017 correctness; upstream seam guidance block added after §B-3/AC-016 section. L-C-1 — §H2 concrete-shape block comment lead-ins L1044/L1060 reworded from stale "onTick callback" form to reference `tickBody` wiring / seam method names (`startLoopbackTicker(env, ..., d.onUpstreamTick)` / `startLoopbackTicker(env, ..., d.onDownstreamTick)`). F-A-1 — RoundTrip doc-comment L337 purpose sentence reworded from `decodeRTID(payload)==rt.id` (1-value code token) to semantic English ("the delivered payload decodes to rt.id"). See "v1.6 R4 Re-Review Repair (2026-07-22)" section. |
 | 1.5 | R3 re-review repair (2026-07-22): F-B-1 — `startLoopbackTicker` rewritten tick-free (no `hc.Tick()` in helper; parameter changed from `onTick func(halfchannel.ChannelFrame)` to `tickBody func()`; `hc` param dropped); both directions wired through their internal-tick seam methods (`onUpstreamTick` / `onDownstreamTick`) as the ticker `tickBody`; false-composition claim at §M2/§B-3 L1240 retracted and reworded. F-B-4 — `driver.errCh` "acceptable alternative" dropped; `t.Errorf`-based `failLoud` is now the sole specified error-surface mechanism. F-B-2 — first-SendKeystroke "chanSeq=1" invariant qualified as config-dependent (holds only when downstream interval > upstream round-trip, as in VP-042). F-B-2b — CreateSession-time window prose corrected from "N empty ticks" to "N+1" (data tick itself increments seq). See "v1.5 R3 Re-Review Repair (2026-07-22)" section. |
@@ -197,6 +198,23 @@ driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, mpFrame.Payload
 loopbackSink.SendInput(payload) error   // Q4
 ```
 
+**`SendKeystroke` performs no session-existence validation [v1.8 F-LENSB-B-02]:**
+The first step above — mint `RoundTrip`, register `driver.pending[id]`, encode
+`payload`, `Enqueue` into `upstreamHC` — is UNCONDITIONAL. `SendKeystroke` does
+NOT check that `sessionID` refers to an existing or provisioned session before
+doing any of this. This is deliberate: AC-017 (§M2) calls `SendKeystroke` BEFORE
+`CreateSession`, when the session's console is not yet provisioned (see the
+"Driver lifecycle pin" in §H3), and depends on that pre-`CreateSession` call
+succeeding at the mint/encode/enqueue level — the failure AC-017 exercises
+surfaces later and downstream, at `accessNode.SendKeystroke` inside
+`onUpstreamTick()` (`ErrConsoleNotFound`, via `failLoud`), not at `SendKeystroke`
+itself. An implementer who adds a defensive session-existence guard to
+`SendKeystroke` (e.g. `if !driver.sessionExists(sessionID) { t.Fatalf(...) }`)
+would abort AC-017 at step 1, before `onUpstreamTick()` ever runs, and the test
+would fail for the wrong reason instead of exercising the `failLoud` path it is
+meant to test. `SendKeystroke` MUST remain unconditional in this respect; no
+session-existence guard is permitted.
+
 **Why `SendFunc` is called from inside the ticker goroutine, not spawned into
 its own goroutine per path:** `multipath.Send`'s doc explicitly says `fn` is
 called "without holding any internal lock" — it is safe to do real work
@@ -346,6 +364,13 @@ type RoundTrip struct {
 
 // SendKeystroke drives a keystroke through the full loopback protocol stack
 // (Q3) and returns a token identifying this specific round trip.
+//
+// [v1.8 F-LENSB-B-02] SendKeystroke performs NO session-existence validation —
+// it unconditionally mints the RoundTrip, encodes the payload, and enqueues
+// into upstreamHC regardless of whether sessionID has been provisioned via
+// CreateSession. This is deliberate and load-bearing for AC-017; see Q3,
+// "SendKeystroke performs no session-existence validation," for the full
+// rationale.
 func (lb *LoopbackEnv) SendKeystroke(t testing.TB, sessionID SessionID, key string) RoundTrip
 
 // WaitForEcho blocks until the echo tagged with rt arrives, or timeout
@@ -964,9 +989,9 @@ intentional and correct; `ChanSeq` is captured separately before this call.
 `chan frame.OuterHeader`. `frame.OuterHeader` carries no payload (its fields are
 Version/FrameType/PayloadLen/SVTNID/SrcAddr/DstAddr/HMACTag — see
 `frame.go:66-84`). The round-trip id rides in payload bytes via `encodeRTID`/
-`decodeRTID`. AC-014(b) requires the caller to assert `decodeRTID(payload) ==
-rt.id`. This is impossible with a void-returning function and a payload-less
-carrier.
+`decodeRTID`. AC-014(b) requires the caller to assert the delivered payload
+decodes to `rt.id`. This is impossible with a void-returning function and a
+payload-less carrier.
 
 **Decision:** The following type signatures are binding for this story:
 
@@ -1084,12 +1109,48 @@ console key is registered and attached. The v1.1 design references the
 keystroke silently fails (`ErrConsoleNotFound` returned by `SendKeystroke`,
 never surfaced), AC-004/005/006/014 happy paths all time out.
 
-**Decision:** The loopback driver construction sequence (in `CreateSession` or
-in the `loopbackDriver` constructor) MUST include the following, matching the
-shipped `testenv.AttachConsole` idiom (`testenv.go:646-648`):
+**Decision:** Console provisioning happens ONLY in `CreateSession` — never in
+the `loopbackDriver` constructor. [v1.8 F-LENSB-B-01] This is a hard boundary,
+not a style preference: AC-017 (§M2) requires building the driver and calling
+`SendKeystroke` + `onUpstreamTick()` synchronously BEFORE `CreateSession` runs,
+and observing `ErrConsoleNotFound` (via `failLoud`) as the result. If the
+`loopbackDriver` constructor provisioned the console eagerly, that pre-
+`CreateSession` `SendKeystroke` call would already have an attached console
+available by the time `onUpstreamTick()` processes it — `accessNode.SendKeystroke`
+would SUCCEED, `failLoud` would never fire, and AC-017's step-4 assertion would
+fail. Permitting construction-time provisioning as an implementation choice
+(as prior versions of this note did) is therefore incompatible with AC-017 and
+is withdrawn.
+
+**Driver lifecycle pin [v1.8 F-LENSB-B-01]:** the `loopbackDriver` constructor
+(invoked once, from `NewLoopback`, before `CreateSession` is ever called)
+builds ALL of the following, fully initialized and immediately usable, but
+with the console UN-PROVISIONED (no `Publish`/`RegisterKey`/`Attach` has run):
+
+- The `Publisher`/`SessionAuth`/`AccessNode` triple (Q2).
+- BOTH `*multipath.Multipath` instances, `upstreamMP` and `downstreamMP` (Q7).
+- BOTH `*halfchannel.HalfChannel` instances, `upstreamHC` and `downstreamHC` (§H2).
+
+Concretely: `SendKeystroke` (enqueues into `upstreamHC`), `onUpstreamTick()`
+(dequeues from `upstreamHC`, drives `upstreamMP.Send`/`Receive`, then calls
+`accessNode.SendKeystroke`), and `onDownstreamTick()` are ALL safely callable
+on a freshly-constructed, pre-`CreateSession` driver — none of them nil-deref,
+because `upstreamMP`/`downstreamMP`/`upstreamHC`/`downstreamHC` are built AT
+CONSTRUCTION, not lazily at `CreateSession`. Only the console's session-level
+authorization state (Publish/RegisterKey/Attach, below) is deferred to
+`CreateSession`. `CreateSession` therefore does exactly two things: (1) the
+console-provisioning sequence below, and (2) starting the downstream ticker
+goroutine (§M2's preferred `CreateSession`-time start) — it does NOT construct
+the driver, the multipath instances, or the half-channels; those already exist
+from `NewLoopback`.
+
+This matches the shipped `testenv.AttachConsole` idiom (`testenv.go:646-648`):
 
 ```go
-// Construction-time provisioning — called once per CreateSession:
+// Session provisioning — called ONLY from CreateSession, never from the
+// loopbackDriver constructor (the driver, its AccessNode, and both
+// multipath/half-channel pairs already exist and are usable — see
+// "Driver lifecycle pin" above; only console attachment is deferred here):
 loopbackConsoleKey := driver.env.newConsoleKey()  // opaque ConsoleKey
 
 // [v1.3 B-F1] Publish into the driver's OWN dedicated Publisher BEFORE Attach.
@@ -1120,7 +1181,7 @@ _ = downstream  // downstream channel not used — echo delivery is via loopback
 2. `sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)` — register the console key so `SendKeystroke`'s authorizer check passes.
 3. `sh.access.Attach(loopbackConsoleKey, sessionName)` — attach the console to the session; succeeds now that the Publisher has the session.
 
-Steps 1–3 MUST appear in this order. `RegisterKey` before `Attach` was already required (from v1.2); `Publish` before `Attach` is the new v1.3 requirement.
+Steps 1–3 MUST appear in this order. `RegisterKey` before `Attach` was already required (from v1.2); `Publish` before `Attach` is the new v1.3 requirement. [v1.8] Steps 1–3 are exactly the console-provisioning work `CreateSession` performs; `CreateSession` additionally starts the downstream ticker goroutine (§M2's preferred `CreateSession`-time start) as a separate concern unordered relative to 1–3 — see "Driver lifecycle pin" above.
 
 `loopbackConsoleKey` is stored on `loopbackDriver` and passed to
 `driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in
@@ -1306,6 +1367,57 @@ method** on `loopbackDriver` (symmetric to `onDownstreamTick()`). [v1.6] This is
 already the method name in the §H2 concrete shape above; this requirement locks that
 name as binding for the AC-017 test, exactly as `onDownstreamTick()` is bound for
 AC-016. The story-writer binds AC-017 to this seam; the implementer must expose it.
+
+**Recording `testing.TB` requirement for AC-016/AC-017 fault-injection tests
+[v1.8 F-LENSB-B-03]:** Both AC-016 (above) and AC-017 (above) assert that
+`driver.failLoud` FIRED as the PASSING outcome. But `driver.failLoud` calls
+`t.Errorf` on the driver's OWN stored `testing.TB` (the one supplied to
+`NewLoopback` at construction) — if that stored `testing.TB` is the enclosing
+REAL `*testing.T` running the AC-016/AC-017 test itself, that `t.Errorf` call
+marks the ENCLOSING test FAILED the instant `failLoud` fires. An AC-016/AC-017
+test written against the real `t` would therefore be marked failed by Go's
+testing framework at the exact moment it is supposed to observe a pass.
+
+**Fix:** AC-016 and AC-017's fault-injection tests construct their driver (via
+`NewLoopback`) with a RECORDING `testing.TB` stub/spy in place of the real
+`*testing.T` — feasible because these are white-box, in-package tests
+(`package testenv`), and `NewLoopback`/`SendKeystroke`/`WaitForEcho`/the driver
+already accept `testing.TB` rather than a concrete `*testing.T`/`*testing.B`:
+
+```go
+// recordingTB is a minimal testing.TB stub used ONLY by AC-016/AC-017's
+// fault-injection tests, so failLoud's t.Errorf is CAPTURED and asserted
+// instead of failing the enclosing real *testing.T.
+type recordingTB struct {
+    testing.TB          // embed to satisfy the interface; unused methods panic if called
+    mu          sync.Mutex
+    errorfCalls []string
+}
+
+func (r *recordingTB) Errorf(format string, args ...any) {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    r.errorfCalls = append(r.errorfCalls, fmt.Sprintf(format, args...))
+}
+
+// AC-016/AC-017 construct the driver against the stub, not the real t:
+stub := &recordingTB{}
+lb := testenv.NewLoopback(ctx, stub, testenv.LoopbackConfig{ /* ... */ })
+// ... exercise the fault-injection procedure (steps above) ...
+if len(stub.errorfCalls) != 1 {
+    t.Errorf("expected exactly one failLoud call, got %d: %v", len(stub.errorfCalls), stub.errorfCalls)
+}
+```
+
+The `mu sync.Mutex` guard is required because `failLoud` may be invoked from a
+ticker goroutine (the general case) even though AC-016/AC-017's own fault-injection
+procedures call `onDownstreamTick()`/`onUpstreamTick()` synchronously from the test
+goroutine — the stub must be safe regardless of which caller pattern exercises it.
+The REAL enclosing `*testing.T` (`t`, distinct from the driver's stub) is used only
+to report the assertion against `stub.errorfCalls` — `failLoud`'s `t.Errorf` never
+reaches it. This recording-stub requirement is scoped to AC-016 and AC-017 only;
+every other (happy-path) AC constructs its driver with the real `*testing.T`/
+`*testing.B` exactly as before.
 
 ---
 
@@ -1736,3 +1848,106 @@ No code expression in the purpose sentence; the 2-value binding assertion adjace
 findings (disk-verified per PAT-04 protocol). No source re-reads required for
 these note-only doc/comment repairs; F-B-LENSB-01 design decision based on
 analysis of AC-016 seam pattern already in this note.
+
+---
+
+## v1.8 R5 Re-Review Repair (2026-07-24)
+
+Round 5 re-review found 1 MED (F-LENSB-B-01) + 2 LOW (F-LENSB-B-02,
+F-LENSB-B-03) + 1 optional nitpick (A-L967, Lens A). All three headline
+findings trace to one design area — the `loopbackDriver` lifecycle /
+provisioning-timing / goroutine-ownership boundary around AC-017 — and are
+resolved coherently in this single pass per defect-lifecycle §1.3 ("fix the
+whole class, not just the flagged instance"), rather than as three isolated
+patches.
+
+### §F-LENSB-B-01 (MED) — §H3 provisioning-timing contradicted AC-017's un-provisioned premise
+
+**Defect (PAT-04 verified):** §H3's "**Decision:**" permitted console
+provisioning "(in `CreateSession` or in the `loopbackDriver` constructor)"
+while the adjacent code comment said "Construction-time provisioning — called
+once per CreateSession" — internally contradictory, and load-bearing: if an
+implementer took the permitted constructor-provisioning path, the driver's
+console would already be attached by the time AC-017 (§M2) calls
+`SendKeystroke` pre-`CreateSession`, so `SendKeystroke` would SUCCEED instead
+of surfacing `ErrConsoleNotFound` via `failLoud` — AC-017's step-4 assertion
+would fail. The note permitted a construction choice that broke one of its
+own ACs.
+
+**Fix:** §H3's "Decision" now states console provisioning happens ONLY in
+`CreateSession`; the constructor-provisioning latitude is withdrawn. A new
+"Driver lifecycle pin" subsection (§H3) makes the full state machine
+explicit: the `loopbackDriver` constructor (via `NewLoopback`) builds the
+AccessNode triple (Q2), both `*multipath.Multipath` instances (Q7), and both
+`*halfchannel.HalfChannel` instances (§H2) — all fully usable — with the
+console left UN-PROVISIONED; only `CreateSession` performs Publish/
+RegisterKey/Attach plus starts the downstream ticker. This resolves the R5
+sub-issue directly: `onUpstreamTick()` cannot nil-deref `upstreamMP` when run
+pre-`CreateSession` (as AC-017 requires), because `upstreamMP` — like
+`downstreamMP` and both half-channels — is built at construction, not
+lazily. The code comment is corrected to "Session provisioning — called ONLY
+from CreateSession, never from the loopbackDriver constructor." A
+cross-reference was propagated to the "Steps 1–3 MUST appear in this order"
+sentence, tying console provisioning and the separately-timed downstream
+ticker start back to the lifecycle pin. Grepped for every other "constructor"
+reference in the note — none found (this was the sole occurrence).
+
+### §F-LENSB-B-02 (LOW) — `SendKeystroke`'s no-validation dependency made explicit
+
+**Defect:** AC-017 depends on `SendKeystroke` performing no session-existence
+check (it must succeed at mint/encode/enqueue even when called before
+`CreateSession`, with the real failure surfacing later inside
+`onUpstreamTick()`), but the note never stated this as a constraint — an
+implementer adding a defensive session-existence guard would abort AC-017 at
+step 1, before `failLoud` could ever fire.
+
+**Fix:** Q3 gains a "`SendKeystroke` performs no session-existence validation"
+paragraph immediately after the upstream-flow pseudocode, stating the
+constraint and its AC-017 rationale explicitly, with an explicit prohibition
+on adding a defensive guard. The `SendKeystroke` doc comment at its
+definition (§Q5) gains a matching one-paragraph note cross-referencing Q3, so
+the constraint is visible both at the flow narrative and at the function
+signature itself.
+
+### §F-LENSB-B-03 (LOW, residual from AC-016) — recording `testing.TB` stub specified for fault-injection tests
+
+**Defect:** AC-016 and AC-017's fault-injection procedures (§M2) both assert
+that `driver.failLoud` fired as their PASSING outcome, but `failLoud` calls
+`t.Errorf` on the driver's own stored `testing.TB` — if that's the real
+`*testing.T` running the AC-016/AC-017 test, `t.Errorf` marks the ENCLOSING
+test FAILED at the moment `failLoud` fires, not just recorded as an
+assertable fact.
+
+**Fix:** A single new subsection in §M2, positioned after both the AC-016 and
+AC-017 procedures so it covers both without duplication, specifies that these
+two tests construct their driver (via `NewLoopback`) with a recording
+`testing.TB` stub/spy — a white-box, in-package type embedding `testing.TB`
+and overriding `Errorf` to append into a mutex-guarded slice — rather than
+the real `*testing.T`. The real enclosing `*testing.T` then asserts against
+the stub's recorded calls instead of receiving `failLoud`'s `t.Errorf`
+directly. Scoped explicitly to AC-016/AC-017 only; all happy-path ACs are
+unaffected and continue to construct their driver with the real
+`*testing.T`/`*testing.B`.
+
+### §A-L967 (NITPICK, Lens A) — disposition: cleaned
+
+**Assessment:** §H1's "**Defect:**" paragraph is live design-rationale prose
+(not a dated changelog row or repair-addendum section), so it was safe to
+reword. The 1-value code token `decodeRTID(payload) == rt.id` was the last
+live occurrence of that class in the note (confirmed by grep — the one
+remaining match, at the v1.4 §B-1 historical defect description, is a frozen
+repair-addendum row and was left untouched per §2.9).
+
+**Fix:** Reworded to "AC-014(b) requires the caller to assert the delivered
+payload decodes to `rt.id`" — semantic English, no code expression, matching
+the pattern already applied at v1.6 §F-A-1 and v1.7. Zero live 1-value
+`decodeRTID(payload)==` tokens remain anywhere in the note.
+
+---
+
+**Ground truth source (v1.8):** All four fixes are note-internal
+consistency/completeness repairs to sections already grounded in prior PAT-04
+source verification (§H3 provisioning against `internal/session/upstream.go`
+and `session.go` per the v1.3 addendum; Q7's multipath construction and §H2's
+half-channel construction per their own sections). No additional source reads
+were required for this repair.
