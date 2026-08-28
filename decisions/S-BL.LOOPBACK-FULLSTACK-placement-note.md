@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.8"
+version: "1.9"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.9 | R6 re-review repair (2026-08-28): BLOCKER — §M2's `recordingTB` stub construction (`stub := &recordingTB{}`, embedding a nil `testing.TB`) is corrected to `stub := &recordingTB{TB: t}` (embedding the real enclosing `*testing.T`). Disk-verified against `internal/testenv/testenv.go`: `NewLoopback`→`newEnv` unconditionally calls `b.Helper()` (:384), `t.Helper()` (:460), and `t.Cleanup(...)` twice (:475, :528 — the ticker/env teardown AC-011/Q6 depend on); with a nil embed these promoted calls nil-panic at construction, before AC-016/AC-017's fault-injection procedure ever runs. The struct comment's false "unused methods panic if called" claim is corrected, and the prior "in place of the real `*testing.T`" / implicit "must NOT pass real t" framing is retracted and replaced with the correct semantics: `Errorf` is OVERRIDDEN on `*recordingTB`, so `stub.Errorf(...)` dispatches to the override and is captured — it never reaches the embedded real `t`, so the enclosing test is never marked failed; the embedded real `t` is required so `Helper`/`Cleanup`/`Fatalf` delegate to a live TB instead of nil-panicking. LOW (Lens B O-1) — §H3 gains a `sessionName` storage/timing pin: `sessionName` is stated as a `loopbackDriver` field, set in `CreateSession` alongside `loopbackConsoleKey` (before Steps 1–3 run), holding its zero value (`""`) before `CreateSession` has run — consistent with the "Driver lifecycle pin," and the reason AC-017's pre-`CreateSession` call observes `ErrConsoleNotFound` independent of `loopbackConsoleKey`'s own zero-value state. See "v1.9 R6 Re-Review Repair (2026-08-28)" section. |
 | 1.8 | R5 re-review repair (2026-07-24): F-LENSB-B-01 — §H3 provisioning-timing/lifecycle pin: removed the "(or the `loopbackDriver` constructor)" console-provisioning latitude that contradicted AC-017's un-provisioned premise; added a "Driver lifecycle pin" specifying the `loopbackDriver` constructor builds the AccessNode triple, both multipath instances, and both half-channels in an un-provisioned state at construction (not lazily at `CreateSession`), so `SendKeystroke`/`onUpstreamTick()`/`onDownstreamTick()` are all safely pre-`CreateSession`-callable with no nil-deref; console provisioning (Publish/RegisterKey/Attach) confirmed deferred to `CreateSession` only; propagated a cross-reference at the "Steps 1–3" sentence. F-LENSB-B-02 — Q3 and the SendKeystroke doc comment (§Q5) now state explicitly that `SendKeystroke` performs no session-existence validation, by design, for AC-017. F-LENSB-B-03 — §M2 adds one recording-`testing.TB`-stub requirement covering both AC-016 and AC-017's fault-injection tests, so `failLoud`'s `t.Errorf` is captured/asserted rather than failing the enclosing real `*testing.T`. A-L967 (nitpick) — §H1 "Defect" prose's last live 1-value `decodeRTID(payload)==rt.id` token reworded to semantic English ("the delivered payload decodes to `rt.id`"); the frozen v1.4 §B-1 historical description at a separate line is untouched per §2.9. See "v1.8 R5 Re-Review Repair (2026-07-24)" section. |
 | 1.7 | F-A-1 class propagation (2026-07-23): benchmark pseudocode L518 comment dropped the 1-value `decodeRTID(payload)==rt.id` code token — reworded to semantic English consistent with v1.6 L337 fix. Zero live 1-value `decodeRTID(payload)==` tokens remain outside dated history/defect-description sections. |
 | 1.6 | R4 re-review repair (2026-07-22): F-B-LENSB-01 — resolved upstream-ticker/AC-017 timing tension using the preferred direct-seam approach: `onUpstreamTick()` named as a binding directly-callable package-private seam (symmetric to `onDownstreamTick()` / AC-016); AC-017 test specified to invoke `onUpstreamTick()` directly/synchronously (no ticker goroutine started), making AC-017 ticker-timing-independent; "MAY start at construction" preserved as valid but no longer load-bearing for AC-017 correctness; upstream seam guidance block added after §B-3/AC-016 section. L-C-1 — §H2 concrete-shape block comment lead-ins L1044/L1060 reworded from stale "onTick callback" form to reference `tickBody` wiring / seam method names (`startLoopbackTicker(env, ..., d.onUpstreamTick)` / `startLoopbackTicker(env, ..., d.onDownstreamTick)`). F-A-1 — RoundTrip doc-comment L337 purpose sentence reworded from `decodeRTID(payload)==rt.id` (1-value code token) to semantic English ("the delivered payload decodes to rt.id"). See "v1.6 R4 Re-Review Repair (2026-07-22)" section. |
@@ -1187,6 +1188,26 @@ Steps 1–3 MUST appear in this order. `RegisterKey` before `Attach` was already
 `driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in
 the upstream delivery callback (Q3 `accessNode.SendKeystroke` line).
 
+**`sessionName` storage/timing pin [v1.9 R6 LOW fix, Lens B O-1]:**
+`sessionName` is likewise stored as a `loopbackDriver` field (e.g.
+`driver.sessionName`), set once in `CreateSession` alongside
+`loopbackConsoleKey`, at the same point — before Steps 1–3 above run (step 1,
+`sh.pub.Publish(sessionName)`, is `sessionName`'s first use, so the field is
+populated no later than immediately before that call). Consistent with the
+"Driver lifecycle pin" above (construction leaves the driver un-provisioned;
+`CreateSession` provisions it), `driver.sessionName` holds its zero value
+(`""`) at any point before `CreateSession` has run. This is exactly why
+AC-017's pre-`CreateSession` `SendKeystroke`/`onUpstreamTick()` call reaches
+`accessNode.SendKeystroke(loopbackConsoleKey, "", payload)` in the upstream
+delivery callback and correctly observes `ErrConsoleNotFound` — no session
+named `""` is ever published, so the zero value alone is sufficient to
+produce AC-017's fault, independent of `loopbackConsoleKey`'s own zero-value
+state. For the happy-path ACs (AC-004/005/006 and others), `driver.sessionName`
+is populated and stable by the time any upstream tick can reach the delivery
+callback, because `CreateSession` sets it before returning and no
+`SendKeystroke` call that matters to those ACs is made before `CreateSession`
+completes.
+
 Note: the `downstream` channel returned by `Attach` is discarded because the
 loopback driver does not need a separate downstream-frame collector — echo
 delivery flows through `loopbackSink` → `downstreamHC.Enqueue` → downstream
@@ -1369,27 +1390,42 @@ name as binding for the AC-017 test, exactly as `onDownstreamTick()` is bound fo
 AC-016. The story-writer binds AC-017 to this seam; the implementer must expose it.
 
 **Recording `testing.TB` requirement for AC-016/AC-017 fault-injection tests
-[v1.8 F-LENSB-B-03]:** Both AC-016 (above) and AC-017 (above) assert that
-`driver.failLoud` FIRED as the PASSING outcome. But `driver.failLoud` calls
-`t.Errorf` on the driver's OWN stored `testing.TB` (the one supplied to
-`NewLoopback` at construction) — if that stored `testing.TB` is the enclosing
-REAL `*testing.T` running the AC-016/AC-017 test itself, that `t.Errorf` call
-marks the ENCLOSING test FAILED the instant `failLoud` fires. An AC-016/AC-017
-test written against the real `t` would therefore be marked failed by Go's
-testing framework at the exact moment it is supposed to observe a pass.
+[v1.8 F-LENSB-B-03; v1.9 R6 BLOCKER fix]:** Both AC-016 (above) and AC-017
+(above) assert that `driver.failLoud` FIRED as the PASSING outcome. But
+`driver.failLoud` calls `t.Errorf` on the driver's OWN stored `testing.TB`
+(the one supplied to `NewLoopback` at construction) — if that stored
+`testing.TB` were the enclosing REAL `*testing.T` running the AC-016/AC-017
+test itself with no override in front of it, that `t.Errorf` call would mark
+the ENCLOSING test FAILED the instant `failLoud` fires. An AC-016/AC-017 test
+written directly against the bare real `t`, with no interposed type, would
+therefore be marked failed by Go's testing framework at the exact moment it
+is supposed to observe a pass.
 
-**Fix:** AC-016 and AC-017's fault-injection tests construct their driver (via
-`NewLoopback`) with a RECORDING `testing.TB` stub/spy in place of the real
-`*testing.T` — feasible because these are white-box, in-package tests
-(`package testenv`), and `NewLoopback`/`SendKeystroke`/`WaitForEcho`/the driver
-already accept `testing.TB` rather than a concrete `*testing.T`/`*testing.B`:
+**Fix:** AC-016 and AC-017's fault-injection tests construct their driver
+(via `NewLoopback`) with a RECORDING `testing.TB` stub/spy that EMBEDS the
+real enclosing `*testing.T` and OVERRIDES only `Errorf` — feasible because
+these are white-box, in-package tests (`package testenv`), and
+`NewLoopback`/`SendKeystroke`/`WaitForEcho`/the driver already accept
+`testing.TB` rather than a concrete `*testing.T`/`*testing.B`:
 
 ```go
 // recordingTB is a minimal testing.TB stub used ONLY by AC-016/AC-017's
 // fault-injection tests, so failLoud's t.Errorf is CAPTURED and asserted
-// instead of failing the enclosing real *testing.T.
+// instead of failing the enclosing real *testing.T. It EMBEDS the real
+// enclosing t (constructed as &recordingTB{TB: t} — never the zero value)
+// so that Helper/Cleanup/Fatalf, which NewLoopback/newEnv call
+// unconditionally (testenv.go:384 b.Helper(), :460 t.Helper(), :475
+// t.Cleanup(func(){...}), :528 t.Cleanup(e.Close) for the ticker/env
+// teardown AC-011/Q6 depend on), promote through to a live TB instead of
+// nil-panicking. Only Errorf is overridden, to capture rather than fail.
 type recordingTB struct {
-    testing.TB          // embed to satisfy the interface; unused methods panic if called
+    testing.TB          // MUST be the real enclosing t (&recordingTB{TB: t}),
+                         // never left nil — Helper/Cleanup/Fatalf promote to
+                         // this embedded value and are exercised by every
+                         // NewLoopback call (testenv.go:384/460/475/528); a
+                         // nil embed nil-panics at construction, before
+                         // AC-016/AC-017's fault-injection procedure — or
+                         // even NewLoopback itself — completes.
     mu          sync.Mutex
     errorfCalls []string
 }
@@ -1400,8 +1436,8 @@ func (r *recordingTB) Errorf(format string, args ...any) {
     r.errorfCalls = append(r.errorfCalls, fmt.Sprintf(format, args...))
 }
 
-// AC-016/AC-017 construct the driver against the stub, not the real t:
-stub := &recordingTB{}
+// AC-016/AC-017 construct the driver against the stub, embedding the real t:
+stub := &recordingTB{TB: t}
 lb := testenv.NewLoopback(ctx, stub, testenv.LoopbackConfig{ /* ... */ })
 // ... exercise the fault-injection procedure (steps above) ...
 if len(stub.errorfCalls) != 1 {
@@ -1409,15 +1445,43 @@ if len(stub.errorfCalls) != 1 {
 }
 ```
 
+**Why embedding the real `t` is safe, not merely tolerated:** `Errorf` is
+OVERRIDDEN on `*recordingTB` — Go method dispatch resolves `stub.Errorf(...)`
+(and therefore `failLoud`'s call, which only ever sees `stub` through the
+`testing.TB` interface) to `recordingTB.Errorf`, which appends into
+`errorfCalls` and returns; an explicit method on the outer type always wins
+over a promoted method from an embedded field, so this call never falls
+through to the embedded real `t`'s `Errorf`. The enclosing test is therefore
+NOT marked failed by `failLoud`'s `t.Errorf` call — this holds regardless of
+whether the real `t` is embedded or the field is left nil. What DOES require
+the real `t` to be embedded is the UNOVERRIDDEN methods: `NewLoopback` →
+`newEnv` calls `b.Helper()` (`testenv.go:384`), `t.Helper()` (`:460`),
+`t.Cleanup(func(){...})` (`:475`), and `t.Cleanup(e.Close)` (`:528`, the
+ticker/env teardown AC-011/Q6 depend on) on every construction,
+unconditionally — none of these are overridden on `recordingTB`, so they
+promote straight through to the embedded field. `stub := &recordingTB{}`
+(the prior v1.8 shape, no `TB:` set) leaves that embedded field nil; the
+very first `b.Helper()` call inside `NewLoopback` panics on a nil-interface
+method call, before AC-016's or AC-017's fault-injection procedure — or even
+construction — completes. `&recordingTB{TB: t}` is therefore both correct
+(the enclosing test cannot be failed by `failLoud`, by (1) above) and
+required (construction cannot otherwise complete, by this paragraph). The
+prior "in place of the real `*testing.T`" framing, and any reading of it as
+"the real enclosing `t` must NOT be passed to `NewLoopback`," is retracted:
+it inverted the actual constraint.
+
 The `mu sync.Mutex` guard is required because `failLoud` may be invoked from a
 ticker goroutine (the general case) even though AC-016/AC-017's own fault-injection
 procedures call `onDownstreamTick()`/`onUpstreamTick()` synchronously from the test
 goroutine — the stub must be safe regardless of which caller pattern exercises it.
-The REAL enclosing `*testing.T` (`t`, distinct from the driver's stub) is used only
-to report the assertion against `stub.errorfCalls` — `failLoud`'s `t.Errorf` never
-reaches it. This recording-stub requirement is scoped to AC-016 and AC-017 only;
-every other (happy-path) AC constructs its driver with the real `*testing.T`/
-`*testing.B` exactly as before.
+The REAL enclosing `*testing.T` (`t`) plays two roles here: embedded inside
+`stub` so `Helper`/`Cleanup`/`Fatalf` delegate to a live TB, and used directly,
+after the fault-injection procedure completes, to report the assertion against
+`stub.errorfCalls`. `failLoud`'s `t.Errorf` call is captured by the `Errorf`
+override and never reaches the embedded real value in either role. This
+recording-stub requirement is scoped to AC-016 and AC-017 only; every other
+(happy-path) AC constructs its driver with the real `*testing.T`/`*testing.B`
+directly (no `recordingTB` wrapper) exactly as before.
 
 ---
 
@@ -1951,3 +2015,109 @@ source verification (§H3 provisioning against `internal/session/upstream.go`
 and `session.go` per the v1.3 addendum; Q7's multipath construction and §H2's
 half-channel construction per their own sections). No additional source reads
 were required for this repair.
+
+---
+
+## v1.9 R6 Re-Review Repair (2026-08-28)
+
+Round 6 re-review (3 lenses + oracle) of the v1.8-note/v1.7-story R5-repairs
+found the oracle GREEN and F-LENSB-B-01/02 + concurrency SOUND, but two
+independent lenses (A and B) converged on the v1.8 F-LENSB-B-03
+recording-`testing.TB`-stub fix as a BLOCKER, corroborated by
+orchestrator disk-verification against `internal/testenv/testenv.go`. One
+LOW (Lens B O-1) was also raised. Both are resolved in this pass.
+
+### BLOCKER — `recordingTB` stub embeds a nil `testing.TB`, nil-panics at construction
+
+**Defect (disk-verified against `internal/testenv/testenv.go`):**
+`NewLoopback(ctx, b testing.TB, cfg)` calls `b.Helper()` (`testenv.go:384`)
+then `newEnv(ctx, b, 1)`; `newEnv` calls `t.Helper()` (`:460`),
+`t.Cleanup(func(){...})` (`:475`), and `t.Cleanup(e.Close)` (`:528` — the
+ticker/env teardown AC-011/Q6 depend on). The v1.8 §M2 fix specified
+`type recordingTB struct { testing.TB; mu sync.Mutex; errorfCalls []string }`
+overriding ONLY `Errorf`, constructed as `stub := &recordingTB{}` — the
+embedded `testing.TB` field was left at its zero value, i.e. nil. `Helper`
+and `Cleanup` are NOT overridden, so calling them on `stub` promotes to the
+nil embedded interface and panics — at the very first `b.Helper()` inside
+`NewLoopback`, before AC-016's or AC-017's fault-injection procedure, or even
+construction, completes. Both ACs would crash unconditionally, not just in a
+subtle edge case. The v1.8 struct comment ("embed to satisfy the interface;
+unused methods panic if called") was itself the error: `Helper`/`Cleanup`
+are not unused — they are called on every `NewLoopback`.
+
+**Compounding defect — inverted rationale:** the v1.8 fix's framing
+("construct their driver ... with a RECORDING `testing.TB` stub/spy in
+place of the real `*testing.T`", `stub := &recordingTB{}` with no real `t`
+passed in at all) reads as, and was applied as, "the real enclosing `t`
+must not be passed to `NewLoopback`, or `failLoud`'s `t.Errorf` marks this
+passing test FAILED." That premise is incorrect Go semantics: `recordingTB`
+OVERRIDES `Errorf`, so `stub.Errorf(...)` — the only path `failLoud` can
+reach, since it only ever sees `stub` through the `testing.TB` interface —
+dispatches to the override and is captured; it never falls through to an
+embedded value's `Errorf` regardless of whether that embedded value is real
+or nil. Avoiding the real `t` was never what protected the enclosing test;
+the `Errorf` override was. Withholding the real `t` bought nothing and cost
+everything (`Helper`/`Cleanup` correctness) that the override doesn't cover.
+
+**Fix (adjudicated: embed the real enclosing `t`):** §M2's `recordingTB`
+construction changes from `stub := &recordingTB{}` to
+`stub := &recordingTB{TB: t}`. The struct's embedded-field comment is
+corrected to state that `Helper`/`Cleanup`/`Fatalf` promote to and are
+serviced by the embedded real `t` (citing `testenv.go:384/460/475/528`),
+and that only `Errorf` is overridden, to capture rather than fail. The
+"in place of the real `*testing.T`" framing and its "must NOT pass real t"
+implication are retracted and replaced with the correct rule: the override,
+not the absence of a real `t`, is what keeps the enclosing test green; the
+real `t` is additionally REQUIRED so `Helper`/`Cleanup`(including the
+`Cleanup(e.Close)` ticker teardown)/`Fatalf` delegate to a live TB instead of
+nil-panicking. Full before/after text is in §M2 above (the "Recording
+`testing.TB` requirement" subsection, tagged `[v1.8 F-LENSB-B-03; v1.9 R6
+BLOCKER fix]`). Grepped the note for every other `recordingTB`/stub
+construction and every "unused methods panic"/"must NOT be passed" framing
+— the §M2 occurrence fixed here was the only live instance of either; no
+sibling propagation was required beyond it. This live-prose section sits
+inside the "v1.2 Design Repair Addendum" heading, itself amended by every
+subsequent re-review round (v1.3 through v1.8) — it is current binding spec,
+not frozen history, and was in-scope to edit; the dated v1.8 §F-LENSB-B-03
+subsection below (in the "v1.8 R5 Re-Review Repair" section) records the
+now-superseded fix and is left untouched per §2.9.
+
+### LOW (Lens B O-1) — `driver.sessionName` storage/timing unpinned
+
+**Defect:** the upstream delivery callback (Q3) calls
+`driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)`,
+but `sessionName` was only ever shown as a local in §H3's `CreateSession`
+provisioning code block — the note never stated that `sessionName` is
+stored as a `loopbackDriver` field, nor when that field is populated.
+Harmless for AC-017 (a zero-value `sessionName` still yields
+`ErrConsoleNotFound`, since no session named `""` is ever published), but
+the happy-path ACs (AC-004/005/006 and others) need the field and its
+timing pinned to be implementable without guessing.
+
+**Fix:** §H3 gains a "`sessionName` storage/timing pin" paragraph,
+immediately after the sentence establishing `loopbackConsoleKey` is stored
+on `loopbackDriver`. It states `sessionName` is likewise a `loopbackDriver`
+field, set once in `CreateSession` alongside `loopbackConsoleKey` before
+Steps 1–3 run, and that — consistent with the "Driver lifecycle pin"
+(construction leaves the driver un-provisioned; `CreateSession` provisions
+it) — `driver.sessionName` holds its zero value (`""`) before `CreateSession`
+has run. This is what makes AC-017's pre-`CreateSession` call observe
+`ErrConsoleNotFound` (no session named `""` exists), independent of
+`loopbackConsoleKey`'s own zero-value state, and pins the happy-path timing
+(`driver.sessionName` is populated and stable by the time any upstream tick
+can reach the delivery callback) for AC-004/005/006.
+
+### Governance
+
+Both fixes are edits to live spec prose (§M2, §H3) inside sections already
+amended across v1.2 through v1.8; no frozen dated changelog row or prior
+repair-addendum section was touched. Story and index files are untouched —
+per dispatch, this placement-note edit is transcribed into the story by
+story-writer separately.
+
+**Ground truth source (v1.9):** the BLOCKER fix's `Helper`/`Cleanup`
+call-site line numbers (`testenv.go:384/460/475/528`) were disk-verified
+against `internal/testenv/testenv.go` by the orchestrator before dispatch
+and re-confirmed against the same file in this session. No additional
+source reads were required for the LOW fix (an internal note-consistency
+pin, not a ground-truth claim against source).
