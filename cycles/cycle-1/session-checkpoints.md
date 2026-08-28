@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "03f5d8f"
+input-hash: "5884882"
 traces_to: STATE.md
 ---
 
@@ -783,3 +783,17 @@ S-6.06 worktree: feat/S-6.06-daemon-admin-handlers (active). develop HEAD = b36c
 Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement attempt STOPPED (PAT-03 instance 2 — `testenv.NewLoopback` is a compile-shim, discards `LoopbackConfig`, drives no ticks, imports no halfchannel/arq/multipath); lower-bound bench migrated to the canonical API and MERGED as PR #121 @ `4c276d9`. Residual re-anchored to a new story, `S-BL.LOOPBACK-FULLSTACK` (draft v1.0, P2, 8 points, AC-001 hard-gates implementation on an `arq.OnAck` call-contract sign-off). HS-006 holdout re-evaluated fresh at `f73676d`: 0.895 PASS. POL-005 (adversary-dispatch-integrity) registered in `policies.yaml` v1.4. Session-review cycle-1 dispositions processed (11 approved / 1 deferred). S-7.04-FU-DRAIN-WIRE MERGED PR #120 @ f73676d. S-BL.PE-RECEIVE-LOOP MERGED PR #118 @ e940fc2. S-BL.DISCOVERY-WIRE Tasks 1-5 MERGED PR #123 @ d249f88.
 
 **Next action (superseded by S-BL.ADMISSION-SYNC-WIRE delivery):** Select next story — S-BL.ADMISSION-SYNC-WIRE was next per identity-cluster prerequisite order (leaf story, blocks NODE-IDENTIFY-WIRE); dispatched 2026-07-15–2026-07-18.
+
+---
+
+## Checkpoint: S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY FULLY DELIVERED (archived from STATE.md at S-BL.LOOPBACK-FULLSTACK R5-remediation index-sync burst, 2026-08-28)
+
+**Timestamp:** 2026-07-22T01:05:00Z
+
+**Position:** S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY FULLY DELIVERED (2026-07-22). PR #130 squash-merged to develop @ `af8eb17a5b90e205c17215ae39ca9332227e5976`; follow-up remediation of PR #129 @ 86e420d which shipped the SVTNID guard but left AC-003 PC-3 unmet; 3 ACs, 3 pts; Step-4.5 3/3 NITPICK_ONLY (R8/R9/R10 on 948d563; BC-5.39.001); feature branch+worktree cleaned. Drift SEC-NIDW-SVTNID-CONSISTENCY RESOLVED. STORY-INDEX at v4.144 row-145 DELIVERED. develop @ af8eb17.
+
+**Next (superseded):** S-7.02 cycle-close disposition — 3 [process-gap] candidates in tracker (narrowed-sweep-grep miss class 3rd instance; pr-manager step-9 branch-deletion mis-verify; post-convergence production-edit-without-reconverge). S-BL.LOOPBACK-FULLSTACK parked (P2, 8pts, draft v1.1).
+
+**Resume protocol (superseded):** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) proceed to S-7.02 cycle-close disposition.
+
+**Note (2026-08-28):** the "S-7.02 cycle-close disposition" next-action recorded above was NOT what actually happened next in this checkpoint's real successor session — the factory instead ran Step-4.5 spec convergence on S-BL.LOOPBACK-FULLSTACK (R1-R5, R5 not-clean at Lens B 1 MED + 2 LOW, remediated in placement-note v1.8 @ 4c7abc2 / story v1.7 @ 8f86a8e0 this same 2026-08-28 burst). This archive entry preserves the checkpoint's original text verbatim per the append-only convention; see STATE.md's live Session Resume Checkpoint for current position.
