@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.9"
+version: "1.10"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.10 | R7 re-review repair (2026-08-28): MED (F-LENSB-01) — §M2's ticker-start mitigation decision is corrected: the "upstream ticker MAY start at construction" / "start-time freedom PRESERVED" latitude ([v1.6 F-B-LENSB-01]) is WITHDRAWN. The upstream ticker now starts at `CreateSession` time, SYMMETRIC with the downstream ticker — race-free for the same single-goroutine reason, with no `EnqueueSend` dependency blocking it. The "Driver lifecycle pin" (§H3) and the "Steps 1–3" cross-reference sentence are updated so `CreateSession` is described as starting BOTH tickers, not just the downstream one. AC-017's "single-goroutine throughout" method text is sharpened: because AC-017 never calls `CreateSession` (the sole start-site for both tickers), no ticker goroutine of either kind can run during the test — this is now TRUE BY CONSTRUCTION, closing a latent `go test -race` hazard between a construction-started upstream ticker's locked `failLoud` write and AC-017's unlocked `len(stub.errorfCalls)` assertion read (outcome count was always 1; this was a race annotation, not a wrong count). LOW (F-LENSB-02) — the §H3 `sessionName` storage/timing pin is corrected: AC-017's `ErrConsoleNotFound` is caused PRIMARILY by the un-attached, zero-value `loopbackConsoleKey` (`AccessNode.SendKeystroke`, `internal/session/upstream.go:288-290`, gates on console attachment BEFORE comparing `sessionName` at line 292), not by the empty `sessionName`, which is demoted to a redundant second guarantee. Erratum — two live-text citations of `t.Helper()`'s line number corrected from `:460` to the disk-verified `:461` (`internal/testenv/testenv.go`); the unrelated `cmd/switchboard/access.go:460` citations, and the frozen v1.9 changelog row/section's `:460` citation, are untouched per §2.9. See "v1.10 R7 Re-Review Repair (2026-08-28)" section. |
 | 1.9 | R6 re-review repair (2026-08-28): BLOCKER — §M2's `recordingTB` stub construction (`stub := &recordingTB{}`, embedding a nil `testing.TB`) is corrected to `stub := &recordingTB{TB: t}` (embedding the real enclosing `*testing.T`). Disk-verified against `internal/testenv/testenv.go`: `NewLoopback`→`newEnv` unconditionally calls `b.Helper()` (:384), `t.Helper()` (:460), and `t.Cleanup(...)` twice (:475, :528 — the ticker/env teardown AC-011/Q6 depend on); with a nil embed these promoted calls nil-panic at construction, before AC-016/AC-017's fault-injection procedure ever runs. The struct comment's false "unused methods panic if called" claim is corrected, and the prior "in place of the real `*testing.T`" / implicit "must NOT pass real t" framing is retracted and replaced with the correct semantics: `Errorf` is OVERRIDDEN on `*recordingTB`, so `stub.Errorf(...)` dispatches to the override and is captured — it never reaches the embedded real `t`, so the enclosing test is never marked failed; the embedded real `t` is required so `Helper`/`Cleanup`/`Fatalf` delegate to a live TB instead of nil-panicking. LOW (Lens B O-1) — §H3 gains a `sessionName` storage/timing pin: `sessionName` is stated as a `loopbackDriver` field, set in `CreateSession` alongside `loopbackConsoleKey` (before Steps 1–3 run), holding its zero value (`""`) before `CreateSession` has run — consistent with the "Driver lifecycle pin," and the reason AC-017's pre-`CreateSession` call observes `ErrConsoleNotFound` independent of `loopbackConsoleKey`'s own zero-value state. See "v1.9 R6 Re-Review Repair (2026-08-28)" section. |
 | 1.8 | R5 re-review repair (2026-07-24): F-LENSB-B-01 — §H3 provisioning-timing/lifecycle pin: removed the "(or the `loopbackDriver` constructor)" console-provisioning latitude that contradicted AC-017's un-provisioned premise; added a "Driver lifecycle pin" specifying the `loopbackDriver` constructor builds the AccessNode triple, both multipath instances, and both half-channels in an un-provisioned state at construction (not lazily at `CreateSession`), so `SendKeystroke`/`onUpstreamTick()`/`onDownstreamTick()` are all safely pre-`CreateSession`-callable with no nil-deref; console provisioning (Publish/RegisterKey/Attach) confirmed deferred to `CreateSession` only; propagated a cross-reference at the "Steps 1–3" sentence. F-LENSB-B-02 — Q3 and the SendKeystroke doc comment (§Q5) now state explicitly that `SendKeystroke` performs no session-existence validation, by design, for AC-017. F-LENSB-B-03 — §M2 adds one recording-`testing.TB`-stub requirement covering both AC-016 and AC-017's fault-injection tests, so `failLoud`'s `t.Errorf` is captured/asserted rather than failing the enclosing real `*testing.T`. A-L967 (nitpick) — §H1 "Defect" prose's last live 1-value `decodeRTID(payload)==rt.id` token reworded to semantic English ("the delivered payload decodes to `rt.id`"); the frozen v1.4 §B-1 historical description at a separate line is untouched per §2.9. See "v1.8 R5 Re-Review Repair (2026-07-24)" section. |
 | 1.7 | F-A-1 class propagation (2026-07-23): benchmark pseudocode L518 comment dropped the 1-value `decodeRTID(payload)==rt.id` code token — reworded to semantic English consistent with v1.6 L337 fix. Zero live 1-value `decodeRTID(payload)==` tokens remain outside dated history/defect-description sections. |
@@ -1140,8 +1141,9 @@ because `upstreamMP`/`downstreamMP`/`upstreamHC`/`downstreamHC` are built AT
 CONSTRUCTION, not lazily at `CreateSession`. Only the console's session-level
 authorization state (Publish/RegisterKey/Attach, below) is deferred to
 `CreateSession`. `CreateSession` therefore does exactly two things: (1) the
-console-provisioning sequence below, and (2) starting the downstream ticker
-goroutine (§M2's preferred `CreateSession`-time start) — it does NOT construct
+console-provisioning sequence below, and (2) starting BOTH ticker goroutines
+— downstream and upstream (§M2's preferred `CreateSession`-time start,
+[v1.10 F-LENSB-01] now symmetric for both tickers) — it does NOT construct
 the driver, the multipath instances, or the half-channels; those already exist
 from `NewLoopback`.
 
@@ -1182,13 +1184,14 @@ _ = downstream  // downstream channel not used — echo delivery is via loopback
 2. `sh.auth.RegisterKey(sessionName, loopbackConsoleKey, session.RoleFull)` — register the console key so `SendKeystroke`'s authorizer check passes.
 3. `sh.access.Attach(loopbackConsoleKey, sessionName)` — attach the console to the session; succeeds now that the Publisher has the session.
 
-Steps 1–3 MUST appear in this order. `RegisterKey` before `Attach` was already required (from v1.2); `Publish` before `Attach` is the new v1.3 requirement. [v1.8] Steps 1–3 are exactly the console-provisioning work `CreateSession` performs; `CreateSession` additionally starts the downstream ticker goroutine (§M2's preferred `CreateSession`-time start) as a separate concern unordered relative to 1–3 — see "Driver lifecycle pin" above.
+Steps 1–3 MUST appear in this order. `RegisterKey` before `Attach` was already required (from v1.2); `Publish` before `Attach` is the new v1.3 requirement. [v1.8] Steps 1–3 are exactly the console-provisioning work `CreateSession` performs; `CreateSession` additionally starts both ticker goroutines — downstream and upstream ([v1.10 F-LENSB-01] §M2's preferred `CreateSession`-time start, now symmetric for both) — as a separate concern unordered relative to 1–3 — see "Driver lifecycle pin" above.
 
 `loopbackConsoleKey` is stored on `loopbackDriver` and passed to
 `driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, payload)` in
 the upstream delivery callback (Q3 `accessNode.SendKeystroke` line).
 
-**`sessionName` storage/timing pin [v1.9 R6 LOW fix, Lens B O-1]:**
+**`sessionName` storage/timing pin [v1.9 R6 LOW fix, Lens B O-1; v1.10
+F-LENSB-02 fault-attribution correction]:**
 `sessionName` is likewise stored as a `loopbackDriver` field (e.g.
 `driver.sessionName`), set once in `CreateSession` alongside
 `loopbackConsoleKey`, at the same point — before Steps 1–3 above run (step 1,
@@ -1196,17 +1199,28 @@ the upstream delivery callback (Q3 `accessNode.SendKeystroke` line).
 populated no later than immediately before that call). Consistent with the
 "Driver lifecycle pin" above (construction leaves the driver un-provisioned;
 `CreateSession` provisions it), `driver.sessionName` holds its zero value
-(`""`) at any point before `CreateSession` has run. This is exactly why
-AC-017's pre-`CreateSession` `SendKeystroke`/`onUpstreamTick()` call reaches
-`accessNode.SendKeystroke(loopbackConsoleKey, "", payload)` in the upstream
-delivery callback and correctly observes `ErrConsoleNotFound` — no session
-named `""` is ever published, so the zero value alone is sufficient to
-produce AC-017's fault, independent of `loopbackConsoleKey`'s own zero-value
-state. For the happy-path ACs (AC-004/005/006 and others), `driver.sessionName`
-is populated and stable by the time any upstream tick can reach the delivery
-callback, because `CreateSession` sets it before returning and no
-`SendKeystroke` call that matters to those ACs is made before `CreateSession`
-completes.
+(`""`) at any point before `CreateSession` has run. [v1.10 F-LENSB-02] The
+PRIMARY cause of AC-017's `ErrConsoleNotFound` is the UN-ATTACHED, zero-value
+`loopbackConsoleKey` — not the empty `sessionName`. `AccessNode.SendKeystroke`
+(`internal/session/upstream.go:276-301`) takes `sinkMu`, then at line 288
+looks up `attached, ok := a.consoles.Session(key)`; because `loopbackConsoleKey`
+has never been `Attach`ed (that only happens inside `CreateSession`'s Steps
+1–3, which have not run before AC-017's call), this lookup returns
+`ok == false`, and the console-attachment gate at lines 289-290 returns
+`ErrConsoleNotFound` IMMEDIATELY — before `sessionName` is ever read. The
+`attached != sessionName` comparison at line 292 (which would return
+`ErrSessionMismatch`) is unreached on this path. The empty `sessionName` is
+therefore a REDUNDANT second guarantee, not the operative cause: had some
+OTHER session already been published while `loopbackConsoleKey` remained
+unattached, the same `ErrConsoleNotFound` would fire at lines 289-290 for the
+same reason; had `loopbackConsoleKey` instead been attached to a real session
+while `sessionName` stayed `""`, the attachment gate would pass but the
+`attached != ""` comparison at line 292 would then return `ErrSessionMismatch`
+— either way a loud error, never a silent success. For the happy-path ACs
+(AC-004/005/006 and others), `driver.sessionName` is populated and stable by
+the time any upstream tick can reach the delivery callback, because
+`CreateSession` sets it before returning and no `SendKeystroke` call that
+matters to those ACs is made before `CreateSession` completes.
 
 Note: the `downstream` channel returned by `Attach` is discarded because the
 loopback driver does not need a separate downstream-frame collector — echo
@@ -1257,16 +1271,24 @@ is still 0 — the first real data tick produces `chanSeq = 65` (or higher),
 making `OnAck(65, zeroSACK)` return `ErrAckOutOfWindow` (65 - 0 = 65 > 64),
 `delivered = nil`, and the first benchmark sample times out.
 
-**Mitigation decision [v1.3 B-F3 tightened; v1.4 B-2 rationale corrected]:**
+**Mitigation decision [v1.3 B-F3 tightened; v1.4 B-2 rationale corrected;
+v1.10 F-LENSB-01 tightened]:**
 Do not start the downstream ticker goroutine at `NewLoopback` time.
 **PREFERRED: start the downstream ticker at `CreateSession` time.**
 `CreateSession` is called once, from a single goroutine, before any
 `SendKeystroke` calls — there is no concurrency at that point, so starting
 the ticker there is race-free and requires no additional synchronization.
-The upstream ticker MAY start at construction (it has no `EnqueueSend`
-dependency). [v1.6 F-B-LENSB-01] This start-time freedom is PRESERVED but
-AC-017's fault-injection test MUST NOT depend on it — see **AC-017 fault-injection
-method and required upstream test seam** below.
+[v1.10 F-LENSB-01] The upstream ticker likewise starts at `CreateSession`
+time, SYMMETRIC with the downstream ticker — NOT at construction. The prior
+"upstream ticker MAY start at construction" / "start-time freedom PRESERVED"
+latitude ([v1.6 F-B-LENSB-01]) is WITHDRAWN: the upstream ticker has no
+`EnqueueSend` dependency, so nothing blocks a `CreateSession`-time start
+either, and the same single-goroutine, race-free argument above applies to
+it unchanged. This also makes AC-017's independence from ticker-start timing
+TRUE BY CONSTRUCTION rather than a discipline the test must separately
+uphold — see **AC-017 fault-injection method and required upstream test
+seam** below, which no longer needs to guard against a construction-time
+start because that option no longer exists.
 
 **Per-option window-safety invariant [v1.4 B-2]:**
 
@@ -1358,30 +1380,46 @@ goroutine. The story-writer binds AC-016 to this seam; the implementer must
 expose it. (The method is already named `onDownstreamTick()` in the note's
 §H2 concrete shape — see above; this requirement locks that name as binding.)
 
-**AC-017 fault-injection method and required upstream test seam [v1.6 F-B-LENSB-01]:**
+**AC-017 fault-injection method and required upstream test seam [v1.6
+F-B-LENSB-01; v1.10 F-LENSB-01 tightened to true-by-construction]:**
 
 AC-017 tests that `SendKeystroke` called BEFORE `CreateSession` surfaces
-`ErrConsoleNotFound` via `failLoud`. The upstream ticker's start timing MUST NOT
-be a prerequisite for this test to work deterministically: an implementer who
-starts the upstream ticker at `CreateSession` time (symmetric with the downstream
-preferred option) would make the pre-`CreateSession` `SendKeystroke` enqueue
-silently — the upstream ticker hasn't started yet, the enqueued keystroke is never
-processed through the upstream tick body, and AC-017 hangs to timeout instead of
-firing `failLoud`. The design resolves this tension by specifying that AC-017's
-fault-injection test invokes `onUpstreamTick()` DIRECTLY and SYNCHRONOUSLY,
-exactly as AC-016 invokes `onDownstreamTick()` directly — no upstream ticker
-goroutine is started during the AC-017 test:
+`ErrConsoleNotFound` via `failLoud`. [v1.10 F-LENSB-01] Because both the
+downstream AND upstream tickers now start ONLY at `CreateSession` time (see
+the §M2 "Mitigation decision" above and the "Driver lifecycle pin" in §H3),
+and AC-017 deliberately never calls `CreateSession`, NO ticker goroutine of
+either kind can run at any point during the AC-017 test — this is now TRUE
+BY CONSTRUCTION, not merely a discipline the test must separately uphold.
+The test's direct, synchronous `onUpstreamTick()` call is therefore the ONLY
+driver of the upstream tick body for the whole test; there is no concurrent
+ticker goroutine that could also touch `upstreamHC`, `upstreamMP`, or (via
+§M2's `recordingTB` stub) `stub.errorfCalls` while the test's own assertion
+reads it. AC-017's fault-injection test invokes `onUpstreamTick()` DIRECTLY
+and SYNCHRONOUSLY, exactly as AC-016 invokes `onDownstreamTick()` directly:
 
-1. Do NOT start the upstream ticker goroutine.
+1. Do NOT start the upstream ticker goroutine. [v1.10] This step is now
+   automatically satisfied rather than a separate discipline to uphold:
+   `CreateSession` is the sole start-site for both tickers (§M2), and
+   AC-017's procedure never calls it, so no upstream ticker goroutine can
+   exist at any point in this test.
 2. Call `SendKeystroke` before `CreateSession` — this enqueues a payload into
    `upstreamHC` (no console registered yet).
 3. Call `driver.onUpstreamTick()` synchronously. This fires the upstream tick body:
    `upstreamHC.Tick()` dequeues the payload, `accessNode.SendKeystroke(...)` is
    called, returns `ErrConsoleNotFound` (no console registered), `failLoud` fires.
-4. Assert that `driver.failLoud` was called (surfaced via `t.Errorf`).
+4. Assert that `driver.failLoud` was called (surfaced via `t.Errorf`). [v1.10]
+   Because no ticker goroutine of either kind ever runs (step 1, now true by
+   construction), this assertion's unlocked read of `stub.errorfCalls` — after
+   the synchronous `onUpstreamTick()` call in step 3 has already returned —
+   observes no concurrent writer. `go test -race` (AC-015) stays clean on
+   this path by construction, closing the latent race the prior
+   construction-start latitude permitted (the outcome count was always 1;
+   the hazard was a race annotation on the read, not a wrong assertion
+   value).
 
 This is single-goroutine throughout — no race, no ticker-timing dependency,
-ticker-start order is irrelevant to AC-017's correctness.
+ticker-start order is irrelevant to AC-017's correctness, and — per [v1.10]
+— no ticker of either kind ever launches during this test at all.
 
 **Required seam:** `onUpstreamTick()` must be a directly-callable **package-private
 method** on `loopbackDriver` (symmetric to `onDownstreamTick()`). [v1.6] This is
@@ -1414,7 +1452,7 @@ these are white-box, in-package tests (`package testenv`), and
 // instead of failing the enclosing real *testing.T. It EMBEDS the real
 // enclosing t (constructed as &recordingTB{TB: t} — never the zero value)
 // so that Helper/Cleanup/Fatalf, which NewLoopback/newEnv call
-// unconditionally (testenv.go:384 b.Helper(), :460 t.Helper(), :475
+// unconditionally (testenv.go:384 b.Helper(), :461 t.Helper(), :475
 // t.Cleanup(func(){...}), :528 t.Cleanup(e.Close) for the ticker/env
 // teardown AC-011/Q6 depend on), promote through to a live TB instead of
 // nil-panicking. Only Errorf is overridden, to capture rather than fail.
@@ -1455,7 +1493,7 @@ through to the embedded real `t`'s `Errorf`. The enclosing test is therefore
 NOT marked failed by `failLoud`'s `t.Errorf` call — this holds regardless of
 whether the real `t` is embedded or the field is left nil. What DOES require
 the real `t` to be embedded is the UNOVERRIDDEN methods: `NewLoopback` →
-`newEnv` calls `b.Helper()` (`testenv.go:384`), `t.Helper()` (`:460`),
+`newEnv` calls `b.Helper()` (`testenv.go:384`), `t.Helper()` (`:461`),
 `t.Cleanup(func(){...})` (`:475`), and `t.Cleanup(e.Close)` (`:528`, the
 ticker/env teardown AC-011/Q6 depend on) on every construction,
 unconditionally — none of these are overridden on `recordingTB`, so they
@@ -2121,3 +2159,145 @@ against `internal/testenv/testenv.go` by the orchestrator before dispatch
 and re-confirmed against the same file in this session. No additional
 source reads were required for the LOW fix (an internal note-consistency
 pin, not a ground-truth claim against source).
+
+## v1.10 R7 Re-Review Repair (2026-08-28)
+
+Round 7 re-review found one MED (F-LENSB-01) and one LOW (F-LENSB-02), both
+tracing to the `loopbackDriver` upstream-ticker start-timing / AC-017
+fault-attribution area — the same design region v1.6 and v1.9 previously
+touched. Both are resolved in this pass, plus a line-reference erratum
+folded in from the same dispatch.
+
+### F-LENSB-01 (MED) — upstream-ticker start-site under-pinned; contradicted AC-017's single-goroutine claim; latent `-race` hazard
+
+**Defect:** §M2's ticker-start mitigation decision said the downstream
+ticker starts at `CreateSession` (PREFERRED) while the upstream ticker "MAY
+start at construction ... [v1.6 F-B-LENSB-01] This start-time freedom is
+PRESERVED." Meanwhile AC-017's method text claimed "single-goroutine
+throughout" while step 1 only asked the test to refrain from starting the
+upstream ticker itself — it did not, and structurally could not, prevent a
+construction-time-started upstream ticker from running in the background
+during the AC-017 test, because "MAY start at construction" made that
+ticker's existence an implementer's free choice, not something AC-017's own
+procedure controlled. If an implementer took the construction-start option,
+`NewLoopback` would start a live background upstream ticker goroutine.
+That ticker's `onUpstreamTick()` calls `failLoud` under `recordingTB.mu`
+(§M2's `Errorf` override) on any tick that hits an error path, while
+AC-017's own assertion (`if len(stub.errorfCalls) != 1 { ... }`) reads
+`stub.errorfCalls` UNLOCKED, directly, no `mu.Lock()` around the read. A
+background ticker goroutine writing under lock concurrently with the test
+goroutine's unlocked read is a data race by Go's memory model regardless of
+whether the two ever observe inconsistent values in a given run — `go test
+-race` (AC-015, `just test-race`) flags it, intermittently reproducing
+depending on scheduler timing. The outcome COUNT stays 1 in every run (the
+construction-started upstream ticker, with no keystroke enqueued for it to
+process beyond AC-017's own single enqueue, never itself calls `failLoud`
+in practice) — this is why prior rounds' review, which checks assertion
+values, did not catch it: it is a race annotation on the read, not a wrong
+count.
+
+**Fix:** §M2's "Mitigation decision" is corrected so the upstream ticker
+starts ONLY at `CreateSession` time, SYMMETRIC with the downstream ticker —
+not at construction. The "MAY start at construction" / "start-time freedom
+PRESERVED" latitude from v1.6 is WITHDRAWN. The single-goroutine,
+race-free argument already given for the downstream `CreateSession`-time
+start (`CreateSession` is called once, from a single goroutine, before any
+`SendKeystroke` — no concurrency, so no synchronization is needed) applies
+identically to the upstream ticker; the upstream ticker's earlier freedom
+was never load-bearing for anything but AC-017 in the first place, and
+AC-017 already required NOT starting the upstream ticker goroutine at all
+during its own procedure. The "Driver lifecycle pin" (§H3) and the "Steps
+1–3 MUST appear in this order" cross-reference sentence are both updated:
+`CreateSession` now starts BOTH tickers, not just the downstream one.
+AC-017's method text (§M2) is sharpened from "the test must refrain from
+starting the upstream ticker" to a TRUE-BY-CONSTRUCTION guarantee: because
+`CreateSession` is now the SOLE start-site for either ticker, and AC-017's
+procedure never calls `CreateSession`, no ticker goroutine of any kind can
+exist during the AC-017 test — full stop, not contingent on the test's own
+discipline. Step 1 ("Do NOT start the upstream ticker goroutine") is kept
+in the enumerated procedure but reworded to state it is now automatically
+satisfied rather than a separate obligation. Step 4's assertion prose gains
+a sentence stating explicitly that the unlocked `len(stub.errorfCalls)`
+read is race-free because no concurrent writer can exist on this path,
+closing the `go test -race` hazard by construction. The `mu sync.Mutex`
+guard on `recordingTB.Errorf` is UNCHANGED and still required for the
+general/happy-path case (AC-004/005/006/014 etc.), where `failLoud` may
+legitimately fire from a live ticker goroutine; only AC-017's own safety
+argument for its specific unlocked assertion read is sharpened, not the
+stub's general contract.
+
+**Verification (ground truth, this session):** `internal/session/upstream.go`
+`AccessNode.SendKeystroke` (lines 276-301) confirmed: `sinkMu` is taken
+first; line 288 `attached, ok := a.consoles.Session(key)`; lines 289-290
+`if !ok { return ...ErrConsoleNotFound }`; line 292
+`if attached != sessionName { return ...ErrSessionMismatch }` — the
+console-attachment gate fires before the `sessionName` comparison,
+confirming (independent of F-LENSB-02 below) that AC-017's fault path does
+not depend on which ticker is running, only on whether one runs at all.
+
+### F-LENSB-02 (LOW) — `sessionName` pin misattributed AC-017's fault cause
+
+**Defect:** §H3's `sessionName` storage/timing pin credited the empty
+`sessionName` as independently sufficient to produce AC-017's
+`ErrConsoleNotFound`, "independent of `loopbackConsoleKey`'s own zero-value
+state." Disk-verified against `internal/session/upstream.go:276-301`: the
+console-attachment gate (`a.consoles.Session(key)` → `ErrConsoleNotFound`
+at lines 288-290) fires FIRST, before `sessionName` is compared at line
+292. Since `loopbackConsoleKey` is never `Attach`ed before AC-017's call
+(that only happens inside `CreateSession`, which AC-017 never calls), the
+attachment-gate failure is what actually produces `ErrConsoleNotFound` in
+this scenario — the empty `sessionName` value is never read on this path,
+so it cannot be the operative cause the prior text described.
+
+**Fix:** §H3's `sessionName` storage/timing pin is reworded to attribute
+AC-017's fault to the un-attached, zero-value `loopbackConsoleKey` (the
+first-triggered `a.consoles.Session(key)` → `ErrConsoleNotFound` gate,
+lines 288-290), with the empty `sessionName` demoted to a REDUNDANT second
+guarantee: had a session been published under some other name while
+`loopbackConsoleKey` stayed unattached, the same `ErrConsoleNotFound` would
+still fire at the attachment gate; had `loopbackConsoleKey` instead been
+attached to a real session while `sessionName` stayed `""`, the attachment
+gate would pass but the line-292 comparison would then return
+`ErrSessionMismatch` — either way a loud, `failLoud`-surfaced error, never
+a silent success. AC-017 step 3's existing text ("`ErrConsoleNotFound` (no
+console registered)") already matched this and required no change.
+
+### Erratum — `t.Helper()` line-reference correction (`:460` → `:461`)
+
+**Defect:** Two live-text citations of `internal/testenv/testenv.go`'s
+`t.Helper()` call site inside `newEnv` read `:460`. Disk-verification this
+session confirms the call is actually at line 461 (`b.Helper()` at line
+384, `func newEnv` at line 460, `t.Helper()` on the line immediately
+after it, `:461`).
+
+**Fix:** The two LIVE-text occurrences — the §M2 `recordingTB` struct
+comment's inline citation, and the "Why embedding the real `t` is safe"
+prose paragraph's citation — are corrected from `:460` to `:461`. Left
+untouched, per §2.9 (frozen dated content) and because they cite a
+DIFFERENT file: the two `cmd/switchboard/access.go:460` comparisons (an
+unrelated file, correct as-is); the frozen v1.9 changelog row (line ~34 in
+the pre-v1.10 numbering) and the frozen "v1.9 R6 Re-Review Repair" section
+below, both of which cite `:460` as part of their own dated historical
+description of what v1.9 disk-verified at the time — rewriting frozen
+history to match a later correction would falsify the record of what that
+round actually found and fixed.
+
+### Governance
+
+All three fixes are edits to live spec prose (§M2's "Mitigation decision"
+and "AC-017 fault-injection method" subsections, §H3's "Driver lifecycle
+pin" and "Steps 1–3" cross-reference and `sessionName` pin) inside sections
+already amended across v1.2 through v1.9; no frozen dated changelog row or
+prior repair-addendum section was touched. Story and index files are
+untouched — per dispatch, this placement-note edit is transcribed into the
+story by story-writer separately.
+
+**Ground truth sources (v1.10):** `internal/session/upstream.go:276-301`
+(`AccessNode.SendKeystroke` gate ordering — console-attachment check at
+lines 288-290 precedes the `sessionName` comparison at line 292) and
+`internal/testenv/testenv.go` (`b.Helper()` at line 384, `func newEnv` at
+line 460, `t.Helper()` at line 461, `t.Cleanup(func(){...})` at line 475,
+`t.Cleanup(e.Close)` at line 528) were both supplied as pre-verified ground
+truth for this dispatch and were not independently re-read from disk in
+this pass beyond confirming the note's citations against the supplied line
+numbers.
