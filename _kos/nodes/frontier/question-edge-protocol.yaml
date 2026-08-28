@@ -17,9 +17,9 @@ edges:
   - target: elem-mvp-scope-single-lan
     type: derives
   - target: elem-timeslice-framing
-    type: related
+    type: derives
   - target: elem-asymmetric-half-channels
-    type: related
+    type: derives
 provenance:
   created_by: human
   session: session-014

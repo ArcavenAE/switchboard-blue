@@ -25,9 +25,10 @@ content: |
   need real measurement.
 edges:
   - target: elem-asymmetric-half-channels
-    type: related
+    type: supports
   - target: question-timeslice-framing
-    type: leaves-open
+    type: partially_resolves
+    note: "The framing model is settled; tick rates remain open pending measurement"
 provenance:
   created_by: human
   session: session-049

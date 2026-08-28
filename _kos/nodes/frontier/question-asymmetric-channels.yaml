@@ -8,7 +8,7 @@ edges:
   - target: elem-asymmetric-half-channels
     type: derives
   - target: elem-timeslice-framing
-    type: related
+    type: derives
 provenance:
   created_by: human
   session: null

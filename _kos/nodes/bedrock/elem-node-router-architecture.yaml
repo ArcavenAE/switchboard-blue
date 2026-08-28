@@ -24,9 +24,10 @@ content: |
   `elem-single-binary-three-modes`.
 edges:
   - target: elem-ssh-end-to-end-encryption
-    type: related
+    type: derives
+    note: "The blind-relay property is grounded in SSH end-to-end encryption"
   - target: elem-single-binary-three-modes
-    type: related
+    type: supports
 provenance:
   created_by: human
   session: session-049
