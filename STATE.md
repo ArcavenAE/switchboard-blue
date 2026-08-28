@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-loopback-fullstack-step4.5-r5-remediated-r6-pending
+phase_step: steady-state-loopback-fullstack-step4.5-r6-remediated-r7-pending
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,8 +42,8 @@ develop_head: af8eb17a5b90e205c17215ae39ca9332227e5976
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence IN PROGRESS. R5 (2026-07-23) NOT CLEAN — Lens B 1 MED (F-LENSB-B-01 driver-lifecycle/provisioning-timing pin) + 2 LOW (F-LENSB-B-02 SendKeystroke no-session-validation, F-LENSB-B-03 recording-testing.TB stub); nitpicks A-L967 (note-only) + F-C-1 (changelog erratum). REMEDIATED 2026-08-28: placement-note v1.8 @ 4c7abc2, story v1.7 @ 8f86a8e0 (17 ACs, input-hash 61e8091). Convergence counter 0/3. NEXT: R6 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip 8f86a8e0 — needs 3 consecutive clean diverse-lens passes; any finding/edit resets counter to 0. S-7.02 cycle-close disposition (3 [process-gap] candidates) remains queued behind R6."
-current_step: "S-BL.LOOPBACK-FULLSTACK Step-4.5 R5 remediation index-sync — placement-note v1.8 @ 4c7abc2 (F-LENSB-B-01/02/03 + A-L967), story v1.7 @ 8f86a8e0 (transcription + F-C-1 erratum, 17 ACs, input-hash 61e8091); STORY-INDEX row v1.1→v1.7 (POL-002 catch-up); convergence counter 0/3, R6 next. develop unchanged @ af8eb17 (no code delivery this burst — index-sync only). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence IN PROGRESS. R6 (2026-08-28) NOT CLEAN — 1 BLOCKER + 1 MED (same defect: recordingTB nil-embed panic, Lens A+B converged) + 2 LOW (O-1 sessionName timing; F-LC-R6-001 changelog quote). Oracle GREEN. R6 findings REMEDIATED 2026-08-28: placement-note v1.9 @ c7b449b3 (recordingTB{TB: t} real-t embed + rationale correction, O-1 sessionName pin), story v1.8 @ e171cbce (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash 497607b). Convergence counter 0/3. NEXT: R7 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip e171cbce — needs 3 consecutive clean diverse-lens passes; any finding/edit resets counter to 0. S-7.02 cycle-close disposition (3 [process-gap] candidates) remains queued behind R7."
+current_step: "S-BL.LOOPBACK-FULLSTACK Step-4.5 R6 remediation index-sync — placement-note v1.9 @ c7b449b3 (BLOCKER recordingTB{TB: t} real-t embed fix + O-1 sessionName pin), story v1.8 @ e171cbce (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash 497607b); STORY-INDEX row v1.7→v1.8 (POL-002); convergence counter 0/3, R7 next. develop unchanged @ af8eb17 (no code delivery this burst — index-sync only). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
 timestamp: 2026-08-28T00:00:00Z
 last_update: 2026-08-28
@@ -55,7 +55,7 @@ last_update: 2026-08-28
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-08-28 — S-BL.LOOPBACK-FULLSTACK R5-remediation index sync: STORY-INDEX row (~L155) status cell v1.1→v1.7 (POL-002 catch-up, 5-version drift cleared: R1-R5 rounds bumped the story v1.2→v1.7 without a synced status cell); placement-note citation v1.1→v1.8; AC-count reference 14→17. STATE.md checkpoint refreshed to reflect note v1.8 @ 4c7abc2 / story v1.7 @ 8f86a8e0, R5 remediated (F-LENSB-B-01/02/03 + A-L967 + F-C-1), R6 pending, convergence counter 0/3. Index-sync only — story body and placement note untouched this burst (committed separately by architect/story-writer); D-chain cite D-446 latest greenfield; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-08-28 — S-BL.LOOPBACK-FULLSTACK R6-remediation index sync: STORY-INDEX row (~L155) status cell v1.7→v1.8 (POL-002); placement-note citation v1.8→v1.9. STATE.md checkpoint refreshed to reflect note v1.9 @ c7b449b3 / story v1.8 @ e171cbce, R6 remediated (BLOCKER recordingTB{TB: t} + MED same-defect + O-1 sessionName pin + F-LC-R6-001 erratum), R7 pending, convergence counter 0/3. Index-sync only — story body and placement note untouched this burst (committed separately by architect/story-writer); rereview-R6 record written to cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/; D-chain cite D-446 latest greenfield; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -71,7 +71,7 @@ last_update: 2026-08-28
 | **Started** | 2026-06-23 |
 | **Last Updated** | 2026-08-28 |
 | **Current Phase** | steady-state (post-cycle-1) |
-| **Current Step** | S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence — R5 (2026-07-23) NOT CLEAN (Lens B 1 MED + 2 LOW), REMEDIATED 2026-08-28: placement-note v1.8 @ 4c7abc2, story v1.7 @ 8f86a8e0 (17 ACs); convergence counter 0/3; R6 adversarial re-review next. develop unchanged @ af8eb17 (index-sync burst, no code delivery). |
+| **Current Step** | S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence — R6 (2026-08-28) NOT CLEAN (1 BLOCKER + 1 MED same-defect + 2 LOW), REMEDIATED 2026-08-28: placement-note v1.9 @ c7b449b3, story v1.8 @ e171cbce (17 ACs); convergence counter 0/3; R7 adversarial re-review next. develop unchanged @ af8eb17 (index-sync burst, no code delivery). |
 
 ## Phase Progress
 
@@ -88,7 +88,7 @@ last_update: 2026-08-28
 | fix burst (S-BL.ADMISSION-SYNC-WIRE Step-4.5) | Rulings 12–15; BC-2.05.009 v1.0→v1.6; code HEAD ab043c5→92a2c65 (squash) | 4 fix bursts |
 | S-BL.NODE-IDENTIFY-WIRE Step-4.5 adversary | **DELIVERED** PR #127 @ 7fcf0cf; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); F-1 stored-key + F-2 log + MED-1 + LOW-1 fixed | →2→0→0→0 |
 | S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY Step-4.5 | **DELIVERED** PR #130 @ af8eb17 (2026-07-22); PR #129 @ 86e420d partial (AC-003 PC-3 unmet); fix burst on 948d563; R8/R9/R10 3/3 NITPICK_ONLY (BC-5.39.001) | →0→0→0 |
-| S-BL.LOOPBACK-FULLSTACK Step-4.5 adversary | R5 (2026-07-23) NOT CLEAN — Lens B 1 MED + 2 LOW; REMEDIATED 2026-08-28: placement-note v1.8 @ 4c7abc2, story v1.7 @ 8f86a8e0 (17 ACs); counter 0/3, R6 pending | R1-R5 |
+| S-BL.LOOPBACK-FULLSTACK Step-4.5 adversary | R6 (2026-08-28) NOT CLEAN — 1 BLOCKER + 1 MED same-defect + 2 LOW; REMEDIATED 2026-08-28: placement-note v1.9 @ c7b449b3, story v1.8 @ e171cbce (17 ACs); counter 0/3, R7 pending | R1-R6 |
 
 Wave-by-wave detail: `cycles/cycle-1/burst-log.md` and `cycles/cycle-1/closed-stories.md`.
 
@@ -102,11 +102,11 @@ Older rows archived to `cycles/cycle-1/burst-log.md`. Showing last 5 rows.
 
 | Date | Step | Status | Result |
 |------|------|--------|--------|
-| 2026-07-21 | **S-BL.DISCOVERY-WIRE Step-4.5 exhaustive version-pin audit: story v2.27 / def6b7b (2 missed BC-2.03.001 PC-5 structural-variant pins v1.6→v1.7; all declared-input pins confirmed canonical); factory 075bfc0; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | v2.27-pin-audit | develop @ 7fcf0cf. |
 | 2026-07-21 | **S-BL.DISCOVERY-WIRE FULLY DELIVERED — PR #128 squash-merged develop @ 4bfcbf7; Tasks 6a-6d + SEC-DW-10 map-bounding; all 18 ACs; Step-4.5 3/3 NITPICK_ONLY (BC-5.39.001); 2 benign CI-fix commits folded; feature branch+worktree cleaned.** | story-DELIVERED | develop @ 4bfcbf7. |
 | 2026-07-22 | **S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY Step-4.5 reconvergence: PR #129 @ 86e420d shipped guard but left AC-003 PC-3 unmet; fix burst on 948d563; Step-4.5 R8/R9/R10 3/3 NITPICK_ONLY (BC-5.39.001).** | step-4.5-converged | develop @ af8eb17. |
 | 2026-07-22 | **S-BL.NODE-IDENTIFY-SVTNID-CONSISTENCY FULLY DELIVERED — PR #130 squash-merged develop @ af8eb17 (2026-07-22); 3 ACs, 3 pts; Step-4.5 3/3 NITPICK_ONLY; feature branch+worktree cleaned; drift SEC-NIDW-SVTNID-CONSISTENCY RESOLVED; STORY-INDEX row 145 updated (POL-002).** | story-DELIVERED | develop @ af8eb17. |
 | 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R5 remediation index-sync: STORY-INDEX row v1.1→v1.7 (POL-002 catch-up), placement-note citation v1.1→v1.8, AC-count 14→17; STATE.md checkpoint refreshed (note v1.8 @ 4c7abc2 / story v1.7 @ 8f86a8e0, R5 remediated, R6 pending, counter 0/3).** | index-sync | develop unchanged @ af8eb17. |
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R6 remediation index-sync: STORY-INDEX row v1.7→v1.8 (POL-002), placement-note citation v1.8→v1.9; STATE.md checkpoint refreshed (note v1.9 @ c7b449b3 / story v1.8 @ e171cbce, R6 remediated — BLOCKER recordingTB fix + O-1 + F-LC-R6-001, R7 pending, counter 0/3).** | index-sync | develop unchanged @ af8eb17. |
 
 ## Wave 6 Story Status
 
@@ -130,7 +130,7 @@ Waves 1–5 detail: `cycles/cycle-1/closed-stories.md`.
 | DRIFT-SIGHUP-MODE-ASYMMETRY | LOW | kill -HUP reloads router but terminates other modes. Anchor: S-BL.CLI-SURFACE-COMPLETION. | architect | open |
 | DRIFT-SIGHUP-INERT-RELOAD-UX | LOW | Valid SIGHUP reload with no upstream changes is silently inert. Anchor: S-BL.CLI-SURFACE-COMPLETION. | product-owner | open |
 | W3-DEFER-1..6 | MED/OBS | Worktree tuple; M-1 relay busy-spin; fired-source LRU; M-2 unbounded log; EC-005; PTY-EOF. Detail: `cycles/cycle-1/closed-drift.md`. | various | deferred |
-| OBS-VP-BENCH | OBS | VP-042 re-anchored → S-BL.LOOPBACK-FULLSTACK (draft v1.7, AC-001 OnAck gate discharged; Step-4.5 R5 remediated, R6 pending). | orchestrator | re-anchored |
+| OBS-VP-BENCH | OBS | VP-042 re-anchored → S-BL.LOOPBACK-FULLSTACK (draft v1.8, AC-001 OnAck gate discharged; Step-4.5 R6 remediated, R7 pending). | orchestrator | re-anchored |
 | WAVE-GATE-DISPATCH-INTEGRITY | HIGH | HEAD-SHA tuple absent from adversary dispatch. POL-005 local mitigation. Upstream: drbothen/vsdd-factory#448. | orchestrator | mitigated-local |
 | F-DW-IMPL-001 | HIGH | execute-against-baseline premise-tracing gap. Upstream: drbothen/vsdd-factory#620. | orchestrator | filed upstream |
 | DRIFT-DOCS-LOG-LEVEL | LOW | docs/* cite log_level but config.Config rejects it (E-CFG-005). | technical-writer | open |
@@ -181,11 +181,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence IN PROGRESS. R5 (2026-07-23) was NOT CLEAN — Lens B 1 MED (F-LENSB-B-01 driver-lifecycle/provisioning-timing pin) + 2 LOW (F-LENSB-B-02 SendKeystroke no-session-validation, F-LENSB-B-03 recording-testing.TB stub); nitpicks A-L967 (note-only) + F-C-1 (changelog erratum). R5 findings REMEDIATED 2026-08-28: placement-note v1.8 @ `4c7abc2`, story v1.7 @ `8f86a8e0` (transcription + F-C-1 erratum, 17 ACs, input-hash 61e8091). Convergence counter 0/3. STORY-INDEX at v4.145, row (~L155) synced v1.1→v1.7 (POL-002 catch-up). develop unchanged @ af8eb17 (no code delivery this burst).
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 convergence IN PROGRESS. R6 (2026-08-28) NOT CLEAN — 1 BLOCKER + 1 MED (same defect: recordingTB nil-embed panic, Lens A+B converged) + 2 LOW (O-1 sessionName timing; F-LC-R6-001 changelog quote). Oracle GREEN. R6 findings REMEDIATED 2026-08-28: placement-note v1.9 @ `c7b449b3` (recordingTB{TB: t} real-t embed + rationale correction, O-1 sessionName pin), story v1.8 @ `e171cbce` (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash 497607b). Convergence counter 0/3. STORY-INDEX at v4.146, row (~L155) synced v1.7→v1.8 (POL-002). develop unchanged @ af8eb17 (no code delivery this burst).
 
-**Next:** R6 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip `8f86a8e0` — needs 3 consecutive clean diverse-lens passes; any finding or edit resets the counter to 0. S-7.02 cycle-close disposition (3 [process-gap] candidates: narrowed-sweep-grep miss class 3rd instance; pr-manager step-9 branch-deletion mis-verify; post-convergence production-edit-without-reconverge) remains queued behind R6.
+**Next:** R7 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip `e171cbce` — needs 3 consecutive clean diverse-lens passes; any finding or edit resets the counter to 0. S-7.02 cycle-close disposition (3 [process-gap] candidates: narrowed-sweep-grep miss class 3rd instance; pr-manager step-9 branch-deletion mis-verify; post-convergence production-edit-without-reconverge) remains queued behind R7.
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch R6 adversarial re-review for S-BL.LOOPBACK-FULLSTACK against tip 8f86a8e0 (carry the POL-005 verification tuple).
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch R7 adversarial re-review for S-BL.LOOPBACK-FULLSTACK against tip e171cbce (carry the POL-005 verification tuple).
 
 ## Concurrent Cycles
 

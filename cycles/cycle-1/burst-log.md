@@ -1952,3 +1952,25 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-07-20 | **S-BL.DISCOVERY-WIRE Task 6a-6d CODE-COMPLETE (pre-Step-4.5) — worktree af91335 (12 commits, 9 files, 1828 ins); all 6 gates green; story v2.17; task6d ruling v1.0; FO(g) deferred.** | code-complete | develop @ 7fcf0cf. |
+
+---
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 R6 remediation index-sync (2026-08-28)
+
+**Context:** R6 adversarial re-review (3 diverse lenses A/B/C + §1.8 verification oracle) against reviewed tip story v1.7 @ `8f86a8e0`, note v1.8 @ `4c7abc2`, STORY-INDEX v4.145 @ `d3692a9a`. Verdict: NOT CLEAN — convergence counter stays 0/3.
+
+**Findings:** Oracle CLEAN (`go build`/`go vet` PASS; 11/11 shipped symbols EXIST-AS-CITED; 8/8 story-introduced symbols correctly ABSENT). Lens A: F-LENSA-R6-01 (MED, NEW) — recordingTB nil-embed panic at NewLoopback. Lens B: F-LENSB-B6-01 (BLOCKER, NEW) — same recordingTB stub (`&recordingTB{}`, nil embed) nil-panics at NewLoopback, crashing AC-016+AC-017 before failLoud; the "must NOT pass real t" rationale was wrong Go semantics (embedding real t is safe+required) + O-1 (LOW) sessionName storage/timing unpinned. Lens C: F-LC-R6-001 (LOW, NEW) — story v1.7 changelog misquoted the removed §H3 permissive latitude, zero live-spec impact. R5 fixes (F-LENSB-B-01/02/03, A-L967, F-C-1) all re-verified faithfully landed by all three lenses.
+
+**Fix:** All findings REMEDIATED 2026-08-28, batch architect→story-writer→state-manager: architect note v1.9 @ `c7b449b3` (BLOCKER `recordingTB{TB: t}` real-t embed + rationale correction; O-1 sessionName pin); story-writer story v1.8 @ `e171cbce` (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash `497607b`); state-manager (this burst) STORY-INDEX row v1.7→v1.8 (POL-002) + STATE.md checkpoint refresh.
+
+**Convergence counter:** 0/3 reset (BLOCKER + MED found this pass; last edit is now `e171cbce`).
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R6-2026-08-28.md`.
+
+**Next:** R7 adversarial re-review against tip `e171cbce` — needs 3 consecutive clean diverse-lens passes.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-07-21 | **S-BL.DISCOVERY-WIRE Step-4.5 exhaustive version-pin audit: story v2.27 / def6b7b (2 missed BC-2.03.001 PC-5 structural-variant pins v1.6→v1.7; all declared-input pins confirmed canonical); factory 075bfc0; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | v2.27-pin-audit | develop @ 7fcf0cf. |
