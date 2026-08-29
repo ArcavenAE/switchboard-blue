@@ -8,7 +8,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: story-writer
 timestamp: 2026-07-12T00:00:00Z
-version: "1.11"
+version: "1.12"
 phase: 2
 epic: E-1
 wave: backlog
@@ -20,7 +20,7 @@ inputs:
   - .factory/specs/verification-properties/VP-042.md
   - .factory/specs/architecture/ARCH-08-dependency-graph.md
   - .factory/specs/architecture/ARCH-03-routing-engine.md
-input-hash: "1145d15"
+input-hash: "b924eff"
 traces_to: .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md
 behavioral_contracts:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
@@ -54,7 +54,7 @@ cycle: v1.0.0-greenfield
 depends_on: []   # S-BL.TESTENV already MERGED (PR #110, 62e38d3) — this story extends its NewLoopback/LoopbackEnv API; it is not blocked on that story, it builds on shipped code
 blocks: []
 inputDocuments:
-  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.11 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4) + v1.3 R1 Re-Review Repair (B-F1/B-F2/B-F3/C-F1/C-F2) + v1.4 R2 Re-Review Repair (B-1/B-2/B-3/N-1) + v1.5 R3 Re-Review Repair (F-B-1/F-B-4/F-B-2/F-B-2b) + v1.6 R4 Re-Review Repair (F-B-LENSB-01/L-C-1/F-A-1) + v1.7 F-A-1 propagation + v1.8 R5 Re-Review Repair (F-LENSB-B-01/F-LENSB-B-02/F-LENSB-B-03/A-L967) + v1.9 R6 Re-Review Repair (BLOCKER — recordingTB stub embed-real-t fix; LOW — sessionName storage/timing pin) + v1.10 R7 Re-Review Repair (MED F-LENSB-01 — both tickers CreateSession-started, AC-017 single-goroutine-by-construction; LOW F-LENSB-02 — AC-017 fault reattributed to un-attached console key; t.Helper() line-ref erratum :460→:461) + v1.11 R8 slash-form line-ref repair (F-LENSA-01/F-ORACLE-01 — remaining slash-notation `t.Helper()` citation corrected). Where this story and the note diverge, the note governs.
+  - '.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md'   # v1.12 — BINDING. Q1-Q8 + Non-Goals + Package Impact + 5 Risks, PLUS Q4 Addendum (AC-001 Sign-off) + v1.2 Design Repair Addendum (B1/H1/H2/H3/M2/M4) + v1.3 R1 Re-Review Repair (B-F1/B-F2/B-F3/C-F1/C-F2) + v1.4 R2 Re-Review Repair (B-1/B-2/B-3/N-1) + v1.5 R3 Re-Review Repair (F-B-1/F-B-4/F-B-2/F-B-2b) + v1.6 R4 Re-Review Repair (F-B-LENSB-01/L-C-1/F-A-1) + v1.7 F-A-1 propagation + v1.8 R5 Re-Review Repair (F-LENSB-B-01/F-LENSB-B-02/F-LENSB-B-03/A-L967) + v1.9 R6 Re-Review Repair (BLOCKER — recordingTB stub embed-real-t fix; LOW — sessionName storage/timing pin) + v1.10 R7 Re-Review Repair (MED F-LENSB-01 — both tickers CreateSession-started, AC-017 single-goroutine-by-construction; LOW F-LENSB-02 — AC-017 fault reattributed to un-attached console key; t.Helper() line-ref erratum :460→:461) + v1.11 R8 slash-form line-ref repair (F-LENSA-01/F-ORACLE-01 — remaining slash-notation `t.Helper()` citation corrected) + v1.12 consistency-audit remediation (MAJOR — phantom branch `fix/vp-042-testenv-integrated-bench` corrected to the actual merged file, `internal/bench/keystroke_echo_testenv_bench_test.go`, `develop`, PR #121 @ `4c276d9`, `//go:build integration`-tagged; MAJOR — new "Verification Method (AC-013)" subsection binding `go test -tags integration` as the AC-013 verifier, `just bench` adjudicated out of scope; MINOR — Risks item 6 forward obligation for VP-042.md's Proof Harness Skeleton). Where this story and the note diverge, the note governs.
   - '.factory/specs/verification-properties/VP-042.md'
   - '.factory/specs/architecture/ARCH-08-dependency-graph.md'   # v2.13 — this story's merge finalizes the PROSPECTIVE pos-23 import-set amendment
   - '.factory/specs/architecture/ARCH-03-routing-engine.md'
@@ -69,7 +69,7 @@ backlog_origin:
 
 # S-BL.LOOPBACK-FULLSTACK: Full-Stack Loopback Testenv Extension for VP-042
 
-> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. **v1.3 (2026-07-22):** note v1.3 transcription + R1 story fixes applied (B-F1/B-F2/B-F3/A-M1/A-M2/A-L1/A-L2) — consistent with placement-note v1.3. **v1.4 (2026-07-22):** note v1.4 transcription + R2 story fixes applied (B-1 decodeRTID 2-value, B-3 AC-016 sound injection via onDownstreamTick seam, B-4 new AC-017 upstream-error-loud, A-N2/C-LOW1) — consistent with placement-note v1.4. **v1.5 (2026-07-22):** note v1.5 transcription + R3 story fixes applied (F-B-1 tick-free startLoopbackTicker + seam wiring, F-B-4 errCh dropped, F-1 decodeRTID/changelog, F-2/C task-ref, F-2/A AC-017 cross-ref) — consistent with placement-note v1.5. **v1.6 (2026-07-23):** note v1.7 transcription + R4 story repairs applied (F-B-LENSB-01 AC-017 direct-seam respec + onUpstreamTick() binding, F-A-1 RoundTrip doc-comment 1-value token) — consistent with placement-note v1.7. **v1.7 (2026-08-28):** note v1.8 transcription + R5 story repairs applied (F-LENSB-B-01 driver-lifecycle pin, F-LENSB-B-02 SendKeystroke no-validation, F-LENSB-B-03 recording testing.TB) — consistent with placement-note v1.8. **v1.8 (2026-08-28):** note v1.9 transcription + R6 story repairs applied (BLOCKER — the F-LENSB-B-03 `recordingTB` stub is corrected from `&recordingTB{}` (nil embed, nil-panics at construction) to `&recordingTB{TB: t}` (embeds the real enclosing `*testing.T`, required so `Helper`/`Cleanup`/`Fatalf` don't nil-panic; `Errorf` alone is overridden, so the enclosing test is never marked failed); LOW — `sessionName` storage/timing pin added to Design Constraints) — consistent with placement-note v1.9. **v1.9 (2026-08-28):** note v1.10 transcription + R7 story repairs applied (MED F-LENSB-01 — the upstream ticker's "MAY start at construction" latitude is WITHDRAWN; both tickers now start at `CreateSession` time, symmetric; AC-017's single-goroutine independence from ticker-start timing is TRUE BY CONSTRUCTION, closing a latent `go test -race` hazard on the unlocked `stub.errorfCalls` read; LOW F-LENSB-02 — AC-017's `ErrConsoleNotFound` is reattributed primarily to the un-attached `loopbackConsoleKey` per `internal/session/upstream.go:288-290`, with the empty `sessionName` demoted to a redundant second guarantee; erratum — two live-text `t.Helper()` citations corrected `:460`→`:461`) — consistent with placement-note v1.10. **v1.10 (2026-08-28):** note v1.11 transcription + R8 story repair applied (the third live `t.Helper()` citation corrected in SLASH notation, `testenv.go:384/460/475/528`→`384/461/475/528`, in the §M2 `recordingTB` struct-field comment — completing the `:460`→`:461` citation-class sweep the v1.9 space-colon erratum missed) — consistent with placement-note v1.11. **v1.11 (2026-08-28):** R11 spec-review repair (F-LENSA-R11-01 LOW / F-LENSC-R11-01) — this status-note ledger backfilled with the missing v1.10 entry (above) and extended with this v1.11 entry, restoring the per-version status-note convention; no design-content change, placement-note unchanged (v1.11) — consistent with placement-note v1.11. Do not implement from Q4's original code blocks alone — the Addendum and v1.2/v1.3/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/**v1.10/v1.11** corrections govern.
+> **Status note:** This story is authored to full spec but is deliberately **draft / unscheduled** per human disposition (2026-07-12) — "author now, deliver later." AC-001 (the `arq.OnAck` sign-off gate) is **DISCHARGED** (2026-07-12, verdict REVISED — see AC-001 below): the value convention is confirmed, and implementation is bound to the single-shared-instance topology from the Q4 Addendum. **v1.2 (2026-07-22):** adversarial spec-review repairs applied (B1/H1/H2/H3/M1/M2/M3/M4 + LOW) — consistent with placement-note v1.2. **v1.3 (2026-07-22):** note v1.3 transcription + R1 story fixes applied (B-F1/B-F2/B-F3/A-M1/A-M2/A-L1/A-L2) — consistent with placement-note v1.3. **v1.4 (2026-07-22):** note v1.4 transcription + R2 story fixes applied (B-1 decodeRTID 2-value, B-3 AC-016 sound injection via onDownstreamTick seam, B-4 new AC-017 upstream-error-loud, A-N2/C-LOW1) — consistent with placement-note v1.4. **v1.5 (2026-07-22):** note v1.5 transcription + R3 story fixes applied (F-B-1 tick-free startLoopbackTicker + seam wiring, F-B-4 errCh dropped, F-1 decodeRTID/changelog, F-2/C task-ref, F-2/A AC-017 cross-ref) — consistent with placement-note v1.5. **v1.6 (2026-07-23):** note v1.7 transcription + R4 story repairs applied (F-B-LENSB-01 AC-017 direct-seam respec + onUpstreamTick() binding, F-A-1 RoundTrip doc-comment 1-value token) — consistent with placement-note v1.7. **v1.7 (2026-08-28):** note v1.8 transcription + R5 story repairs applied (F-LENSB-B-01 driver-lifecycle pin, F-LENSB-B-02 SendKeystroke no-validation, F-LENSB-B-03 recording testing.TB) — consistent with placement-note v1.8. **v1.8 (2026-08-28):** note v1.9 transcription + R6 story repairs applied (BLOCKER — the F-LENSB-B-03 `recordingTB` stub is corrected from `&recordingTB{}` (nil embed, nil-panics at construction) to `&recordingTB{TB: t}` (embeds the real enclosing `*testing.T`, required so `Helper`/`Cleanup`/`Fatalf` don't nil-panic; `Errorf` alone is overridden, so the enclosing test is never marked failed); LOW — `sessionName` storage/timing pin added to Design Constraints) — consistent with placement-note v1.9. **v1.9 (2026-08-28):** note v1.10 transcription + R7 story repairs applied (MED F-LENSB-01 — the upstream ticker's "MAY start at construction" latitude is WITHDRAWN; both tickers now start at `CreateSession` time, symmetric; AC-017's single-goroutine independence from ticker-start timing is TRUE BY CONSTRUCTION, closing a latent `go test -race` hazard on the unlocked `stub.errorfCalls` read; LOW F-LENSB-02 — AC-017's `ErrConsoleNotFound` is reattributed primarily to the un-attached `loopbackConsoleKey` per `internal/session/upstream.go:288-290`, with the empty `sessionName` demoted to a redundant second guarantee; erratum — two live-text `t.Helper()` citations corrected `:460`→`:461`) — consistent with placement-note v1.10. **v1.10 (2026-08-28):** note v1.11 transcription + R8 story repair applied (the third live `t.Helper()` citation corrected in SLASH notation, `testenv.go:384/460/475/528`→`384/461/475/528`, in the §M2 `recordingTB` struct-field comment — completing the `:460`→`:461` citation-class sweep the v1.9 space-colon erratum missed) — consistent with placement-note v1.11. **v1.11 (2026-08-28):** R11 spec-review repair (F-LENSA-R11-01 LOW / F-LENSC-R11-01) — this status-note ledger backfilled with the missing v1.10 entry (above) and extended with this v1.11 entry, restoring the per-version status-note convention; no design-content change, placement-note unchanged (v1.11) — consistent with placement-note v1.11. **v1.12 (2026-08-28):** consistency-audit remediation (POL-005 dispatch, `.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`) — consistent with placement-note v1.12. MAJOR (Finding #1) — every live-prose citation of the phantom branch `fix/vp-042-testenv-integrated-bench` (Story-Sizing Rationale, Q2 Design Constraints, AC-013, Package Impact Summary, Token Budget, Task 10, Previous Story Intelligence, File Structure Requirements) corrected to the actual merged state: `internal/bench/keystroke_echo_testenv_bench_test.go` is MERGED on `develop` (PR #121 @ `4c276d9`), `//go:build integration`-tagged, defines `BenchmarkKeystrokeToEcho_P99`; the branch was never real. MAJOR (Finding #2) — AC-013's verification method corrected from bare `go build ./internal/bench/...` + `just bench` (neither reaches the integration-tagged benchmark) to the binding `go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/` invocation; `just bench` explicitly adjudicated OUT of AC-013's scope (it runs the separate, untagged `BenchmarkKeystrokeEcho_P99` lower-bound function — S-BL.BENCH's recipe, unaffected by this story). MEDIUM (Finding #3) — the Previous Story Intelligence row for S-BL.PE-RECEIVE-LOOP's line-number-citation claim reconciled to as-practiced reality: self-referential story-symbol/story-line-number citations are forbidden, but disk-verified external-source anchors (`internal/session/upstream.go:288-290`, `internal/testenv/testenv.go:461`) are permitted and practiced throughout this story. MINOR (Finding #4) — new File Structure Requirements row encoding the forward obligation that this story's binding API shape supersedes VP-042.md's Proof Harness Skeleton (placement note Risks item 6). Do not implement from Q4's original code blocks alone — the Addendum and v1.2/v1.3/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10/v1.11/**v1.12** corrections govern.
 
 ## Narrative
 
@@ -97,7 +97,7 @@ a testenv-integrated measurement post S-BL.TESTENV."
 
 This story is that testenv-integrated measurement. It is scoped and designed entirely by the architect
 design note listed as this story's binding input
-(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.11) — **story-writer's job here is
+(`.factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md` v1.12) — **story-writer's job here is
 transcription, not re-derivation.** Where this story and the placement note appear to diverge, the note
 governs; where this story and VP-042.md's older proof-harness skeleton diverge (the skeleton's two-call
 `env.SendKeystroke`/`env.WaitForEcho` shape vs. this story's token-based `RoundTrip` API), the placement
@@ -128,7 +128,7 @@ The placement note's own estimate is 5–8 points, broken down as: tick-driving 
 small — a direct copy of an idiom already used twice in `testenv.go` (`AttachConsole`/`AttachProbe`)
 and twice more in `cmd/switchboard/access.go`; multipath wiring (Q3, Q7) is low-risk — small,
 well-tested pure APIs, a few lines of synthetic path construction; the round-trip-token API (Q5)
-touches the WIP bench test and VP-042.md's skeleton, small but real fan-out. **The ARQ wiring (Q4) is
+touches the merged bench test and VP-042.md's skeleton, small but real fan-out. **The ARQ wiring (Q4) is
 the size and risk driver** — it commits to a call contract (`arq.OnAck`'s `ackSeq` semantics) that has
 no existing production precedent to copy, and the note itself flags that commitment as needing
 architect/adversarial sign-off before an implementer treats it as settled (Risk 1 below).
@@ -138,9 +138,11 @@ placement note's own text: (1) AC-001 is a hard pre-implementation gate, not jus
 real process latency before `dev-story` can properly start, which the note's code-size-only estimate
 doesn't price in; (2) four of the five Risks (not just Risk 1) resolve into their own gating or
 decision-bearing ACs (AC-009, AC-010, AC-011) rather than being absorbed silently into the main
-implementation tasks; (3) the WIP bench cross-reference (Package Impact, `internal/bench` row) is real
-fan-out into a file on a different branch (`fix/vp-042-testenv-integrated-bench`), which is coordination
-overhead the tick/multipath/token estimate doesn't include.
+implementation tasks; (3) the merged-bench cross-reference (Package Impact, `internal/bench` row) is real
+fan-out into an already-merged, `//go:build integration`-tagged file
+(`internal/bench/keystroke_echo_testenv_bench_test.go`, `develop`, PR #121 @ `4c276d9`) that must be
+updated in place to the new token-based API shape, which is coordination overhead the tick/multipath/token
+estimate doesn't include.
 
 **AC-001 gate resolved pre-scheduling (2026-07-12):** the gate priced into reason (1) has now been
 discharged — verdict REVISED (single shared `*arq.ARQ` instance required; see AC-001) — before this
@@ -173,8 +175,9 @@ re-derived here; where a code sketch is reproduced, it is the note's sketch, not
 
 A new unexported `loopbackDriver` type lives inside `internal/testenv`, owned by `LoopbackEnv`.
 `SendKeystroke`/`WaitForEcho`/`CreateSession` are **new methods on `*LoopbackEnv`**, not on `*Env`.
-`LoopbackEnv` is `struct { Env *Env }` — a named field, not Go embedding (confirmed: the existing WIP
-bench test does `env := lb.Env; env.CreateSession(b)`, never `lb.CreateSession(b)`) — so new
+`LoopbackEnv` is `struct { Env *Env }` — a named field, not Go embedding (confirmed: the existing merged
+bench test (`internal/bench/keystroke_echo_testenv_bench_test.go`, `develop`, PR #121 @ `4c276d9`) does
+`env := lb.Env; env.CreateSession(b)`, never `lb.CreateSession(b)`) — so new
 `*LoopbackEnv` methods do not collide with or shadow `*Env`'s method set.
 
 **[H3 — v1.3] Console provisioning (required for upstream happy path).** `AccessNode.SendKeystroke`
@@ -940,20 +943,34 @@ returned. No `Close()` method is added to `LoopbackEnv`.
 `sync.WaitGroup`-based join-confirmation, with a bounded timeout guarding against a hang (matching the
 existing `AttachConsole`/`AttachProbe` leak-check pattern in this package).
 
-### AC-013 (traces to Package Impact — WIP bench cross-reference)
+### AC-013 (traces to Package Impact — merged bench cross-reference)
 
-`internal/bench/keystroke_echo_testenv_bench_test.go` on branch `fix/vp-042-testenv-integrated-bench` is
-updated from its current two-call `env.SendKeystroke`/`env.WaitForEcho` shape (the VP-042.md skeleton
-shape, now superseded — see Context) to the token-based shape:
-`rt := lb.SendKeystroke(b, sessionID, "x"); payload, ok := lb.WaitForEcho(b, rt, 500*time.Millisecond)`.
-The call matches the shipped `NewLoopback` signature order (ctx, b, LoopbackConfig) and the H1
-two-value `WaitForEcho` return. The package comment's "lower bound only" framing (inherited from
-S-BL.BENCH's honest-partial-evidence disclosure) is retired once this full stack lands, since the
-divergence it disclosed (bypassing arq/multipath/tick-scheduling) no longer exists.
+`internal/bench/keystroke_echo_testenv_bench_test.go` (merged on `develop`, PR #121 @ `4c276d9`,
+`//go:build integration`-tagged) is updated from its current two-call `env.SendKeystroke`/
+`env.WaitForEcho` shape (the VP-042.md skeleton shape, now superseded — see Context) to the token-based
+shape: `rt := lb.SendKeystroke(b, sessionID, "x"); payload, ok := lb.WaitForEcho(b, rt,
+500*time.Millisecond)`. The call matches the shipped `NewLoopback` signature order (ctx, b,
+LoopbackConfig) and the H1 two-value `WaitForEcho` return. The package comment's "lower bound only"
+framing (inherited from S-BL.BENCH's honest-partial-evidence disclosure) is retired once this full stack
+lands, since the divergence it disclosed (bypassing arq/multipath/tick-scheduling) no longer exists.
 
-**Test:** no new test — this AC is a modification of an existing benchmark file. Verification is that
-`go build ./internal/bench/...` succeeds against the new `LoopbackEnv` API and `just bench` runs the
-updated benchmark to completion, producing a `p99_rtt_ms` metric.
+**Test:** no new test — this AC is a modification of an existing benchmark file. **Verification Method
+(binding per placement note v1.12):** AC-013 verifies via the direct invocation the merged file's own doc
+comment already prescribes — not a bare `go build`, and not `just bench`. Compile with the required build
+tag: `go build -tags integration ./internal/bench/...` (and/or `go vet -tags integration
+./internal/bench/...`) — a bare `go build` (no `-tags integration`) excludes this file from the build
+entirely and verifies nothing about `BenchmarkKeystrokeToEcho_P99`. Then run:
+
+```sh
+go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 \
+    -benchtime=1x -count=1 ./internal/bench/
+```
+
+producing the `p99_rtt_ms` metric via `b.ReportMetric`. **`just bench` is explicitly OUT of AC-013's
+scope** (`justfile:53-66`) — it runs the separate, untagged `BenchmarkKeystrokeEcho_P99` (no "To") defined
+in `keystroke_echo_bench_test.go`, the S-BL.BENCH tag-free lower-bound recipe; it structurally cannot run
+`BenchmarkKeystrokeToEcho_P99` (different build-tag gate, different function name), runs today unaffected
+by this story, and verifies nothing this story changes.
 
 ### AC-014 (regression guard, added 2026-07-12; traces to AC-001 Q4 Addendum)
 
@@ -1164,7 +1181,7 @@ Transcribed from the placement note. This story does NOT implement:
 | `internal/arq` | None — read-only consumer (`New`, `EnqueueSend`, `OnAck`); first production-adjacent call site for `OnAck` (AC-001) | No |
 | `internal/multipath` | None — read-only consumer (`NewMultipath`, `Send`, `Receive`) | No |
 | `internal/paths` | None — read-only consumer (`NewPathTracker`, `RankedPath`) | No |
-| `internal/bench` | `keystroke_echo_testenv_bench_test.go` (branch `fix/vp-042-testenv-integrated-bench`) updated to the token-based two-call shape; "lower bound only" framing retired (AC-013) | No |
+| `internal/bench` | `keystroke_echo_testenv_bench_test.go` (merged on `develop`, PR #121 @ `4c276d9`, `//go:build integration`-tagged) updated to the token-based two-call shape; "lower bound only" framing retired (AC-013) | No |
 
 **No new `internal/` package.** ARCH-08 registration is the import-set amendment already applied
 (v2.13, DRAFT/PROSPECTIVE) — it becomes final at this story's merge per the same machine-verification
@@ -1179,7 +1196,7 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 | This story spec | ~9k |
 | Placement note (binding input, full read required) | ~6k |
 | Referenced production code (`testenv.go`, `halfchannel.go`, `arq.go`, `multipath.go`, `paths.go` — read-only consumer surfaces) | ~7k |
-| Test infrastructure context (existing `testenv` patterns, WIP bench test) | ~3k |
+| Test infrastructure context (existing `testenv` patterns, merged bench test) | ~3k |
 | **Total implementing-agent context** | **~25k — well within 20–30% of a 200k context window. No story split required.** |
 
 ## Tasks (MANDATORY)
@@ -1221,8 +1238,8 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 9. [ ] Implement synthetic path construction — two `paths.RankedPath`s per direction backed by
    `paths.NewPathTracker(1.0, 0.125)`, plus the `PathTracker.IsActive()` initial-state assertion (Q7,
    AC-010).
-10. [ ] Wire the `driver.pending`-empty `t.Cleanup` safeguard (AC-011); update
-    `keystroke_echo_testenv_bench_test.go` on `fix/vp-042-testenv-integrated-bench` to the token-based
+10. [ ] Wire the `driver.pending`-empty `t.Cleanup` safeguard (AC-011); update the merged
+    `keystroke_echo_testenv_bench_test.go` (`develop`, PR #121 @ `4c276d9`) to the token-based
     shape (AC-013).
 11. [ ] Implement the regression guard against reintroducing the two-instance `arqServer`/`arqClient`
     shape (AC-014): a behavioral test that a full `SendKeystroke`/`WaitForEcho` round trip actually
@@ -1249,9 +1266,9 @@ protocol used for every prior testenv import-set change (v2.5, v2.8, v2.11).
 
 | Predecessor | Lesson carried forward |
 |-------------|--------------------------|
-| S-BL.TESTENV (merged PR #110, `62e38d3`) | Ships the `NewLoopback`/`LoopbackConfig`/`LoopbackEnv` skeleton this story extends. `LoopbackEnv` is a named field (`struct { Env *Env }`), not embedding — confirmed via the existing WIP bench call shape `env := lb.Env; env.CreateSession(b)`. |
+| S-BL.TESTENV (merged PR #110, `62e38d3`) | Ships the `NewLoopback`/`LoopbackConfig`/`LoopbackEnv` skeleton this story extends. `LoopbackEnv` is a named field (`struct { Env *Env }`), not embedding — confirmed via the existing merged bench call shape (`internal/bench/keystroke_echo_testenv_bench_test.go`, `develop`, PR #121 @ `4c276d9`) `env := lb.Env; env.CreateSession(b)`. |
 | S-BL.BENCH (merged PR #109, `cd67394`) | VP-042 partial evidence already recorded (in-process loopback echo p99 ~0.002ms) is an honest LOWER-BOUND-ONLY measurement — declared divergence: the inline echo path bypasses arq/multipath/tick-scheduling. This story removes that divergence. |
-| S-BL.PE-RECEIVE-LOOP (merged PR #118, `e940fc2`) | Established the `env.wg`/`env.closeCh`-registered ticker-goroutine idiom as house convention for test goroutines needing deterministic teardown — `startLoopbackTicker` (Q6) reuses the identical shape. Also: every new symbol claim must be grep-resolved or marked "(new — defined by this story)"; line-number citations are forbidden in story prose — use mechanism-anchor descriptions (both followed in this story). |
+| S-BL.PE-RECEIVE-LOOP (merged PR #118, `e940fc2`) | Established the `env.wg`/`env.closeCh`-registered ticker-goroutine idiom as house convention for test goroutines needing deterministic teardown — `startLoopbackTicker` (Q6) reuses the identical shape. Also: every new symbol claim must be grep-resolved or marked "(new — defined by this story)"; self-referential story-symbol/story-line-number citations are forbidden in story prose — use mechanism-anchor descriptions for anything this story itself defines. Disk-verified external-source line-number anchors remain permitted and are practiced throughout this story's Design Constraints (e.g. `internal/session/upstream.go:288-290`, `internal/testenv/testenv.go:461`) — both conventions followed in this story. |
 | VP-042.md v1.3 | The VP's own proof-harness skeleton (`env.SendKeystroke`/`env.WaitForEcho`, no token) is directionally correct but superseded by this story's `RoundTrip`-token two-call shape (Q5) — the skeleton predates the discovery that a token is required to fix `CollectFrames`'s accumulation short-circuit. |
 
 ## Architecture Compliance Rules (MANDATORY)
@@ -1275,8 +1292,9 @@ consumption). No new external dependency.
 |------|--------|
 | `internal/testenv/loopback.go` (new — implementer's choice of filename, or inline in `testenv.go`) | `loopbackDriver` (with `upstreamHCMu`/`downstreamHCMu` — H2; `onDownstreamTick()` seam — v1.4 B-3/AC-016; `onUpstreamTick()` seam — v1.6 F-B-LENSB-01/AC-017), `RoundTrip` (`done chan []byte` — H1), `loopbackSink`, `LoopbackEnv.SendKeystroke`/`WaitForEcho`/`CreateSession` (returns `([]byte,bool)` — H1; provisions console — H3), `startLoopbackTicker`, `newLoopbackPaths` (`DefaultDropCacheSize` — LOW), `toMPFrame`, `encodeRTID`, `decodeRTID`, `zeroSACK` (M4); `frameFor` REMOVED (H1/M4) |
 | `internal/testenv/testenv.go` | `NewLoopback` modified to wire halfchannel/arq/multipath/paths instead of discarding `LoopbackConfig` |
-| `internal/bench/keystroke_echo_testenv_bench_test.go` (branch `fix/vp-042-testenv-integrated-bench`) | Modified — token-based two-call shape (AC-013); "lower bound only" comment retired |
+| `internal/bench/keystroke_echo_testenv_bench_test.go` (merged on `develop`, PR #121 @ `4c276d9`, `//go:build integration`-tagged) | Modified — token-based two-call shape (AC-013); "lower bound only" comment retired |
 | `.factory/specs/architecture/ARCH-08-dependency-graph.md` | §6.5 pos-23 row: PROSPECTIVE → machine-verified at merge (architect/implementer act at merge time, not a story-writer edit) |
+| `.factory/specs/verification-properties/VP-042.md` (Proof Harness Skeleton section) — **Forward Obligation, not this story's own edit** | This story's binding `RoundTrip`-token two-call API shape (Q5) supersedes VP-042.md's existing Proof Harness Skeleton (its `env.SendKeystroke`/`env.WaitForEcho` two-call form predates the discovery that a token is required to fix `Env.CollectFrames`'s accumulation short-circuit — see Context, Non-Goals). Per placement note v1.12 Risks item 6: a downstream act (PO/architect, alongside or following the `verification_lock` decision — see Forward Obligation below) MUST update VP-042.md's skeleton to the binding two-call token shape (`SendKeystroke` → `RoundTrip`; `WaitForEcho(t, rt, timeout) ([]byte, bool)`), so a future reader of VP-042.md is not misled by a skeleton the shipped code no longer matches. This is a forward obligation on VP-042.md, not a new AC of this story. |
 
 ---
 
@@ -1299,12 +1317,19 @@ compiles and its own tests pass." Do not treat this story's merge, by itself, as
 This mirrors how VP-042's own history table already distinguishes "audited"/"partial evidence" entries
 from a lock flip.
 
+**Second forward obligation (placement note v1.12 Risks item 6):** this story's binding `RoundTrip`-token
+API shape (Q5) supersedes VP-042.md's existing Proof Harness Skeleton — see the File Structure
+Requirements row above. Updating that skeleton section is likewise a separate, subsequent PO/architect
+act, not part of this story's own Definition of Done; it may be bundled with the `verification_lock`
+decision above or done independently.
+
 ---
 
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.12 | 2026-08-28 | Consistency-audit remediation (POL-005 dispatch, `.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`), propagating architect placement-note v1.12's repair into this story body. MAJOR (Finding #1) — every live-prose citation of the phantom branch `fix/vp-042-testenv-integrated-bench` (11 occurrences: Story-Sizing Rationale ×2, Q2 Design Constraints, AC-013 header + body, Package Impact Summary, Token Budget Estimate, Task 10, Previous Story Intelligence S-BL.TESTENV row, File Structure Requirements) corrected to the actual merged state — `internal/bench/keystroke_echo_testenv_bench_test.go` is MERGED on `develop` (PR #121 @ `4c276d9`), `//go:build integration`-tagged, defines `BenchmarkKeystrokeToEcho_P99`; the branch was never real. MAJOR (Finding #2) — AC-013's "Verification Method" rewritten: the prior bare `go build ./internal/bench/...` + `just bench` framing is wrong on both counts (neither reaches the integration-tagged function); replaced with the binding `go build -tags integration ./internal/bench/...` compile check + `go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/` run, producing `p99_rtt_ms`; explicit adjudication recorded that `just bench` stays the tag-free S-BL.BENCH lower-bound recipe, out of AC-013's scope. MEDIUM (Finding #3) — the Previous Story Intelligence row for S-BL.PE-RECEIVE-LOOP's "line-number citations are forbidden in story prose" claim was inaccurate (this story contains disk-verified external-source citations like `internal/session/upstream.go:288-290` and `internal/testenv/testenv.go:461`, deliberately maintained across R7/R8); reconciled to distinguish forbidden self-referential story-symbol/story-line-number citations from permitted, practiced disk-verified external-source anchors. MINOR (Finding #4) — new File Structure Requirements row + Forward Obligation section paragraph encoding the forward obligation (placement note Risks item 6) that this story's binding two-call token API shape (`SendKeystroke` → `RoundTrip`; `WaitForEcho(t, rt, timeout) ([]byte, bool)`) supersedes VP-042.md's Proof Harness Skeleton, to be updated by a separate downstream PO/architect act — not a new AC. `inputDocuments`/Context section note-version pin updated v1.11→v1.12; status note blockquote gains a v1.12 entry. AC count 17 unchanged (spec-correctness repairs, not scope growth). Points 8 unchanged. Input-hash recomputed (declared input `S-BL.LOOPBACK-FULLSTACK-placement-note.md` content changed v1.11→v1.12). Consistent with placement-note v1.12. |
 | 1.11 | 2026-08-28 | R11 spec-review repair (F-LENSA-R11-01 LOW / F-LENSC-R11-01, corroborated by two fresh lenses). The top-of-story status-note blockquote (L72) version-ledger was one revision behind the document's own version — it carried entries through v1.9 but not the v1.10 revision, and its closing "corrections govern" enumeration ended at v1.9, contradicting frontmatter version 1.10. Restored the per-version status-note convention: backfilled the missing v1.10 entry (mirroring this table's v1.10 row) and added a v1.11 entry for this repair; extended the enumeration to …/v1.9/v1.10/v1.11. No design-content change; placement-note untouched (stays v1.11); inputDocuments/Context pins unchanged. Status note blockquote updated with v1.10 (backfill) + v1.11 entries. AC count 17 unchanged. Points 8 unchanged. Input-hash 1145d15 (unchanged — declared inputs byte-identical). Consistent with placement-note v1.11. |
 | 1.10 | 2026-08-28 | Transcribe note v1.11 R8 repair (F-LENSA-01/F-ORACLE-01). Corrected the third live `t.Helper()` citation in SLASH notation (`testenv.go:384/460/475/528` → `384/461/475/528`) in the `recordingTB` struct-field comment (~L545) — missed by the v1.9 `:460`→`:461` erratum, which only caught the space-colon form. Completes the citation-class sweep. inputDocuments/Context pins → note v1.11. Input-hash recomputed. AC count 17 unchanged. Consistent with placement-note v1.11. |
 | 1.9 | 2026-08-28 | Transcribe note v1.10 + R7 story repairs (F-LENSB-01/F-LENSB-02). F-LENSB-01 (MED) — the §M2 "Mitigation decision" and "Driver lifecycle pin" (§H3) are corrected: the "upstream ticker MAY start at construction" / "start-time freedom PRESERVED" latitude ([v1.6 F-B-LENSB-01]) is WITHDRAWN — the upstream ticker now starts at `CreateSession` time, SYMMETRIC with the downstream ticker (both tickers, race-free for the same single-goroutine reason, no `EnqueueSend` dependency blocking either). The "Driver lifecycle pin" sentence and the "Steps 1–3" cross-reference sentence are updated so `CreateSession` is described as starting BOTH tickers, not just the downstream one. AC-017's "single-goroutine throughout" method text (Design Constraints "Required upstream seam" paragraph, and AC-017 body steps 1/4/closing sentence) is sharpened to TRUE BY CONSTRUCTION: because AC-017 never calls `CreateSession` (the sole start-site for both tickers), no ticker goroutine of either kind can run during the test; the test's direct synchronous `onUpstreamTick()` call is therefore the sole driver, so the assertion's unlocked read of `len(stub.errorfCalls)` observes no concurrent writer — closing a latent `go test -race` hazard the prior construction-start latitude permitted (the outcome count was always 1; the hazard was a race annotation on the read, not a wrong assertion value). F-LENSB-02 (LOW) — the §H3 `sessionName` storage/timing pin is corrected: AC-017's `ErrConsoleNotFound` is caused PRIMARILY by the un-attached, zero-value `loopbackConsoleKey` (`AccessNode.SendKeystroke`, `internal/session/upstream.go:288-290`, gates on console attachment BEFORE comparing `sessionName` at line 292), not by the empty `sessionName`, which is demoted to a redundant second guarantee. Erratum — two live-text citations of `t.Helper()`'s line number corrected from `:460` to the disk-verified `:461` (`internal/testenv/testenv.go`) at the `recordingTB` struct comment and the "Why embedding the real `t` is required" prose paragraph; the frozen v1.8 changelog row's `:460` citation is untouched per §2.9. `inputDocuments` pin and Context section note-version updated v1.9→v1.10. AC count: 17 (unchanged — both fixes are corrections to existing AC-017 body and Design Constraints prose, no new ACs). Points: 8 (unchanged — spec-correctness repairs, not scope growth). Status note blockquote updated with a v1.9 entry. Input-hash recomputed (`497607b` → `89d5e3c`; note content changed v1.9→v1.10, computed via rc.24 `compute-input-hash`). Consistent with placement-note v1.10. |
