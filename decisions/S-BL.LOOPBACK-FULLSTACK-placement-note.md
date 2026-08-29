@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.13"
+version: "1.14"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.14 | R18 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R18-LENSC-01) — four live-prose citations of a stale naked `L256` line number as "the per-direction-mutex binding rule" (§H2 concrete-shape wiring note; §F-B-1 defect/fix narrative ×2; the v1.5 "Ground truth source" line) de-anchored: `L256` on disk is `loopbackSink.SendInput`'s doc comment, unrelated to the mutex rule. All four replaced with a mechanism anchor — "the §H2 per-direction-mutex binding rule (every `Enqueue`/`Tick` call site acquires the corresponding mutex)" — carrying no naked line number, per the story's L62 no-self-referential-line-citation convention; the co-located valid `§H2` anchors (including the `onDownstreamTick` cross-reference) are preserved. Whole-file grep found no other naked `L<digits>` binding-rule citations in live prose. MED (F-R18-LENSB-01) — Q3's upstream-flow design corrected: `multipath.Send` (`multipath.go:244-286`) returns `nil` whenever `sent >= 1`, and the upstream duplicate-and-race dispatch (two paths, Q7) always has at least one path's `deliverUpstream` call return `nil` via the dedup `ErrDuplicate` short-circuit (`multipath.go:323`) even when the delivering path's `accessNode.SendKeystroke` call fails — so a `failLoud` check placed on `upstreamMP.Send`'s return value in `onUpstreamTick()` can never observe the masked per-path error. Corrected the Q3 pseudocode/prose and the AC-017 fault-injection procedure (step 3) to pin `failLoud` to the IN-PLACE `SendKeystroke` error site inside `deliverUpstream` — symmetric with §M2's already-correct in-place downstream `OnAck` check — while `deliverUpstream` still returns the error afterward so `multipath.Send`'s `SendResult{Sent:false}` accounting and the all-paths-failed `sent==0` wrapped error are preserved; documented why exactly one `failLoud` call fires (only the delivering path ever reaches `SendKeystroke`) and why the post-`Send` placement is unsound (the masking rationale). Downstream (`OnAck`) description untouched — already correct. See "v1.14 R18 Reconvergence Repair (2026-08-28)" section. |
 | 1.13 | R15 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R15-LENSB-01) — the v1.12 "### Verification Method (AC-013)" subsection's compile-check bullet was itself vacuous and its causal claim wrong. `internal/bench/` is a TEST-ONLY package (both files are `_test.go`); `go build` never compiles `_test.go` files, WITH OR WITHOUT `-tags integration` — the tag is irrelevant to the exclusion, so the prescribed `go build -tags integration ./internal/bench/...` compile-check verified nothing (empirically confirmed: exits 0 even with a deliberately injected compile error in the tagged file). Replaced with `go test -tags integration -run '^$' -count=1 ./internal/bench/` (Option (a) below) as the binding compile-gate — empirically confirmed to fail (exit 1) against the same injected error, while the untagged form does not see it. Causal claim corrected: exclusion is because the file is a test file, not because the tag is absent. See "v1.13 R15 Reconvergence Repair (2026-08-28)" section. |
 | 1.12 | Consistency-audit remediation (2026-08-28, POL-005 dispatch, `.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`): MAJOR (Finding #1) — every live-text citation of the phantom branch `fix/vp-042-testenv-integrated-bench` (three occurrences: §Q2 ~L130, Package Impact Summary ~L613, Risks item 3 ~L642-643) corrected to reflect the actual merged state — `internal/bench/keystroke_echo_testenv_bench_test.go` is MERGED on `develop` (PR #121 @ `4c276d9`, `//go:build integration`-tagged, defines `BenchmarkKeystrokeToEcho_P99`); the branch was never real. MAJOR (Finding #2) — added a new "### Verification Method (AC-013)" subsection specifying the correct verification: `go build -tags integration ./internal/bench/...` (compile) + `go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/` (run), replacing the prior incorrect framing (bare `go build` + `just bench`, neither of which can reach the integration-tagged function); explicit adjudication recorded: `just bench` stays the tag-free S-BL.BENCH lower-bound recipe, out of AC-013's scope (Option (a)). MINOR (Finding #4) — added Risks item 6, a forward obligation for story-writer to encode a File-List obligation updating VP-042.md's Proof Harness Skeleton to the binding two-call token shape. See "v1.12 Consistency-Audit Repair (2026-08-28)" section. |
 | 1.11 | R8 re-review repair (2026-08-28): LOW (F-LENSA-01) / NITPICK (F-ORACLE-01) — the v1.10 erratum corrected the two SPACE-COLON `t.Helper()` citations `:460`→`:461`, but a THIRD live citation in SLASH notation (`testenv.go:384/460/475/528`, the `recordingTB` struct-field comment at §M2 ~L1463) survived uncorrected; now corrected to `384/461/475/528`. The v1.10 "two citations" accounting was complete for the space-colon form but the class also included the slash form; this completes the class sweep. Frozen v1.10 row/section left as-is per §2.9; ground truth `internal/testenv/testenv.go:461`. See "v1.11 R8 Re-Review Repair (2026-08-28)" section. |
@@ -201,9 +202,39 @@ driver.upstreamMP.Receive(mpFrame)     // endpoint checksum dedup, multipath.go:
 driver.accessNode.SendKeystroke(loopbackConsoleKey, sessionName, mpFrame.Payload)
     │  internal/session/upstream.go:276 — authorizer check, sinkMu-serialized,
     │  synchronous call into the injected KeystrokeSink
+    │  ── error checked IN-PLACE here, inside deliverUpstream, symmetric
+    │     with §M2's downstream OnAck pattern: [v1.14]
+    │         if err := driver.accessNode.SendKeystroke(...); err != nil {
+    │             driver.failLoud(err)
+    │             return err   // still propagates to multipath.Send — see below
+    │         }
     ▼
 loopbackSink.SendInput(payload) error   // Q4
 ```
+
+**`failLoud` MUST be checked in-place at the `SendKeystroke` call site inside
+`deliverUpstream`, never at a call site after `upstreamMP.Send` returns
+[v1.14 F-R18-LENSB-01]:** `multipath.Send` (`multipath.go:244-286`) records
+each path's `fn` error only in a discarded `lastErr` local and a per-path
+`SendResult{Sent: bool}` that never carries the error value; it returns a
+wrapped error to its caller ONLY when every selected path failed
+(`sent == 0`, `multipath.go:283`) — when `sent >= 1` it returns `nil`. In the
+upstream duplicate-and-race dispatch (two paths per Q7), the delivering
+path's `deliverUpstream` call reaches `SendKeystroke` and can fail, while the
+dedup sibling's `Receive` call returns `ErrDuplicate` (`multipath.go:323`)
+and `deliverUpstream` returns `nil` WITHOUT ever calling `SendKeystroke` —
+so `sent` is always at least 1 from the dedup path alone, `multipath.Send`
+always returns `nil` to `onUpstreamTick()`, and a failLoud check placed on
+`Send`'s return value in the tick body can NEVER observe the masked
+per-path error. This reintroduces the exact SOUL.md §4 silent-failure
+`OnAck` swallowed silently before §M2's fix. Because only ONE path (the
+first-arriving, delivering path) ever reaches `SendKeystroke` — the dedup
+sibling returns before `SendKeystroke` is called — `failLoud` fires exactly
+once per failing tick, consistent with AC-017's "exactly one `Errorf` call"
+assertion, and `deliverUpstream` still returns the error afterward so
+`multipath.Send`'s `SendResult{Sent: false}` accounting (and the
+all-paths-failed `sent == 0` wrapped-error path) is preserved — `failLoud`
+is additive to the return, not a replacement for it.
 
 **`SendKeystroke` performs no session-existence validation [v1.8 F-LENSB-B-02]:**
 The first step above — mint `RoundTrip`, register `driver.pending[id]`, encode
@@ -458,7 +489,8 @@ func startLoopbackTicker(
 **Wiring (v1.5 F-B-1):** the upstream ticker's `tickBody` is `d.onUpstreamTick`
 and the downstream ticker's `tickBody` is `d.onDownstreamTick`. Each seam method
 owns its half-channel's `Tick()` call under the corresponding per-direction mutex
-(per §H2 and L256 binding rule), so every `Tick()` is mutex-guarded regardless
+(per the §H2 per-direction-mutex binding rule — every `Enqueue`/`Tick` call site
+acquires the corresponding mutex), so every `Tick()` is mutex-guarded regardless
 of how the goroutine invokes the body.
 
 This is the same lifecycle shape as `cmd/switchboard/access.go:460`
@@ -1503,9 +1535,21 @@ and SYNCHRONOUSLY, exactly as AC-016 invokes `onDownstreamTick()` directly:
    exist at any point in this test.
 2. Call `SendKeystroke` before `CreateSession` — this enqueues a payload into
    `upstreamHC` (no console registered yet).
-3. Call `driver.onUpstreamTick()` synchronously. This fires the upstream tick body:
-   `upstreamHC.Tick()` dequeues the payload, `accessNode.SendKeystroke(...)` is
-   called, returns `ErrConsoleNotFound` (no console registered), `failLoud` fires.
+3. Call `driver.onUpstreamTick()` synchronously. This fires the upstream tick
+   body: `upstreamHC.Tick()` dequeues the payload, then
+   `upstreamMP.Send(mpFrame, driver.deliverUpstream)` dispatches
+   `deliverUpstream` on both configured paths (Q7, duplicate-and-race). On
+   the delivering (first-arriving) path, `upstreamMP.Receive` reports no
+   duplicate, `accessNode.SendKeystroke(...)` is called and returns
+   `ErrConsoleNotFound` (no console registered), and `deliverUpstream` calls
+   `failLoud` IN-PLACE at that call site before returning the error [v1.14].
+   On the dedup sibling path, `upstreamMP.Receive` returns `ErrDuplicate` and
+   `deliverUpstream` returns `nil` without ever calling `SendKeystroke`.
+   `upstreamMP.Send`'s own return value is NOT the fault-detection signal
+   here — with one path's `Sent: true` (the no-op dedup return) and the
+   other's `Sent: false`, `Send` returns `nil` to `onUpstreamTick()`
+   regardless, per the masking rationale above; `failLoud` has already fired
+   synchronously inside `deliverUpstream` by the time `Send` returns.
 4. Assert that `driver.failLoud` was called (surfaced via `t.Errorf`). [v1.10]
    Because no ticker goroutine of either kind ever runs (step 1, now true by
    construction), this assertion's unlocked read of `stub.errorfCalls` — after
@@ -1899,8 +1943,9 @@ design decisions made and the rationale.
 **Defect (PAT-04 verified):** The v1.4 Q6 `startLoopbackTicker` signature was
 `func startLoopbackTicker(env *Env, hc *halfchannel.HalfChannel, interval time.Duration, onTick func(halfchannel.ChannelFrame))`
 with body `onTick(hc.Tick())` — the HELPER called `hc.Tick()` inside the ticker
-goroutine, with no mutex. But §H2 (`onDownstreamTick`) and L256 require every
-`Tick()` call under the per-direction mutex. The downstream half-channel is also
+goroutine, with no mutex. But §H2 (`onDownstreamTick`) — the per-direction-mutex
+binding rule (every `Enqueue`/`Tick` call site acquires the corresponding mutex) —
+requires every `Tick()` call under the per-direction mutex. The downstream half-channel is also
 `Enqueue`'d from `loopbackSink.SendInput` under `downstreamHCMu` (from the
 upstream ticker goroutine). Two goroutines touching `downstreamHC` with mutex
 on only one → DATA RACE → fails AC-015 (`just test-race`).
@@ -1921,7 +1966,8 @@ double-tick (seq 2×, ARQ window corruption) or run `hc.Tick()` outside the mute
    - Downstream ticker: `startLoopbackTicker(env, downstreamInterval, d.onDownstreamTick)`
    Each seam method calls `<dir>HCMu.Lock(); f := d.<dir>HC.Tick(); <dir>HCMu.Unlock()`
    then the direction's flow logic. Every `Tick()` is therefore mutex-guarded
-   (satisfies §H2 + L256). `onDownstreamTick()` is the single directly-callable
+   (satisfies the §H2 per-direction-mutex binding rule — every `Enqueue`/`Tick`
+   call site acquires the corresponding mutex). `onDownstreamTick()` is the single directly-callable
    seam AC-016 requires — the AC-016 test invokes it synchronously without starting
    any goroutine → no race.
 3. The false-composition sentence retracted and replaced (see §M2/§B-3 above).
@@ -1970,7 +2016,7 @@ the first `chanSeq` value.
 **Ground truth source (v1.5):** PAT-04 verified against source reads documented
 in rereview-R3-2026-07-22.md. `startLoopbackTicker` body (`onTick(hc.Tick())`),
 `onDownstreamTick`/`onUpstreamTick` signatures (no-arg, mutex-internal), and
-L256 binding rule all confirmed from source before this repair.
+the §H2 per-direction-mutex binding rule all confirmed from source before this repair.
 
 ---
 
@@ -2634,3 +2680,114 @@ integration`, `go test -run '^$'`, `go test -tags integration -run
 deliberately-injected compile error, per the table above — all
 performed and observed in this session, not inherited from the
 orchestrator's dispatch fact base.
+
+---
+
+## v1.14 R18 Reconvergence Repair (2026-08-28)
+
+An R18 adversarial reconvergence pass found two MED defects: a
+mis-anchoring defect (stale naked line-number citations) and a
+spec-implementation soundness defect (an unsound error-check
+placement in the upstream design).
+
+### Finding F-R18-LENSC-01 (MED, mis-anchoring) — stale naked `L256` binding-rule citations
+
+**Defect (PAT-04 verified):** Four live-prose sites cited a naked `L256`
+line number as authority for "the per-direction-mutex binding rule":
+the §H2 "Wiring" paragraph, both sentences in the §F-B-1 defect/fix
+narrative, and the v1.5 "Ground truth source" closing line. Disk-verified
+against this note itself: line 256 is `loopbackSink.SendInput`'s doc
+comment ("is the echo generator"), not any statement of the mutex
+binding rule. This also violates the story's v1.13 L62 convention
+("no self-referential story-line-number citations — disk-verified
+external-source anchors permitted"); a naked internal line number that
+drifts across revisions is exactly the citation class that convention
+rules out.
+
+**Fix:** All four sites corrected to a mechanism anchor carrying no
+naked line number — "the §H2 per-direction-mutex binding rule (every
+`Enqueue`/`Tick` call site acquires the corresponding mutex)" — while
+preserving the co-located valid `§H2` anchor at each site (including
+the `onDownstreamTick` cross-reference at the §F-B-1 defect paragraph).
+A whole-file grep for `L256` and for other naked `L[0-9]+` citations
+adjacent to "rule"/"require"/"binding"/"must"/"mandat*" language found
+no further live-prose instances of this citation class; the remaining
+naked line-number citations found (`L361`, `L967`, `L1044`/`L1060`,
+`L130`, `L613`, `L642-643`, etc.) are either disk-verified external-file
+anchors or in-note navigational pointers ("see L1240 above"), not
+binding-rule authority citations, and are unaffected.
+
+### Finding F-R18-LENSB-01 (MED, spec-implementation soundness) — upstream `failLoud` placement unsound vs `multipath.Send` aggregation
+
+**Defect (PAT-04 verified):** Verified against
+`internal/multipath/multipath.go:244-286`: `Send` records each selected
+path's `fn` error only in a discarded `lastErr` local and a per-path
+`SendResult{PathID, Sent bool}` that never surfaces the error value; it
+returns a wrapped error to its caller ONLY when every selected path
+failed (`sent == 0`, line 283) — when `sent >= 1` it returns `nil`. Q7
+configures two paths per direction, so the upstream tick body always
+dispatches `deliverUpstream` on both (duplicate-and-race). In the
+scenario AC-017 exercises (console not attached), the delivering
+(first-arriving) path's `deliverUpstream` → `accessNode.SendKeystroke`
+returns `ErrConsoleNotFound` (`Sent: false`), while the dedup sibling's
+`upstreamMP.Receive` call returns `ErrDuplicate` (`multipath.go:323`)
+and `deliverUpstream` returns `nil` WITHOUT ever calling `SendKeystroke`
+(`Sent: true`) — so `sent == 1`, `Send` returns `nil`, and the delivery
+error is DROPPED. The note's AC-017 procedure (step 3) described
+`onUpstreamTick()` as calling `accessNode.SendKeystroke(...)` directly
+and observing its error, omitting the intervening `upstreamMP.Send` /
+`deliverUpstream` / `Receive` dispatch entirely — an implementer
+reading only that description could plausibly place the `failLoud`
+check on `upstreamMP.Send`'s return value inside `onUpstreamTick()`,
+which can never observe the masked per-path error. This reintroduces
+the exact SOUL.md §4 silent-failure class AC-017 exists to prevent —
+the same class §M2's downstream `OnAck` fix already closed for the
+downstream direction, which checks `OnAck`'s error IN-PLACE in the tick
+body with no aggregation layer between it and the call site.
+
+**Fix:** Q3's upstream-flow pseudocode and prose, and the AC-017
+fault-injection procedure's step 3, corrected to pin `failLoud` to the
+IN-PLACE `SendKeystroke` error site INSIDE `deliverUpstream` —
+symmetric with §M2's already-correct in-place downstream pattern.
+`deliverUpstream` still returns the error afterward, unchanged, so
+`multipath.Send`'s `SendResult{Sent: false}` accounting and the
+all-paths-failed `sent == 0` wrapped-error path are preserved —
+`failLoud` is additive to the return, not a replacement for it. Recorded
+why exactly one `failLoud` call fires per failing tick (only the
+delivering path ever reaches `SendKeystroke`; the dedup sibling returns
+before `SendKeystroke` is called), consistent with AC-017's existing
+"exactly one `Errorf` call" assertion — no change to that assertion or
+to its race-freedom reasoning (step 1: no ticker goroutine ever runs)
+was needed. The downstream (`OnAck`) description is unchanged — it was
+already correct.
+
+### Governance
+
+Both fixes are edits to live spec prose: Q3 (upstream-flow pseudocode
+and the "SendKeystroke performs no session-existence validation"
+paragraph's neighboring flow description) and the AC-017 fault-injection
+procedure block are current-version live spec content, open to
+in-place correction across versions, same class as §Q2/§H2/§H3/§M2 and
+Package Impact Summary. The §H2 "Wiring" paragraph is likewise live
+spec content. The two §F-B-1 sites and the v1.5 "Ground truth source"
+line sit inside the "v1.5 R3 Re-Review Repair" section; per this
+dispatch's explicit instruction these four `L256` sites (all citing the
+same now-corrected mechanism anchor) were corrected in place as a
+citation-drift fix — consistent with v1.12 Finding #1's precedent of
+sweeping a stale citation class across multiple historical sections
+(§Q2, Package Impact Summary, Risks item 3) rather than confining the
+correction to a single new section. No other frozen dated changelog row
+or prior repair-addendum section's defect/fix narrative was altered.
+Story, STORY-INDEX, and code are untouched — per dispatch, this
+placement-note edit is transcribed into the story separately.
+
+**Ground truth sources (v1.14):** this note's own disk content (`grep`
+for `L256` and the wider naked-line-number sweep); `git -C
+/Users/skippy/work/aae-orc/run/switchboard-blue rev-parse HEAD` on
+`develop` (`2ce3a57...`); `internal/multipath/multipath.go:244-286`
+(`Send`'s `sent >= 1 ⇒ nil` aggregation, `SendResult` shape, `lastErr`
+discarded), `:315-325` (`Receive`'s `ErrDuplicate` short-circuit);
+`internal/session/upstream.go:276-301` (`SendKeystroke`'s
+`ErrConsoleNotFound`/`ErrSessionMismatch` gates, confirming the note's
+existing line citations at 288-292 remain accurate); Q7 (`§Q7`, two
+paths per direction) — all read and confirmed in this session.
