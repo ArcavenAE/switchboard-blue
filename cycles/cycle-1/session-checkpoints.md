@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "47955b1"
+input-hash: "c8c2bc1"
 traces_to: STATE.md
 ---
 
@@ -858,4 +858,18 @@ Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement a
 
 **Survivor ledger:** three new deferred/observation items this round — S1.7-F2-VP042-HARNESS (MED, deferred to the Forward Obligation), S1.7-F3-NOTE-L497-CITATION (LOW, deferred to the next note revision), S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (HIGH-for-human, systemic, needs an architect decision). SURVIVOR-R22 and the recurring `[process-gap]` ledger-tooling observation (R19/R20/R22/R23/R24) both remain standing, unaffected by this audit — carry forward to the human approval gate.
 
-**Next action (superseded by R25 NOT CLEAN + same-burst remediation):** R25 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the v1.18 tip, restarting the 3-consecutive-clean-pass count from 0/3. R25 ran NOT CLEAN: Oracle+Lens B CLEAN; Lens A+Lens C both independently found the STORY-INDEX L155 leading-token defect (F-R25-LENSA-01/F-LENSC-R25-01, MED, fixed same burst); Lens A also found the story L57 ledger-parity gap (F-R25-LENSA-02, LOW, already fixed by story-writer). Counter STAYS 0/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R25-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.
+**Next action (superseded by R26 CLEAN):** R25 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the v1.18 tip, restarting the 3-consecutive-clean-pass count from 0/3. R25 ran NOT CLEAN: Oracle+Lens B CLEAN; Lens A+Lens C both independently found the STORY-INDEX L155 leading-token defect (F-R25-LENSA-01/F-LENSC-R25-01, MED, fixed same burst); Lens A also found the story L57 ledger-parity gap (F-R25-LENSA-02, LOW, already fixed by story-writer). Counter STAYS 0/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R25-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.
+
+---
+
+## Checkpoint: S-BL.LOOPBACK-FULLSTACK Step-4.5 R25 NOT CLEAN → ledger defects fixed → counter STAYS 0/3 (archived from STATE.md at the R26 CLEAN burst, 2026-08-29)
+
+**Timestamp:** 2026-08-29T21:15:00Z
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial spec convergence, cycle-1. **R25 fresh-context reconvergence (first pass since the §1.7-audit F1 remediation, against v1.18 tip `d14e645`) — VERDICT NOT CLEAN.** §1.8 Oracle CLEAN (AC-013 compile-gate injection proof re-sound, restore hash `e53ab35f`); Lens B CLEAN (v1.18 metadata-only edit introduced no technical defect, all develop source-facts re-derived sound). **Lens A NOT CLEAN** — F-R25-LENSA-01 (MED): STORY-INDEX L155's leading version token stale at `draft (v1.17,` despite the story being v1.18 (the v4.159 changelog row documented this sync but only partially applied it); F-R25-LENSA-02 (LOW): story L57 triple-ledger Finding-2 severity parity, already fixed by story-writer ahead of this pass. **Lens C NOT CLEAN** — F-LENSC-R25-01 (MED), the SAME STORY-INDEX L155 defect, independently corroborated (two-lens agreement).
+
+**Remediated this burst:** STORY-INDEX L155 leading token `draft (v1.17,`→`draft (v1.18,` + a short R25 tail note; STORY-INDEX bumped v4.159→v4.160. Story's L57 fix was already applied by story-writer — story stays v1.18/`4902d5d`, no version bump (in-place ledger-parity completion, per R19/R20 precedent). **Convergence counter: STAYS 0/3** — never advanced this pass. develop @ 2ce3a57; LOOPBACK has delivered no code. Full record: `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R25-2026-08-29.md`.
+
+**Survivor ledger:** RECURRING `[process-gap]` (triple-ledger-parity apparatus) re-flagged by BOTH Lens A and Lens C this round — now ~6th instance (R19/R20/R22/R23/R24/R25); this round's actual defect is a direct instance of the class. SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY all remain standing, unaffected by this pass — carry forward to the human approval gate.
+
+**Next action (superseded by R26 CLEAN):** R26 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the v1.18 tip (unchanged), pass 1 of a new 3-consecutive-clean-pass streak. R26 ran CLEAN: zero findings across all four legs (§1.8 Oracle CLEAN, Lens A CLEAN, Lens B CLEAN, Lens C CLEAN). Zero spec artifacts changed — story stays v1.18/`4902d5d`, note stays v1.15; STORY-INDEX bumped v4.160→v4.161 as an administrative progress-recording change only. Counter ADVANCES 0/3→1/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R26-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.
