@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.14"
+version: "1.15"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.15 | R19 adversarial reconvergence repair (2026-08-29, POL-005 dispatch): MED (F-R19-LENSC-01) — one stale naked `story L442` example-pointer citation in §M2 live prose ("`closeOnce sync.Once` in the note / story L442") de-anchored: `L442` on disk resolves to `closeOnce sync.Once`'s call sites at `story L498`/`L666` (and the note's own definition at `L452`/`L453`), not to note L442 (Q5 correlation-ID prose) or story L442 (`OnAck`/`reorderBuf` topology) — WRONG on both readings. Corrected to the clean parenthetical `` (`closeOnce sync.Once`) `` — dropping the naked cross-reference entirely — matching the already-clean form at note L1808 and story L498 (neither carries a line-number pointer). This corrects a false completeness claim in the v1.14 changelog row ("Whole-file grep found no other naked `L<digits>` binding-rule citations in live prose"): that sweep scoped itself to citations functioning as *binding-rule authority* (the `L256` mutex-rule class) and did not cover this citation, which functions as an *example/navigational* pointer, not a binding-rule citation — a real gap in the v1.14 sweep's stated scope, not a contradiction of what it actually checked. A full whole-class re-sweep (every naked `story L<digits>` / `note L<digits>` / bare `L<digits>` citation in the file, all ~90 occurrences) found: this one live-prose naked citation (fixed here); the frozen v1.6-section `story L868-875` AC-017 citation (dated repair-section provenance, left untouched per §2.9); and the remainder are either disk-verified external-source `file.go:NNN`/`ARCH-03 line NNN` anchors or sit inside frozen dated changelog rows / repair-addendum sections describing historical defects at the line numbers then current — none require correction. Zero live-prose naked line citations remain anywhere in the note. See "v1.15 R19 Reconvergence Repair (2026-08-29)" section. |
 | 1.14 | R18 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R18-LENSC-01) — four live-prose citations of a stale naked `L256` line number as "the per-direction-mutex binding rule" (§H2 concrete-shape wiring note; §F-B-1 defect/fix narrative ×2; the v1.5 "Ground truth source" line) de-anchored: `L256` on disk is `loopbackSink.SendInput`'s doc comment, unrelated to the mutex rule. All four replaced with a mechanism anchor — "the §H2 per-direction-mutex binding rule (every `Enqueue`/`Tick` call site acquires the corresponding mutex)" — carrying no naked line number, per the story's L62 no-self-referential-line-citation convention; the co-located valid `§H2` anchors (including the `onDownstreamTick` cross-reference) are preserved. Whole-file grep found no other naked `L<digits>` binding-rule citations in live prose. MED (F-R18-LENSB-01) — Q3's upstream-flow design corrected: `multipath.Send` (`multipath.go:244-286`) returns `nil` whenever `sent >= 1`, and the upstream duplicate-and-race dispatch (two paths, Q7) always has at least one path's `deliverUpstream` call return `nil` via the dedup `ErrDuplicate` short-circuit (`multipath.go:323`) even when the delivering path's `accessNode.SendKeystroke` call fails — so a `failLoud` check placed on `upstreamMP.Send`'s return value in `onUpstreamTick()` can never observe the masked per-path error. Corrected the Q3 pseudocode/prose and the AC-017 fault-injection procedure (step 3) to pin `failLoud` to the IN-PLACE `SendKeystroke` error site inside `deliverUpstream` — symmetric with §M2's already-correct in-place downstream `OnAck` check — while `deliverUpstream` still returns the error afterward so `multipath.Send`'s `SendResult{Sent:false}` accounting and the all-paths-failed `sent==0` wrapped error are preserved; documented why exactly one `failLoud` call fires (only the delivering path ever reaches `SendKeystroke`) and why the post-`Send` placement is unsound (the masking rationale). Downstream (`OnAck`) description untouched — already correct. See "v1.14 R18 Reconvergence Repair (2026-08-28)" section. |
 | 1.13 | R15 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R15-LENSB-01) — the v1.12 "### Verification Method (AC-013)" subsection's compile-check bullet was itself vacuous and its causal claim wrong. `internal/bench/` is a TEST-ONLY package (both files are `_test.go`); `go build` never compiles `_test.go` files, WITH OR WITHOUT `-tags integration` — the tag is irrelevant to the exclusion, so the prescribed `go build -tags integration ./internal/bench/...` compile-check verified nothing (empirically confirmed: exits 0 even with a deliberately injected compile error in the tagged file). Replaced with `go test -tags integration -run '^$' -count=1 ./internal/bench/` (Option (a) below) as the binding compile-gate — empirically confirmed to fail (exit 1) against the same injected error, while the untagged form does not see it. Causal claim corrected: exclusion is because the file is a test file, not because the tag is absent. See "v1.13 R15 Reconvergence Repair (2026-08-28)" section. |
 | 1.12 | Consistency-audit remediation (2026-08-28, POL-005 dispatch, `.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`): MAJOR (Finding #1) — every live-text citation of the phantom branch `fix/vp-042-testenv-integrated-bench` (three occurrences: §Q2 ~L130, Package Impact Summary ~L613, Risks item 3 ~L642-643) corrected to reflect the actual merged state — `internal/bench/keystroke_echo_testenv_bench_test.go` is MERGED on `develop` (PR #121 @ `4c276d9`, `//go:build integration`-tagged, defines `BenchmarkKeystrokeToEcho_P99`); the branch was never real. MAJOR (Finding #2) — added a new "### Verification Method (AC-013)" subsection specifying the correct verification: `go build -tags integration ./internal/bench/...` (compile) + `go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/` (run), replacing the prior incorrect framing (bare `go build` + `just bench`, neither of which can reach the integration-tagged function); explicit adjudication recorded: `just bench` stays the tag-free S-BL.BENCH lower-bound recipe, out of AC-013's scope (Option (a)). MINOR (Finding #4) — added Risks item 6, a forward obligation for story-writer to encode a File-List obligation updating VP-042.md's Proof Harness Skeleton to the binding two-call token shape. See "v1.12 Consistency-Audit Repair (2026-08-28)" section. |
@@ -1456,7 +1457,7 @@ each observe not-started and launch duplicate tickers, producing
 double-consumption of `ChanSeq` values and corrupting the ARQ window
 (`deliverDownstream` called twice for seq=1; `EnqueueSend` / `OnAck`
 sequence corrupted). The `sync.Once` idiom is already house convention
-in this design (`closeOnce sync.Once` in the note / story L442). There
+in this design (`closeOnce sync.Once`). There
 is no third option: `CreateSession`-time start (preferred) or
 `sync.Once`-guarded first-`SendKeystroke` start.
 
@@ -2791,3 +2792,96 @@ discarded), `:315-325` (`Receive`'s `ErrDuplicate` short-circuit);
 `ErrConsoleNotFound`/`ErrSessionMismatch` gates, confirming the note's
 existing line citations at 288-292 remain accurate); Q7 (`§Q7`, two
 paths per direction) — all read and confirmed in this session.
+
+---
+
+## v1.15 R19 Reconvergence Repair (2026-08-29)
+
+An R19 adversarial reconvergence pass found one MED mis-anchoring
+defect: a stale naked cross-artifact example-pointer citation the
+v1.14 sweep did not cover.
+
+### Finding F-R19-LENSC-01 (MED, mis-anchoring / incomplete-propagation) — stale naked `story L442` example-pointer citation
+
+**Defect (PAT-04 verified):** §M2's `sync.Once` design prose (live
+section, ~L1459) read: "The `sync.Once` idiom is already house
+convention in this design (`closeOnce sync.Once` in the note / story
+L442). There is no third option: …" The naked `story L442` pointer
+resolves to WRONG content on disk: `closeOnce sync.Once` is declared
+and used at `story L498` and `story L666` (and in this note's own
+definition at `L451`/`L453`), not at `story L442` (which is
+`OnAck`/`reorderBuf` topology prose) — and not at `note L442` either
+(which is Q5 correlation-ID prose). The v1.14 R18 sweep's `L256`
+citation-class fix did not catch this one because it scoped itself
+explicitly to citations "as 'the per-direction-mutex binding rule'"
+authority (the `L256` class) — this citation functions differently, as
+an example/navigational pointer, not a binding-rule citation, so it
+fell outside that sweep's stated scope. The v1.14 row's summary
+sentence ("Whole-file grep found no other naked `L<digits>`
+binding-rule citations in live prose") is accurate to its own
+binding-rule scope but reads, out of context, as a broader
+completeness claim than the sweep actually performed; this row
+clarifies that distinction rather than retracting the v1.14 finding.
+The clean end-state form of this exact parenthetical already exists
+elsewhere in the note (`L1808`: "(`closeOnce sync.Once`). No third
+option.") and in the story (`L498`, no line-number pointer), confirming
+the fix direction.
+
+**Fix:** §M2's `sync.Once` prose corrected from "(`closeOnce sync.Once`
+in the note / story L442)" to "(`closeOnce sync.Once`)" — the naked
+cross-artifact line-number pointer is dropped entirely rather than
+repointed, matching the clean form already used at `L1808` and in the
+story at `L498`. No other text in the sentence changed.
+
+### Whole-class sweep (mandatory per defect-lifecycle §1.3)
+
+A complete re-sweep of every naked `story L<digits>` / `note L<digits>`
+/ bare `L<digits>` citation in the file (regex over all four forms,
+~90 total matches) was performed and each hit classified:
+
+- **Live-prose naked line citation (class a — de-anchor):** exactly
+  one — the `story L442` citation at ~L1459, fixed above. No other
+  live-prose site (Q1–Q8, §B1–§M4, Non-Goals, Package Impact Summary,
+  Risks/Open Questions) carries a naked same-document or
+  cross-artifact line-number citation.
+- **Frozen changelog-row / dated repair-section provenance citation
+  (class b — left untouched):** the great majority of hits, inside the
+  top Changelog table rows (versions 1.0–1.14) and every
+  `## v1.X ... Repair (date)` section (v1.2 through v1.14), each
+  describing what a line number contained AT THE TIME that round
+  disk-verified it — including the v1.6-section `story L868-875`
+  AC-017 citation named in this dispatch, which sits inside "## v1.6
+  R4 Re-Review Repair (2026-07-22)" and is immutable per §2.9.
+- **Disk-verified external-source anchor (class c — permitted, left
+  untouched):** citations of the form `file.go:NNN`/`file.go:NNN-MM`
+  (`multipath.go`, `halfchannel.go`, `frame.go`, `upstream.go`,
+  `testenv.go`, `arq.go`, `arqsend.go`) and the one external-document
+  form `ARCH-03 line 159`, all naming a specific other file rather than
+  citing an internal same-document line.
+- **Non-line-number document reference (class d — not in scope):** not
+  separately enumerated; no additional hits of this form were produced
+  by the line-number regex sweep by definition.
+
+Zero live-prose naked line citations remain anywhere in the note after
+this fix.
+
+### Governance
+
+The fix is an edit to live spec prose (§M2's `sync.Once` mitigation
+paragraph) inside a section already amended across v1.2 through v1.10;
+no frozen dated changelog row or prior repair-addendum section's
+defect/fix narrative was altered — including the v1.14 row and "v1.14
+R18 Reconvergence Repair" section, whose "no other naked `L<digits>`
+binding-rule citations" claim is accurate to its own stated scope and
+is left as originally written. Story, STORY-INDEX, and code are
+untouched — per dispatch, this placement-note edit is transcribed into
+the story separately.
+
+**Ground truth sources (v1.15):** this note's own disk content (`grep`
+for the full `story L<digits>` / `note L<digits>` / bare `L<digits>`
+citation sweep, ~90 matches individually classified); `git -C
+/Users/skippy/work/aae-orc/run/switchboard-blue/.factory rev-parse
+HEAD` (`7b8b655...`, the spec worktree, confirmed at dispatch); the
+story file's `closeOnce sync.Once` occurrences at `L498`/`L666`
+(confirmed present, `story L442` confirmed absent of any `sync.Once`
+content) — all read and confirmed in this session.
