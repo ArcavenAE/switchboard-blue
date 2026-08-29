@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.10"
+version: "1.11"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.11 | R8 re-review repair (2026-08-28): LOW (F-LENSA-01) / NITPICK (F-ORACLE-01) — the v1.10 erratum corrected the two SPACE-COLON `t.Helper()` citations `:460`→`:461`, but a THIRD live citation in SLASH notation (`testenv.go:384/460/475/528`, the `recordingTB` struct-field comment at §M2 ~L1463) survived uncorrected; now corrected to `384/461/475/528`. The v1.10 "two citations" accounting was complete for the space-colon form but the class also included the slash form; this completes the class sweep. Frozen v1.10 row/section left as-is per §2.9; ground truth `internal/testenv/testenv.go:461`. See "v1.11 R8 Re-Review Repair (2026-08-28)" section. |
 | 1.10 | R7 re-review repair (2026-08-28): MED (F-LENSB-01) — §M2's ticker-start mitigation decision is corrected: the "upstream ticker MAY start at construction" / "start-time freedom PRESERVED" latitude ([v1.6 F-B-LENSB-01]) is WITHDRAWN. The upstream ticker now starts at `CreateSession` time, SYMMETRIC with the downstream ticker — race-free for the same single-goroutine reason, with no `EnqueueSend` dependency blocking it. The "Driver lifecycle pin" (§H3) and the "Steps 1–3" cross-reference sentence are updated so `CreateSession` is described as starting BOTH tickers, not just the downstream one. AC-017's "single-goroutine throughout" method text is sharpened: because AC-017 never calls `CreateSession` (the sole start-site for both tickers), no ticker goroutine of either kind can run during the test — this is now TRUE BY CONSTRUCTION, closing a latent `go test -race` hazard between a construction-started upstream ticker's locked `failLoud` write and AC-017's unlocked `len(stub.errorfCalls)` assertion read (outcome count was always 1; this was a race annotation, not a wrong count). LOW (F-LENSB-02) — the §H3 `sessionName` storage/timing pin is corrected: AC-017's `ErrConsoleNotFound` is caused PRIMARILY by the un-attached, zero-value `loopbackConsoleKey` (`AccessNode.SendKeystroke`, `internal/session/upstream.go:288-290`, gates on console attachment BEFORE comparing `sessionName` at line 292), not by the empty `sessionName`, which is demoted to a redundant second guarantee. Erratum — two live-text citations of `t.Helper()`'s line number corrected from `:460` to the disk-verified `:461` (`internal/testenv/testenv.go`); the unrelated `cmd/switchboard/access.go:460` citations, and the frozen v1.9 changelog row/section's `:460` citation, are untouched per §2.9. See "v1.10 R7 Re-Review Repair (2026-08-28)" section. |
 | 1.9 | R6 re-review repair (2026-08-28): BLOCKER — §M2's `recordingTB` stub construction (`stub := &recordingTB{}`, embedding a nil `testing.TB`) is corrected to `stub := &recordingTB{TB: t}` (embedding the real enclosing `*testing.T`). Disk-verified against `internal/testenv/testenv.go`: `NewLoopback`→`newEnv` unconditionally calls `b.Helper()` (:384), `t.Helper()` (:460), and `t.Cleanup(...)` twice (:475, :528 — the ticker/env teardown AC-011/Q6 depend on); with a nil embed these promoted calls nil-panic at construction, before AC-016/AC-017's fault-injection procedure ever runs. The struct comment's false "unused methods panic if called" claim is corrected, and the prior "in place of the real `*testing.T`" / implicit "must NOT pass real t" framing is retracted and replaced with the correct semantics: `Errorf` is OVERRIDDEN on `*recordingTB`, so `stub.Errorf(...)` dispatches to the override and is captured — it never reaches the embedded real `t`, so the enclosing test is never marked failed; the embedded real `t` is required so `Helper`/`Cleanup`/`Fatalf` delegate to a live TB instead of nil-panicking. LOW (Lens B O-1) — §H3 gains a `sessionName` storage/timing pin: `sessionName` is stated as a `loopbackDriver` field, set in `CreateSession` alongside `loopbackConsoleKey` (before Steps 1–3 run), holding its zero value (`""`) before `CreateSession` has run — consistent with the "Driver lifecycle pin," and the reason AC-017's pre-`CreateSession` call observes `ErrConsoleNotFound` independent of `loopbackConsoleKey`'s own zero-value state. See "v1.9 R6 Re-Review Repair (2026-08-28)" section. |
 | 1.8 | R5 re-review repair (2026-07-24): F-LENSB-B-01 — §H3 provisioning-timing/lifecycle pin: removed the "(or the `loopbackDriver` constructor)" console-provisioning latitude that contradicted AC-017's un-provisioned premise; added a "Driver lifecycle pin" specifying the `loopbackDriver` constructor builds the AccessNode triple, both multipath instances, and both half-channels in an un-provisioned state at construction (not lazily at `CreateSession`), so `SendKeystroke`/`onUpstreamTick()`/`onDownstreamTick()` are all safely pre-`CreateSession`-callable with no nil-deref; console provisioning (Publish/RegisterKey/Attach) confirmed deferred to `CreateSession` only; propagated a cross-reference at the "Steps 1–3" sentence. F-LENSB-B-02 — Q3 and the SendKeystroke doc comment (§Q5) now state explicitly that `SendKeystroke` performs no session-existence validation, by design, for AC-017. F-LENSB-B-03 — §M2 adds one recording-`testing.TB`-stub requirement covering both AC-016 and AC-017's fault-injection tests, so `failLoud`'s `t.Errorf` is captured/asserted rather than failing the enclosing real `*testing.T`. A-L967 (nitpick) — §H1 "Defect" prose's last live 1-value `decodeRTID(payload)==rt.id` token reworded to semantic English ("the delivered payload decodes to `rt.id`"); the frozen v1.4 §B-1 historical description at a separate line is untouched per §2.9. See "v1.8 R5 Re-Review Repair (2026-07-24)" section. |
@@ -1460,7 +1461,7 @@ type recordingTB struct {
     testing.TB          // MUST be the real enclosing t (&recordingTB{TB: t}),
                          // never left nil — Helper/Cleanup/Fatalf promote to
                          // this embedded value and are exercised by every
-                         // NewLoopback call (testenv.go:384/460/475/528); a
+                         // NewLoopback call (testenv.go:384/461/475/528); a
                          // nil embed nil-panics at construction, before
                          // AC-016/AC-017's fault-injection procedure — or
                          // even NewLoopback itself — completes.
@@ -2301,3 +2302,49 @@ line 460, `t.Helper()` at line 461, `t.Cleanup(func(){...})` at line 475,
 truth for this dispatch and were not independently re-read from disk in
 this pass beyond confirming the note's citations against the supplied line
 numbers.
+
+## v1.11 R8 Re-Review Repair (2026-08-28)
+
+### Erratum-of-the-erratum — a third `t.Helper()` citation, in slash notation, survived the v1.10 sweep
+
+**Defect (LOW, F-LENSA-01 / NITPICK, F-ORACLE-01):** The v1.10 erratum
+("`t.Helper()` line-reference correction (`:460` → `:461`)", above) states
+it corrected "two live-text citations" of the `t.Helper()` call site inside
+`newEnv` — both in the SPACE-COLON form (`testenv.go:384`, `:461`, ...).
+That accounting was complete for the space-colon citation form, but a
+THIRD live citation existed in a different notation: the SLASH form
+`testenv.go:384/460/475/528`, at the §M2 `recordingTB` struct-field
+comment (~L1463, the `NewLoopback call (testenv.go:384/460/475/528)`
+inline comment). This slash-form citation packs all four call-site line
+numbers into one compact positional reference and was not swept by the
+v1.10 erratum's two space-colon fixes, so it still read stale `460` for
+the `t.Helper()` position after v1.10 shipped.
+
+**Fix:** The single live slash-form occurrence is corrected from
+`384/460/475/528` to `384/461/475/528`. No other slash-form or space-colon
+citation exists in live text — the v1.10 erratum's own two fixes (§M2
+struct comment prose paragraph, and the "Why embedding the real `t` is
+safe" paragraph, both now reading `:461`) are unaffected and untouched;
+the two `cmd/switchboard/access.go:460` citations (a different file,
+correct as-is) are untouched; the frozen v1.9 changelog row and "v1.9 R6
+Re-Review Repair" section's `:460` citations are untouched per §2.9; the
+frozen v1.10 changelog row and "v1.10 R7 Re-Review Repair" section
+(including its "two citations" erratum text above) are also untouched per
+§2.9 — this section corrects the completeness of that claim by addendum,
+not by editing the frozen v1.10 text in place.
+
+### Governance
+
+This is a single-line live-text edit inside §M2 (the `recordingTB`
+struct-field comment introduced across v1.3–v1.9 and touched again by
+v1.10's erratum). No frozen dated changelog row or prior repair-addendum
+section was touched, including v1.10's own erratum subsection, which
+remains the historical record of what that round found and fixed. Story
+and index files are untouched — per dispatch, this placement-note edit is
+transcribed into the story by story-writer separately.
+
+**Ground truth source (v1.11):** `internal/testenv/testenv.go` — `b.Helper()`
+at line 384, `func newEnv` at line 460, `t.Helper()` at line 461,
+`t.Cleanup(...)` at lines 475 and 528 — supplied as orchestrator-verified
+ground truth for this dispatch, consistent with the v1.10 ground truth
+already on record above.
