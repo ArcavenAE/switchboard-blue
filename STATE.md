@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-loopback-fullstack-step4.5-r6-remediated-r7-pending
+phase_step: steady-state-loopback-fullstack-step4.5-r7-remediated-r8-pending
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,8 +42,8 @@ develop_head: af8eb17a5b90e205c17215ae39ca9332227e5976
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence IN PROGRESS. R6 (2026-08-28) NOT CLEAN — 1 BLOCKER + 1 MED (same defect: recordingTB nil-embed panic, Lens A+B converged) + 2 LOW (O-1 sessionName timing; F-LC-R6-001 changelog quote). Oracle GREEN. R6 findings REMEDIATED 2026-08-28: placement-note v1.9 @ c7b449b3 (recordingTB{TB: t} real-t embed + rationale correction, O-1 sessionName pin), story v1.8 @ e171cbce (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash 497607b). Convergence counter 0/3. NEXT: R7 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip e171cbce — needs 3 consecutive clean diverse-lens passes; any finding/edit resets counter to 0. S-7.02 cycle-close disposition (3 [process-gap] candidates) remains queued behind R7."
-current_step: "S-BL.LOOPBACK-FULLSTACK Step-4.5 R6 remediation index-sync — placement-note v1.9 @ c7b449b3 (BLOCKER recordingTB{TB: t} real-t embed fix + O-1 sessionName pin), story v1.8 @ e171cbce (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash 497607b); STORY-INDEX row v1.7→v1.8 (POL-002); convergence counter 0/3, R7 next. develop unchanged @ af8eb17 (no code delivery this burst — index-sync only). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "S-BL.LOOPBACK-FULLSTACK Step-4.5 spec convergence IN PROGRESS. R7 (2026-08-28) NOT CLEAN — Lens B technical-soundness 1 MED (F-LENSB-01, upstream-ticker start-site under-pinned, contradicted AC-017's single-goroutine claim) + 1 LOW (F-LENSB-02, §H3 sessionName misattribution); oracle + Lens A spec-fidelity + Lens C traceability all CLEAN (R6 recordingTB embed-real-t BLOCKER fix re-verified CORRECT). R7 findings REMEDIATED 2026-08-28: placement-note v1.10 @ 8e484e50 (upstream ticker pinned to CreateSession start, §H3 reattributed to console-attachment gate, line-ref erratum fixed), story v1.9 @ dfe12a32 (transcription, 17 ACs, input-hash 89d5e3c). Convergence counter 0/3. NEXT: R8 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip dfe12a32 — needs 3 consecutive clean diverse-lens passes; any finding/edit resets counter to 0."
+current_step: "S-BL.LOOPBACK-FULLSTACK Step-4.5 R7 remediation index-sync — placement-note v1.10 @ 8e484e50 (MED upstream-ticker CreateSession-start pin + LOW §H3 reattribution + line-ref erratum), story v1.9 @ dfe12a32 (transcription, 17 ACs, input-hash 89d5e3c); STORY-INDEX row v1.8→v1.9 (POL-002); convergence counter 0/3, R8 next. develop unchanged @ af8eb17 (no code delivery this burst — index-sync only). D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
 timestamp: 2026-08-28T00:00:00Z
 last_update: 2026-08-28
@@ -55,7 +55,7 @@ last_update: 2026-08-28
   Hard cap: 500 lines.
 -->
 
-| **Last Updated** | 2026-08-28 — S-BL.LOOPBACK-FULLSTACK R6-remediation index sync: STORY-INDEX row (~L155) status cell v1.7→v1.8 (POL-002); placement-note citation v1.8→v1.9. STATE.md checkpoint refreshed to reflect note v1.9 @ c7b449b3 / story v1.8 @ e171cbce, R6 remediated (BLOCKER recordingTB{TB: t} + MED same-defect + O-1 sessionName pin + F-LC-R6-001 erratum), R7 pending, convergence counter 0/3. Index-sync only — story body and placement note untouched this burst (committed separately by architect/story-writer); rereview-R6 record written to cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/; D-chain cite D-446 latest greenfield; trajectory-tail →21→7→4→3 |
+| **Last Updated** | 2026-08-28 — S-BL.LOOPBACK-FULLSTACK R7-remediation index sync: STORY-INDEX row (~L155) status cell v1.8→v1.9 (POL-002); placement-note citation v1.9→v1.10. STATE.md checkpoint refreshed to reflect note v1.10 @ 8e484e50 / story v1.9 @ dfe12a32, R7 remediated (MED upstream-ticker CreateSession-start pin + LOW §H3 reattribution + line-ref erratum), R8 pending, convergence counter 0/3. Index-sync only — story body and placement note untouched this burst (committed separately by architect/story-writer); rereview-R7 record written to cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/; D-chain cite D-446 latest greenfield; trajectory-tail →21→7→4→3 |
 
 # Switchboard Factory State
 
@@ -181,11 +181,11 @@ have been extracted to cycle files:
 
 ## Session Resume Checkpoint
 
-**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 convergence IN PROGRESS. R6 (2026-08-28) NOT CLEAN — 1 BLOCKER + 1 MED (same defect: recordingTB nil-embed panic, Lens A+B converged) + 2 LOW (O-1 sessionName timing; F-LC-R6-001 changelog quote). Oracle GREEN. R6 findings REMEDIATED 2026-08-28: placement-note v1.9 @ `c7b449b3` (recordingTB{TB: t} real-t embed + rationale correction, O-1 sessionName pin), story v1.8 @ `e171cbce` (transcription + F-LC-R6-001 erratum, 17 ACs, input-hash 497607b). Convergence counter 0/3. STORY-INDEX at v4.146, row (~L155) synced v1.7→v1.8 (POL-002). develop unchanged @ af8eb17 (no code delivery this burst).
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial spec convergence, cycle-1, IN PROGRESS. R7 (2026-08-28) COMPLETE — NOT CLEAN: Lens B technical-soundness 1 MED (F-LENSB-01, upstream-ticker start-site under-pinned, contradicted AC-017's single-goroutine claim) + 1 LOW (F-LENSB-02, §H3 sessionName misattribution); oracle + Lens A spec-fidelity + Lens C traceability all CLEAN (the R6 recordingTB embed-real-t BLOCKER fix re-verified CORRECT). R7 findings REMEDIATED this batch: placement-note v1.9 → v1.10 @ `8e484e501962ef23c25418fa80c4122626eed660` (upstream ticker pinned to `CreateSession` start — symmetric with downstream, AC-017 single-goroutine claim now TRUE BY CONSTRUCTION; §H3 sessionName reattributed to the console-attachment gate; line-ref erratum fixed), story v1.8 → v1.9 @ `dfe12a32ff15e561eef98eca1c08b7ab7e3ad85c` (17 ACs unchanged, input-hash `497607b` → `89d5e3c`). Convergence counter reset to 0/3. STORY-INDEX at v4.147, row (~L155) synced v1.8→v1.9 (POL-002). develop unchanged @ af8eb17 (no code delivery this burst).
 
-**Next:** R7 adversarial re-review (3 diverse lenses + §1.8 oracle) against tip `e171cbce` — needs 3 consecutive clean diverse-lens passes; any finding or edit resets the counter to 0. S-7.02 cycle-close disposition (3 [process-gap] candidates: narrowed-sweep-grep miss class 3rd instance; pr-manager step-9 branch-deletion mis-verify; post-convergence production-edit-without-reconverge) remains queued behind R7.
+**Next:** R8 adversarial re-review (3 diverse lenses + §1.8 oracle) against the tip after this state-manager commit — needs 3 consecutive clean diverse-lens passes; any finding or edit resets the counter to 0.
 
-**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch R7 adversarial re-review for S-BL.LOOPBACK-FULLSTACK against tip e171cbce (carry the POL-005 verification tuple).
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch R8 adversarial re-review for S-BL.LOOPBACK-FULLSTACK against tip `dfe12a32ff15e561eef98eca1c08b7ab7e3ad85c` (carry the POL-005 verification tuple).
 
 ## Concurrent Cycles
 
