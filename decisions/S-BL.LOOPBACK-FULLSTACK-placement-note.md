@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.11"
+version: "1.12"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.12 | Consistency-audit remediation (2026-08-28, POL-005 dispatch, `.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`): MAJOR (Finding #1) — every live-text citation of the phantom branch `fix/vp-042-testenv-integrated-bench` (three occurrences: §Q2 ~L130, Package Impact Summary ~L613, Risks item 3 ~L642-643) corrected to reflect the actual merged state — `internal/bench/keystroke_echo_testenv_bench_test.go` is MERGED on `develop` (PR #121 @ `4c276d9`, `//go:build integration`-tagged, defines `BenchmarkKeystrokeToEcho_P99`); the branch was never real. MAJOR (Finding #2) — added a new "### Verification Method (AC-013)" subsection specifying the correct verification: `go build -tags integration ./internal/bench/...` (compile) + `go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/` (run), replacing the prior incorrect framing (bare `go build` + `just bench`, neither of which can reach the integration-tagged function); explicit adjudication recorded: `just bench` stays the tag-free S-BL.BENCH lower-bound recipe, out of AC-013's scope (Option (a)). MINOR (Finding #4) — added Risks item 6, a forward obligation for story-writer to encode a File-List obligation updating VP-042.md's Proof Harness Skeleton to the binding two-call token shape. See "v1.12 Consistency-Audit Repair (2026-08-28)" section. |
 | 1.11 | R8 re-review repair (2026-08-28): LOW (F-LENSA-01) / NITPICK (F-ORACLE-01) — the v1.10 erratum corrected the two SPACE-COLON `t.Helper()` citations `:460`→`:461`, but a THIRD live citation in SLASH notation (`testenv.go:384/460/475/528`, the `recordingTB` struct-field comment at §M2 ~L1463) survived uncorrected; now corrected to `384/461/475/528`. The v1.10 "two citations" accounting was complete for the space-colon form but the class also included the slash form; this completes the class sweep. Frozen v1.10 row/section left as-is per §2.9; ground truth `internal/testenv/testenv.go:461`. See "v1.11 R8 Re-Review Repair (2026-08-28)" section. |
 | 1.10 | R7 re-review repair (2026-08-28): MED (F-LENSB-01) — §M2's ticker-start mitigation decision is corrected: the "upstream ticker MAY start at construction" / "start-time freedom PRESERVED" latitude ([v1.6 F-B-LENSB-01]) is WITHDRAWN. The upstream ticker now starts at `CreateSession` time, SYMMETRIC with the downstream ticker — race-free for the same single-goroutine reason, with no `EnqueueSend` dependency blocking it. The "Driver lifecycle pin" (§H3) and the "Steps 1–3" cross-reference sentence are updated so `CreateSession` is described as starting BOTH tickers, not just the downstream one. AC-017's "single-goroutine throughout" method text is sharpened: because AC-017 never calls `CreateSession` (the sole start-site for both tickers), no ticker goroutine of either kind can run during the test — this is now TRUE BY CONSTRUCTION, closing a latent `go test -race` hazard between a construction-started upstream ticker's locked `failLoud` write and AC-017's unlocked `len(stub.errorfCalls)` assertion read (outcome count was always 1; this was a race annotation, not a wrong count). LOW (F-LENSB-02) — the §H3 `sessionName` storage/timing pin is corrected: AC-017's `ErrConsoleNotFound` is caused PRIMARILY by the un-attached, zero-value `loopbackConsoleKey` (`AccessNode.SendKeystroke`, `internal/session/upstream.go:288-290`, gates on console attachment BEFORE comparing `sessionName` at line 292), not by the empty `sessionName`, which is demoted to a redundant second guarantee. Erratum — two live-text citations of `t.Helper()`'s line number corrected from `:460` to the disk-verified `:461` (`internal/testenv/testenv.go`); the unrelated `cmd/switchboard/access.go:460` citations, and the frozen v1.9 changelog row/section's `:460` citation, are untouched per §2.9. See "v1.10 R7 Re-Review Repair (2026-08-28)" section. |
 | 1.9 | R6 re-review repair (2026-08-28): BLOCKER — §M2's `recordingTB` stub construction (`stub := &recordingTB{}`, embedding a nil `testing.TB`) is corrected to `stub := &recordingTB{TB: t}` (embedding the real enclosing `*testing.T`). Disk-verified against `internal/testenv/testenv.go`: `NewLoopback`→`newEnv` unconditionally calls `b.Helper()` (:384), `t.Helper()` (:460), and `t.Cleanup(...)` twice (:475, :528 — the ticker/env teardown AC-011/Q6 depend on); with a nil embed these promoted calls nil-panic at construction, before AC-016/AC-017's fault-injection procedure ever runs. The struct comment's false "unused methods panic if called" claim is corrected, and the prior "in place of the real `*testing.T`" / implicit "must NOT pass real t" framing is retracted and replaced with the correct semantics: `Errorf` is OVERRIDDEN on `*recordingTB`, so `stub.Errorf(...)` dispatches to the override and is captured — it never reaches the embedded real `t`, so the enclosing test is never marked failed; the embedded real `t` is required so `Helper`/`Cleanup`/`Fatalf` delegate to a live TB instead of nil-panicking. LOW (Lens B O-1) — §H3 gains a `sessionName` storage/timing pin: `sessionName` is stated as a `loopbackDriver` field, set in `CreateSession` alongside `loopbackConsoleKey` (before Steps 1–3 run), holding its zero value (`""`) before `CreateSession` has run — consistent with the "Driver lifecycle pin," and the reason AC-017's pre-`CreateSession` call observes `ErrConsoleNotFound` independent of `loopbackConsoleKey`'s own zero-value state. See "v1.9 R6 Re-Review Repair (2026-08-28)" section. |
@@ -127,9 +128,11 @@ owned by `LoopbackEnv`, with `SendKeystroke`/`WaitForEcho`/`CreateSession` as
 NEW methods on `*LoopbackEnv` — not on `*Env`.**
 
 `LoopbackEnv` is currently `struct { Env *Env }` — a **named field**, not
-Go anonymous embedding (confirmed: the existing WIP bench test does
-`env := lb.Env; env.CreateSession(b)`, never `lb.CreateSession(b)`; if `Env`
-were embedded, both forms would resolve). This means new methods on
+Go anonymous embedding (confirmed: the existing merged bench test
+(`internal/bench/keystroke_echo_testenv_bench_test.go`, `develop`, PR #121
+@ `4c276d9`) does `env := lb.Env; env.CreateSession(b)`, never
+`lb.CreateSession(b)`; if `Env` were embedded, both forms would resolve).
+This means new methods on
 `*LoopbackEnv` do not collide with or shadow `*Env`'s methods — they are
 simply a separate method set reached via `lb.Foo(...)` instead of
 `lb.Env.Foo(...)`.
@@ -564,6 +567,67 @@ wait (~half the upstream interval + half the downstream interval on average,
 inside VP-042's 100ms ceiling — consistent with VP-042.md's own "~30s for 500
 samples" estimate at these intervals, i.e. ~60ms/sample).
 
+### Verification Method (AC-013)
+
+**Decision: AC-013 verifies via the direct `go test -tags integration`
+invocation the merged benchmark file's own doc comment already prescribes
+— not a bare `go build`, and not `just bench`. `just bench` is explicitly
+adjudicated OUT of AC-013's scope and stays unchanged.**
+
+The benchmark lands inside
+`internal/bench/keystroke_echo_testenv_bench_test.go` (merged on
+`develop`, PR #121 @ `4c276d9`), which carries `//go:build integration` at
+its top (the same convention `internal/testenv`'s own integration tests
+already use, per that file's package comment). Two consequences for
+AC-013's verification method:
+
+- A **bare** `go build ./internal/bench/...` (no `-tags integration`)
+  EXCLUDES this file from the build entirely — it verifies nothing about
+  `BenchmarkKeystrokeToEcho_P99`. The compile check MUST carry the tag:
+  `go build -tags integration ./internal/bench/...` (and/or
+  `go vet -tags integration ./internal/bench/...`).
+- `just bench` (`justfile:53-66`) runs `go test
+  -bench=BenchmarkKeystrokeEcho_P99 -benchtime=1x -count=1
+  ./internal/bench/` — no `-tags integration`, and it targets
+  `BenchmarkKeystrokeEcho_P99` (no "To"), the untagged S-BL.BENCH
+  lower-bound function defined in the SEPARATE file
+  `keystroke_echo_bench_test.go`. It structurally cannot run
+  `BenchmarkKeystrokeToEcho_P99` (WITH "To") — different build-tag gate,
+  different function name. It runs today, unaffected by this story, and
+  verifies nothing this story changes.
+
+**AC-013's binding verification method is the direct invocation the
+merged file's own doc comment already specifies** (its "Run with:"
+block):
+
+```sh
+go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 \
+    -benchtime=1x -count=1 ./internal/bench/
+```
+
+producing the p99 metric via `b.ReportMetric`, unchanged from the pattern
+above.
+
+**`just bench` adjudication: Option (a)** — leave `just bench` as the
+tag-free lower-bound recipe; AC-013 verifies via the direct command
+above, not a justfile recipe. Rationale, grounded in this note's own
+design intent: the Story-Sizing Estimate already commits to "no new
+CI/deployment surface... everything is additive inside
+`internal/testenv`" for this story — a new or changed justfile recipe
+would be exactly that kind of surface change, unmotivated by anything
+else in this design. `just bench`'s purpose (S-BL.BENCH) is specifically
+the tag-free lower-bound measurement; conflating it with the full-stack
+integration benchmark would blur a distinction the merged file's own
+package comment goes out of its way to preserve ("statistically
+equivalent to `BenchmarkKeystrokeEcho_P99`... does NOT constitute
+full-stack VP-042 evidence"). The merged file already documents its own
+invocation convention independent of any justfile recipe (its "Run
+with:" comment, verbatim above) — AC-013 citing that same command is the
+minimal-diff, already-established path, not a new one this story would
+have to invent. If a future story wants a convenience recipe for the
+integration-tagged bench suite generally (not scoped to this one
+function), that is a separable, additive change outside AC-013's scope.
+
 ---
 
 ## Non-Goals (Explicit)
@@ -610,7 +674,7 @@ This story does NOT implement:
 | `internal/arq` | None — read-only consumer (`New`, `EnqueueSend`, `OnAck`); first production(-adjacent) call site for `OnAck` (see Risks) | No |
 | `internal/multipath` | None — read-only consumer (`NewMultipath`, `Send`, `Receive`) | No |
 | `internal/paths` | None — read-only consumer (`NewPathTracker`, `RankedPath`) | No |
-| `internal/bench` | `keystroke_echo_testenv_bench_test.go` (WIP on `fix/vp-042-testenv-integrated-bench`) updated to the token-based two-call shape; package comment's "lower bound only" framing retired once the full stack lands | No |
+| `internal/bench` | `keystroke_echo_testenv_bench_test.go` (merged on `develop`, PR #121 @ `4c276d9`, `//go:build integration`-tagged) updated to the token-based two-call shape; package comment's "lower bound only" framing retired once the full stack lands | No |
 
 **No new `internal/` package. ARCH-08 registration is the import-set
 amendment already applied (v2.13, DRAFT/PROSPECTIVE, this session) — it
@@ -639,10 +703,10 @@ Rationale:
   see Risks. If that review surfaces a different call contract, the
   downstream half of this design changes, not the upstream half or the
   tick-driving mechanism.
-- The round-trip-token API (Q5) touches the WIP bench test
-  (`fix/vp-042-testenv-integrated-bench`) and VP-042.md's harness skeleton,
-  both of which need updating to the new two-call-with-token shape —
-  small but real fan-out.
+- The round-trip-token API (Q5) touches the merged
+  `internal/bench/keystroke_echo_testenv_bench_test.go` (`develop`, PR #121
+  @ `4c276d9`) and VP-042.md's harness skeleton, both of which need
+  updating to the new two-call-with-token shape — small but real fan-out.
 - No new package, no CI/deployment surface, no cross-cutting production code
   change — everything is additive inside `internal/testenv` plus the ARCH-08
   spec amendment already applied.
@@ -691,6 +755,14 @@ Rationale:
    PO/architect act per existing VP lifecycle convention (compare how VP-042's
    own history table already distinguishes "audited"/"partial evidence" from
    a lock flip).
+6. **VP-042.md's Proof Harness Skeleton is superseded by this story's
+   binding API shape (Q5; see "What VP-042's Benchmark Looks Like Against
+   This," which already notes the divergence).** Story-writer should add a
+   File-List obligation updating VP-042.md's Proof Harness Skeleton section
+   to the binding two-call token shape this note specifies
+   (`SendKeystroke` → `RoundTrip`; `WaitForEcho(t, rt, timeout) ([]byte,
+   bool)`), so a future reader of VP-042.md isn't misled by a skeleton the
+   shipped code no longer matches.
 
 ---
 
@@ -2348,3 +2420,99 @@ at line 384, `func newEnv` at line 460, `t.Helper()` at line 461,
 `t.Cleanup(...)` at lines 475 and 528 — supplied as orchestrator-verified
 ground truth for this dispatch, consistent with the v1.10 ground truth
 already on record above.
+
+## v1.12 Consistency-Audit Repair (2026-08-28)
+
+A fresh-context consistency audit (VSDD §1.7) at the Step-4.5 gate found
+two MAJOR and one MINOR perimeter defect in this note. Audit record:
+`.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`.
+All three are resolved in this pass.
+
+### Finding #1 (MAJOR) — phantom-branch citation swept across three occurrences
+
+**Defect:** The note characterized the merged benchmark file
+`internal/bench/keystroke_echo_testenv_bench_test.go` as WIP on a branch,
+`fix/vp-042-testenv-integrated-bench`, at three live-text locations (§Q2
+~L130 "the existing WIP bench test", Package Impact Summary ~L613, Risks
+item 3 ~L642-643). That branch does not exist — verified absent from both
+`git branch --list` and `git ls-remote` — and the file is in fact already
+merged to `develop` via PR #121 (`4c276d9`, "fix(VP-042): testenv-integrated
+keystroke-echo p99 benchmark (#121)", 2026-07-12).
+
+**Fix:** All three occurrences corrected to state the file is merged on
+`develop` (PR #121 @ `4c276d9`), `//go:build integration`-tagged, defining
+`BenchmarkKeystrokeToEcho_P99`. §Q2's citation — which independently
+confirms `LoopbackEnv`'s named-field-not-embedding shape via the merged
+file's `env := lb.Env; env.CreateSession(b)` call pattern — is otherwise
+unchanged; that code-shape claim was re-verified against the merged file
+this session and remains accurate.
+
+### Finding #2 (MAJOR) — AC-013 verified nothing
+
+**Defect:** AC-013's verification intent, as it stood prior to this
+repair, cited a bare `go build ./internal/bench/...` and `just bench` as
+proof the updated benchmark works. Both are incapable of exercising
+`BenchmarkKeystrokeToEcho_P99`: the merged file carries `//go:build
+integration`, which a tag-less `go build` excludes from compilation
+entirely, and `just bench` (`justfile:53-66`) invokes `go test
+-bench=BenchmarkKeystrokeEcho_P99 ...` — no `-tags integration`, and a
+DIFFERENT function name (no "To") belonging to the separate, untagged
+`keystroke_echo_bench_test.go` (S-BL.BENCH lower-bound).
+
+**Fix:** Added a new "### Verification Method (AC-013)" subsection (below
+"## What VP-042's Benchmark Looks Like Against This") specifying the
+correct compile + run commands — `go build -tags integration
+./internal/bench/...` (and/or `go vet -tags integration
+./internal/bench/...`) for compile, and `go test -tags integration -run
+'^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1
+./internal/bench/` for run — matching the "Run with:" block the merged
+file's own doc comment already prescribes. Explicit adjudication
+recorded: **Option (a)** — `just bench` remains the tag-free S-BL.BENCH
+lower-bound recipe, unmodified and out of AC-013's scope; AC-013 verifies
+via the direct `go test -tags integration ...` command above. Rationale:
+this story's own Story-Sizing Estimate already commits to "no new
+CI/deployment surface... everything is additive inside
+`internal/testenv`" — extending or duplicating the justfile would be
+exactly that kind of surface change, unmotivated by anything else in this
+design; the merged file already documents its own invocation convention
+independent of any justfile recipe, so citing that same command is the
+minimal-diff, already-established path.
+
+### Finding #4 (MINOR) — forward obligation for VP-042.md not recorded
+
+**Defect:** The note's Risks section (five items) never stated that
+VP-042.md's Proof Harness Skeleton — explicitly acknowledged elsewhere in
+this note as diverging from the binding API this design specifies (see
+"What VP-042's Benchmark Looks Like Against This": "a small, deliberate
+divergence from the VP-042.md proof-harness skeleton's exact call shape")
+— needs updating to match. No "Forward Obligation" section existed to
+confirm or deny coverage.
+
+**Fix:** Added Risks item 6, a one-line forward obligation directing
+story-writer to encode a File-List obligation updating VP-042.md's Proof
+Harness Skeleton section to the binding two-call token shape
+(`SendKeystroke` → `RoundTrip`; `WaitForEcho(t, rt, timeout) ([]byte,
+bool)`) this note specifies.
+
+### Governance
+
+Findings #1 and #4 are edits/additions to live spec prose (§Q2, Package
+Impact Summary, Risks) inside sections already amended across v1.2
+through v1.11; no frozen dated changelog row or prior repair-addendum
+section was touched. Finding #2 is a net-new subsection — no prior
+AC-013 verification content existed in the note to correct in place; the
+incorrect framing the audit found lived at the story level, downstream of
+this note. Story and index files are untouched — per dispatch, this
+placement-note edit is transcribed into the story by story-writer
+separately.
+
+**Ground truth sources (v1.12):** `git branch --list` / `git ls-remote`
+(phantom branch absent — zero results for either); `git log develop` /
+`git show develop:internal/bench/keystroke_echo_testenv_bench_test.go`
+(PR #121, `4c276d9`, `//go:build integration` tag, `BenchmarkKeystrokeToEcho_P99`
+definition, "Run with:" doc comment, `env := lb.Env; env.CreateSession(b)`
+call pattern); `git show develop:internal/bench/keystroke_echo_bench_test.go`
+(sibling untagged `BenchmarkKeystrokeEcho_P99`, no "To"); the repo
+`justfile` §`bench` recipe (`justfile:53-66`, `BenchmarkKeystrokeEcho_P99`,
+no `-tags integration`) — all supplied by the orchestrator's dispatch fact
+base and independently re-confirmed against disk in this session.
