@@ -6,7 +6,7 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.12"
+version: "1.13"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.13 | R15 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R15-LENSB-01) — the v1.12 "### Verification Method (AC-013)" subsection's compile-check bullet was itself vacuous and its causal claim wrong. `internal/bench/` is a TEST-ONLY package (both files are `_test.go`); `go build` never compiles `_test.go` files, WITH OR WITHOUT `-tags integration` — the tag is irrelevant to the exclusion, so the prescribed `go build -tags integration ./internal/bench/...` compile-check verified nothing (empirically confirmed: exits 0 even with a deliberately injected compile error in the tagged file). Replaced with `go test -tags integration -run '^$' -count=1 ./internal/bench/` (Option (a) below) as the binding compile-gate — empirically confirmed to fail (exit 1) against the same injected error, while the untagged form does not see it. Causal claim corrected: exclusion is because the file is a test file, not because the tag is absent. See "v1.13 R15 Reconvergence Repair (2026-08-28)" section. |
 | 1.12 | Consistency-audit remediation (2026-08-28, POL-005 dispatch, `.factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`): MAJOR (Finding #1) — every live-text citation of the phantom branch `fix/vp-042-testenv-integrated-bench` (three occurrences: §Q2 ~L130, Package Impact Summary ~L613, Risks item 3 ~L642-643) corrected to reflect the actual merged state — `internal/bench/keystroke_echo_testenv_bench_test.go` is MERGED on `develop` (PR #121 @ `4c276d9`, `//go:build integration`-tagged, defines `BenchmarkKeystrokeToEcho_P99`); the branch was never real. MAJOR (Finding #2) — added a new "### Verification Method (AC-013)" subsection specifying the correct verification: `go build -tags integration ./internal/bench/...` (compile) + `go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/` (run), replacing the prior incorrect framing (bare `go build` + `just bench`, neither of which can reach the integration-tagged function); explicit adjudication recorded: `just bench` stays the tag-free S-BL.BENCH lower-bound recipe, out of AC-013's scope (Option (a)). MINOR (Finding #4) — added Risks item 6, a forward obligation for story-writer to encode a File-List obligation updating VP-042.md's Proof Harness Skeleton to the binding two-call token shape. See "v1.12 Consistency-Audit Repair (2026-08-28)" section. |
 | 1.11 | R8 re-review repair (2026-08-28): LOW (F-LENSA-01) / NITPICK (F-ORACLE-01) — the v1.10 erratum corrected the two SPACE-COLON `t.Helper()` citations `:460`→`:461`, but a THIRD live citation in SLASH notation (`testenv.go:384/460/475/528`, the `recordingTB` struct-field comment at §M2 ~L1463) survived uncorrected; now corrected to `384/461/475/528`. The v1.10 "two citations" accounting was complete for the space-colon form but the class also included the slash form; this completes the class sweep. Frozen v1.10 row/section left as-is per §2.9; ground truth `internal/testenv/testenv.go:461`. See "v1.11 R8 Re-Review Repair (2026-08-28)" section. |
 | 1.10 | R7 re-review repair (2026-08-28): MED (F-LENSB-01) — §M2's ticker-start mitigation decision is corrected: the "upstream ticker MAY start at construction" / "start-time freedom PRESERVED" latitude ([v1.6 F-B-LENSB-01]) is WITHDRAWN. The upstream ticker now starts at `CreateSession` time, SYMMETRIC with the downstream ticker — race-free for the same single-goroutine reason, with no `EnqueueSend` dependency blocking it. The "Driver lifecycle pin" (§H3) and the "Steps 1–3" cross-reference sentence are updated so `CreateSession` is described as starting BOTH tickers, not just the downstream one. AC-017's "single-goroutine throughout" method text is sharpened: because AC-017 never calls `CreateSession` (the sole start-site for both tickers), no ticker goroutine of either kind can run during the test — this is now TRUE BY CONSTRUCTION, closing a latent `go test -race` hazard between a construction-started upstream ticker's locked `failLoud` write and AC-017's unlocked `len(stub.errorfCalls)` assertion read (outcome count was always 1; this was a race annotation, not a wrong count). LOW (F-LENSB-02) — the §H3 `sessionName` storage/timing pin is corrected: AC-017's `ErrConsoleNotFound` is caused PRIMARILY by the un-attached, zero-value `loopbackConsoleKey` (`AccessNode.SendKeystroke`, `internal/session/upstream.go:288-290`, gates on console attachment BEFORE comparing `sessionName` at line 292), not by the empty `sessionName`, which is demoted to a redundant second guarantee. Erratum — two live-text citations of `t.Helper()`'s line number corrected from `:460` to the disk-verified `:461` (`internal/testenv/testenv.go`); the unrelated `cmd/switchboard/access.go:460` citations, and the frozen v1.9 changelog row/section's `:460` citation, are untouched per §2.9. See "v1.10 R7 Re-Review Repair (2026-08-28)" section. |
@@ -571,7 +572,8 @@ samples" estimate at these intervals, i.e. ~60ms/sample).
 
 **Decision: AC-013 verifies via the direct `go test -tags integration`
 invocation the merged benchmark file's own doc comment already prescribes
-— not a bare `go build`, and not `just bench`. `just bench` is explicitly
+— not `go build` (tagged or untagged; both are vacuous against a
+test-only package), and not `just bench`. `just bench` is explicitly
 adjudicated OUT of AC-013's scope and stays unchanged.**
 
 The benchmark lands inside
@@ -581,11 +583,30 @@ its top (the same convention `internal/testenv`'s own integration tests
 already use, per that file's package comment). Two consequences for
 AC-013's verification method:
 
-- A **bare** `go build ./internal/bench/...` (no `-tags integration`)
-  EXCLUDES this file from the build entirely — it verifies nothing about
-  `BenchmarkKeystrokeToEcho_P99`. The compile check MUST carry the tag:
-  `go build -tags integration ./internal/bench/...` (and/or
-  `go vet -tags integration ./internal/bench/...`).
+- **`go build` EXCLUDES this file unconditionally, WITH OR WITHOUT
+  `-tags integration` — the tag is irrelevant to the exclusion.** `go
+  build` never compiles `_test.go` files, tagged or not; the file is
+  excluded because it is a test file, not because a build tag is
+  absent. `internal/bench/` contains only two files
+  (`keystroke_echo_bench_test.go` and
+  `keystroke_echo_testenv_bench_test.go`), both `_test.go` — it is a
+  test-only package, so `go build ./internal/bench/...` compiles
+  nothing in it either way and verifies nothing about
+  `BenchmarkKeystrokeToEcho_P99` regardless of the tag. (v1.12 stated
+  the tagged form as the fix; empirically it is exactly as vacuous as
+  the untagged form — confirmed by injecting a compile error into the
+  tagged file: `go build -tags integration ./internal/bench/...`
+  still exits 0. See v1.13 repair section below for the full
+  verification.) **The compile check for a test-only package must
+  compile the TEST BINARY, not the package**: `go test -tags
+  integration -run '^$' -count=1 ./internal/bench/` (empirically
+  confirmed to fail on the same injected error). `go vet -tags
+  integration ./internal/bench/...` is also sound (type-checks the
+  tagged test files without linking) and may be used as a faster
+  alternative; `go test -run '^$'` is preferred here because it
+  compiles via the identical path the binding RUN command below uses,
+  so the fast pre-check and the run command can never disagree about
+  whether the tagged file compiles.
 - `just bench` (`justfile:53-66`) runs `go test
   -bench=BenchmarkKeystrokeEcho_P99 -benchtime=1x -count=1
   ./internal/bench/` — no `-tags integration`, and it targets
@@ -606,7 +627,12 @@ go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 \
 ```
 
 producing the p99 metric via `b.ReportMetric`, unchanged from the pattern
-above.
+above. This binding RUN command already compiles the test binary
+(including the tagged file) before executing it, so it is itself a
+sufficient compile check on its own; the `go test -tags integration
+-run '^$' -count=1 ./internal/bench/` form above is a fast,
+convenience pre-check that skips the benchmark's actual runtime, not a
+separately-required gate.
 
 **`just bench` adjudication: Option (a)** — leave `just bench` as the
 tag-free lower-bound recipe; AC-013 verifies via the direct command
@@ -2516,3 +2542,95 @@ call pattern); `git show develop:internal/bench/keystroke_echo_bench_test.go`
 `justfile` §`bench` recipe (`justfile:53-66`, `BenchmarkKeystrokeEcho_P99`,
 no `-tags integration`) — all supplied by the orchestrator's dispatch fact
 base and independently re-confirmed against disk in this session.
+
+## v1.13 R15 Reconvergence Repair (2026-08-28)
+
+An R15 adversarial reconvergence pass found one MED technical defect in
+the v1.12 "### Verification Method (AC-013)" subsection itself — the
+subsection v1.12 added to FIX AC-013's verification was, in its compile
+check, exactly as vacuous as the framing it replaced.
+
+### Finding F-R15-LENSB-01 (MED) — v1.12's AC-013 compile-check was itself vacuous
+
+**Defect:** v1.12's compile-check bullet stated that a bare `go build
+./internal/bench/...` (no `-tags integration`) excludes
+`keystroke_echo_testenv_bench_test.go` from the build, and prescribed
+carrying the tag as the fix: `go build -tags integration
+./internal/bench/...`. This causal claim is wrong, and the prescribed
+fix is a no-op. `internal/bench/` is a TEST-ONLY package —
+`git ls-tree develop --name-only internal/bench/` returns exactly two
+files, `keystroke_echo_bench_test.go` and
+`keystroke_echo_testenv_bench_test.go`, both `_test.go`. `go build`
+never compiles `_test.go` files, tagged or not — the build tag governs
+which `_test.go` files a subsequent `go test` compiles, it does not
+make `go build` see test files at all. So `go build
+-tags integration ./internal/bench/...` compiles nothing in this
+package either way, exactly like the untagged form it was meant to
+correct — it verifies nothing about `BenchmarkKeystrokeToEcho_P99` and
+cannot detect a compile error in it. This re-introduces, for a
+different underlying reason, the same class of defect v1.12's Finding
+#2 set out to fix (a prescribed command that cannot reach the
+benchmark).
+
+**Fix:** Corrected the causal claim — `go build` excludes `_test.go`
+files unconditionally (tag-independent); the exclusion is because the
+file is a test file, not because a tag is absent. Replaced the
+prescribed compile-check with `go test -tags integration -run '^$'
+-count=1 ./internal/bench/` (chosen over the also-sound `go vet -tags
+integration ./internal/bench/...` alternative — noted as a faster
+option — because it compiles via the identical path the binding RUN
+command already uses, so the fast pre-check and the run command share
+one compilation model and can never disagree about whether the tagged
+file compiles). Also added a note that the binding RUN command itself
+already compiles the test binary before executing it, so the separate
+compile-check is a convenience pre-check, not an independently
+required gate.
+
+**Empirical verification performed this session** (code tree
+`/Users/skippy/work/aae-orc/run/switchboard-blue`, branch `develop`,
+working tree confirmed clean before and after):
+
+| Command | Clean tree | With a deliberately injected `undefined: <identifier>` compile error in `keystroke_echo_testenv_bench_test.go` |
+|---|---|---|
+| `go build ./internal/bench/...` | exit 0 | (not re-tested; already vacuous by construction — see below) |
+| `go build -tags integration ./internal/bench/...` | exit 0 | **exit 0 — does NOT catch the injected error** |
+| `go test -run '^$' -count=1 ./internal/bench/` (no tag) | exit 0 | exit 0 — does NOT catch it (file excluded, as expected) |
+| `go test -tags integration -run '^$' -count=1 ./internal/bench/` | exit 0 | **exit 1 — catches it**: `keystroke_echo_testenv_bench_test.go:116:37: undefined: thisIdentifierDoesNotExist`, `FAIL ... [build failed]` |
+| `go vet -tags integration ./internal/bench/...` | exit 0 | **exit 1 — also catches it**: `vet: ...:116:37: undefined: thisIdentifierDoesNotExist` |
+
+The error was injected as a trailing `var __deliberateCompileErrorProbe
+= <undefined identifier>` line appended to the tagged file, run against
+each command, then the file was restored from a pre-edit backup;
+`git status --short internal/bench/` and `git diff --stat
+internal/bench/` were empty after restoration (working tree clean,
+confirmed twice — once per injection round). This directly falsifies
+the v1.12 compile-check (tagged `go build` is exit-0 even with a real
+compile error present) and directly confirms both `go test -tags
+integration -run '^$'` and `go vet -tags integration` as sound,
+airtight compile-gates for this test-only package.
+
+### Governance
+
+This is a live-prose correction inside the "### Verification Method
+(AC-013)" subsection v1.12 added — that subsection is not a frozen
+dated changelog row or a frozen prior repair-addendum section (per
+§2.9, only dated changelog rows and prior versions' own repair-addendum
+sections are frozen; the AC-013 subsection is current-version live
+spec content, open to in-place correction like §Q2 or Package Impact
+Summary have been across v1.2–v1.12). The frozen v1.12 changelog row
+(line ~34) and the frozen "v1.12 Consistency-Audit Repair" section
+above (including its own citation of the now-superseded `go build
+-tags integration` compile-check) are both left untouched per
+§2.9 — the correction rides in this new v1.13 row and section, not by
+editing v1.12's record of what it did at the time. Story, STORY-INDEX,
+and code are untouched — per dispatch, this placement-note edit is
+transcribed into the story separately.
+
+**Ground truth sources (v1.13):** `git ls-tree develop --name-only
+internal/bench/` (test-only package, two `_test.go` files, zero
+non-test files); direct empirical runs of `go build`, `go build -tags
+integration`, `go test -run '^$'`, `go test -tags integration -run
+'^$'`, and `go vet -tags integration` against both the clean tree and a
+deliberately-injected compile error, per the table above — all
+performed and observed in this session, not inherited from the
+orchestrator's dispatch fact base.
