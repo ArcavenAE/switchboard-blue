@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "10421b6"
+input-hash: "0a91d09"
 traces_to: STATE.md
 ---
 
@@ -2637,3 +2637,9 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R28 CLEAN (first pass of a new 3-consecutive-clean-pass streak, against v1.18 tip a89b2bb9): zero findings across all 4 legs. §1.8 Oracle CLEAN (compile-gate injection re-proof re-sound, restore hash e53ab35f, no residue); Lens A CLEAN (R27's O-1 fix verified complete and correct, L57/L72 align 1:1 with the formal changelog, no straggler); Lens B CLEAN (one known non-gating LOW re-observed — note L497 stale citation, unchanged deferred status); Lens C CLEAN (O-1-fix completeness sweep clean, triple-ledger 1:1 parity holds, all sweeps clean). Zero spec artifacts changed — story stays v1.18/4902d5d, note stays v1.15; STORY-INDEX v4.162→v4.163 (administrative bump; this burst also removed a pre-existing spurious duplicate Changelog table header, cosmetic index-hygiene fix, no row content edited). **Convergence counter ADVANCES 0/3→1/3.** RECURRING [process-gap] re-observed as non-blocking, ~8th instance (R19/R20/R22/R23/R24/R25/R27/R28). R29 fresh-context reconvergence next (pass 2 of the streak begun at R28).** | adversary-clean | develop @ 2ce3a57; LOOPBACK has delivered no code. |
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the v1.19 human-gate-edit row, 2026-08-29 v1.19 compaction pass):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R29 NOT CLEAN (second pass of the streak begun at R28, against v1.18 tip 4c467103): 3 of 4 legs CLEAN. §1.8 Oracle CLEAN (compile-gate injection re-proof re-sound, restore hash e53ab35f); Lens A CLEAN; Lens B CLEAN (all 8 load-bearing develop@2ce3a57 source-facts re-derived exact, Q4 downstream OnAck placement race/deadlock-free). Lens C NOT CLEAN — F-C-01 (MED): STORY-INDEX changelog missing the 4.144 row. Orchestrator PAT-04 git-adjudication: premise TRUE but RESIDUAL not NEW (git-log pickaxe proves the row never existed; R28 4c46710 exonerated, deleted zero changelog rows) and NOT a sole anomaly (whole-class sweep found a second identical gap, the 4.127 row). Both POL-001 (real frontmatter bump, no changelog row): 4.143→4.144 @ e0f65a6 2026-07-22; 4.126→4.127 @ e7cdd90 2026-07-18. Fixed the whole class — backfilled both rows from git evidence, true historical dates, reconstruction-tagged; ledger now dense-sequential 4.164→4.00. Also resolves the pre-existing F-LENSA-R13-01 Open Drift Item (same gap, first surfaced R13). Zero spec artifacts changed — story stays v1.18/4902d5d, note stays v1.15; STORY-INDEX v4.163→v4.164. **Convergence counter RESETS 1/3→0/3.** R30 fresh-context reconvergence next (pass 1 of a new 3-consecutive-clean-pass streak).** | adversary-notclean+remediated | develop @ 2ce3a57; LOOPBACK has delivered no code. |

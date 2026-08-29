@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-08-29T13:51:46Z","command":"go test -tags integration -run '^$' -count=1 ./internal/bench/ ; echo \"EXIT_CODE=$?\""}
+{"status":"pass","timestamp":"2026-08-29T15:32:09Z","command":"cd /Users/skippy/work/aae-orc/run/switchboard-blue && go test -tags integration -run '^$' -count=1 ./internal/bench/ ; echo \"EXIT_CODE=$?\""}
