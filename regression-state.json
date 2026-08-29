@@ -1,1 +1,1 @@
-{"status":"pass","timestamp":"2026-08-29T10:45:43Z","command":"go test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/ 2>&1; echo \"RUN_EXIT=$?\""}
+{"status":"pass","timestamp":"2026-08-29T11:07:54Z","command":"cd /Users/skippy/work/aae-orc/run/switchboard-blue\ngo test -tags integration -run '^$' -bench=BenchmarkKeystrokeToEcho_P99 -benchtime=1x -count=1 ./internal/bench/ > /tmp/oracle_run_method.log 2>&1\nRUN_EXIT=$?\necho \"RUN_METHOD_EXIT=$RUN_EXIT\"\necho \"---output---\"\ncat /tmp/oracle_run_method.log"}
