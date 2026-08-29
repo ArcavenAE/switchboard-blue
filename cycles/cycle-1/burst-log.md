@@ -2000,3 +2000,25 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R5 remediation index-sync: STORY-INDEX row v1.1→v1.7 (POL-002 catch-up), placement-note citation v1.1→v1.8, AC-count 14→17; STATE.md checkpoint refreshed (note v1.8 @ 4c7abc2 / story v1.7 @ 8f86a8e0, R5 remediated, R6 pending, counter 0/3).** | index-sync | develop unchanged @ af8eb17. |
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 R12 CLEAN (2026-08-28)
+
+**Context:** R12 adversarial re-review (Oracle + 3 diverse lenses A/B/C, four-leg rig) against reviewed tip `a4f3806ff40c8ae4bf7245780f112dc586b047b2` — story v1.11, placement-note v1.11, input-hash `1145d15`, STORY-INDEX v4.149. Story/note/index content identical to the `09d61c54` R11 remediation commit; the intervening `a4f3806f` R11-record commit did not alter any converging artifact. Verdict: **CLEAN** — convergence counter 0/3→1/3.
+
+**Findings:** Oracle GATES GREEN (`go build`/`go vet` both exit 0, code repo develop @ `2ce3a57`) + CITATIONS ACCURATE (all load-bearing citations re-verified exact against real source across testenv.go/upstream.go/arq.go/halfchannel/multipath). Mutation-honesty N/A (spec-only draft). Lens A CLEAN — R11 status-note repair verified complete and correct, all 10 version-ledger surfaces consistent at v1.11, zero findings. Lens B CLEAN — every scaffolding signature re-verified exact against real internal/ source, concurrency invariants (multipath.Send lock-free, AC-016 window math, AC-017 single-goroutine, lock ordering acyclic) re-derived independently and hold, zero findings. Lens C CLEAN — all version-ledger surfaces mutually consistent, changelog honesty verified, all 17 ACs BC-traced, input-hash `1145d15` recomputed and matches, version-qualifier drift sweep found zero stale live-version claims, zero findings.
+
+**Orchestrator adjudication (PAT-04):** R12 end-state independently verified — factory tip `a4f3806f` unchanged during review, worktree clean except sidecar-learning.md, converging artifacts byte-identical to HEAD, code repo develop @ `2ce3a57` unmutated. PASS VERDICT: CLEAN, zero findings all four legs.
+
+**Survivor ledger (carried forward unchanged to R13 + human approval gate):** F-ORACLE-R9-01 (below-LOW, placement-note L476 line-ref off-by-2); R11 Lens B O-1 (multipath.Send error-swallow, non-defect); R10 double-CreateSession observation (by-design single-session contract, for-human-review-at-approval-gate).
+
+**Convergence counter:** 1/3 (CLEAN — no findings, no edits; last edit remains `09d61c541b929bb0923925845fe4592976d96891`).
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R12-2026-08-28.md`.
+
+**Next:** R13 fresh-context 4-leg rig against unchanged tip `a4f3806ff40c8ae4bf7245780f112dc586b047b2` — needs 2 more consecutive clean passes (R13, R14) to converge.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R6 remediation index-sync: STORY-INDEX row v1.7→v1.8 (POL-002), placement-note citation v1.8→v1.9; STATE.md checkpoint refreshed (note v1.9 @ c7b449b3 / story v1.8 @ e171cbce, R6 remediated — BLOCKER recordingTB fix + O-1 + F-LC-R6-001, R7 pending, counter 0/3).** | index-sync | develop unchanged @ af8eb17. |
