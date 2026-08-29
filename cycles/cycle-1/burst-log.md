@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "c22df12"
+input-hash: "4a2ad63"
 traces_to: STATE.md
 ---
 
@@ -2173,3 +2173,21 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R11 NOT CLEAN (F-LENSA-R11-01 LOW, corroborated by F-LENSC-R11-01: status-note version-ledger missing v1.10 entry): Oracle GREEN, Lens B CLEAN (O-1 non-defect); remediated same day @ 09d61c541b929bb0923925845fe4592976d96891 (story frontmatter v1.10→v1.11, status-note backfill, STORY-INDEX v4.149); input-hash STABLE 1145d15; convergence counter RESET 2/3→0/3; R12 next.** | adversary-notclean+remediated | develop unchanged @ af8eb17. |
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 R16 CLEAN — first clean pass since the audit reset (2026-08-29)
+
+**Context:** R16 — first fresh adversarial reconvergence pass since the R15 remediation. Four-leg diverse-lens rig (§1.8 Oracle + 3 diverse lenses A/B/C) dispatched concurrently, POL-005-verified against tip `e728ebc4d4cb0092f6fd00ebebe66feff5d36ee6` — story v1.13, placement-note v1.13, input-hash `2b60a3d`, STORY-INDEX v4.151. Verdict: **CLEAN** — zero findings across all four legs; convergence counter 0/3→1/3.
+
+**Findings:** §1.8 Oracle GREEN — `go build`/`go vet` clean; new compile-gate soundness probe (injected a deliberate compile error into `internal/bench`, hash-verified restore afterward): the R15-fixed gate `go test -tags integration -run '^$' -count=1 ./internal/bench/` catches it (exit 1) while the old vacuous `go build -tags integration` gate misses it (exit 0), independently confirming F-R15-LENSB-01's fix is sound rather than trusting the placement-note's own verification table; binding RUN method still produces the p99 metric; citations accurate. Lens A CLEAN — all three R15 fixes (F-R15-LENSB-01 AC-013 rewrite, F-R15-LENSA-01 L62 reconciliation, F-R15-LENSC-01 "11"→"10") verified fully propagated; one below-LOW disclosure-only observation **OBS-R16-LENSA-DATE** (placement-note v1.13 changelog row dated 2026-08-28 vs story/STORY-INDEX v1.13 rows dated 2026-08-29 — honest session-clock-midnight sequencing artifact, not a defect). Lens B CLEAN — F-R15-LENSB-01 fix re-examined on technical merits (not just note-matching), design soundness un-regressed. Lens C CLEAN — traceability sweeps all clean; one non-defect observation **F-R16-LENSC-01** (story vs note AC-013 framing latitude, identical command text, no substantive divergence).
+
+**Orchestrator adjudication (PAT-04):** R16 end-state independently verified against dispatch tip `e728ebc4`; converging artifacts byte-identical to the HEAD-committed baseline throughout; the Oracle's injection probe was hash-verified restored, no residual mutation. **PASS VERDICT: CLEAN.** **Convergence counter: 0/3 → 1/3 — R17 next.**
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R16-2026-08-29.md`.
+
+**Next:** R17 fresh-context 4-leg rig (§1.8 Oracle + 3 diverse lenses A/B/C) against the tip after this state-manager commit — story v1.13, placement-note v1.13, input-hash `2b60a3d`, STORY-INDEX v4.151 unchanged — carrying the POL-005 dispatch-integrity tuple. Needs 3 consecutive clean-or-better passes (R16/R17/R18) to reconverge, THEN a re-run of the §1.7 consistency audit against v1.13, THEN the human approval gate.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R12 CLEAN (zero findings): all 3 diverse lenses CLEAN, §1.8 oracle GATES GREEN/CITATIONS ACCURATE, no new findings; F-ORACLE-R9-01 + R11 Lens B O-1 carried in survivor ledger not re-raised; artifacts UNCHANGED (note v1.11 / story v1.11 / input-hash 1145d15) against tip a4f3806f; convergence counter 0/3→1/3; R13 next.** | adversary-clean | develop unchanged @ af8eb17. |
