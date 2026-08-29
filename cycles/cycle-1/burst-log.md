@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "4a2ad63"
+input-hash: "ff5c4f9"
 traces_to: STATE.md
 ---
 
@@ -2191,3 +2191,21 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R12 CLEAN (zero findings): all 3 diverse lenses CLEAN, §1.8 oracle GATES GREEN/CITATIONS ACCURATE, no new findings; F-ORACLE-R9-01 + R11 Lens B O-1 carried in survivor ledger not re-raised; artifacts UNCHANGED (note v1.11 / story v1.11 / input-hash 1145d15) against tip a4f3806f; convergence counter 0/3→1/3; R13 next.** | adversary-clean | develop unchanged @ af8eb17. |
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 R17 CLEAN — second consecutive clean pass since the audit reset (2026-08-29)
+
+**Context:** R17 — second fresh adversarial reconvergence pass since the R15 remediation, immediately following R16's clean pass. Four-leg diverse-lens rig (§1.8 Oracle + 3 diverse lenses A/B/C) dispatched concurrently, POL-005-verified against tip `383ceac686778c73b852d50932122fcd4aaf0ad2` — story v1.13, placement-note v1.13, input-hash `2b60a3d`, STORY-INDEX v4.151 (unchanged from R16). Verdict: **CLEAN** — zero findings across all four legs; convergence counter 1/3→2/3.
+
+**Findings:** §1.8 Oracle GREEN — `go build`/`go vet` clean (baseline); a fresh compile-gate soundness re-probe (injected a deliberate compile error into `internal/bench`, hash-verified restore afterward) re-proved the R15-fixed gate `go test -tags integration -run '^$' -count=1 ./internal/bench/` catches it (exit 1) while the old vacuous `go build -tags integration` gate misses it (exit 0) — independently re-confirming F-R15-LENSB-01's fix is sound a second time, rather than trusting R16's own probe; binding RUN method still emits the p99 metric; citations accurate; mutation-honesty N/A. Lens A CLEAN — all axes pass; one non-gating disclosure-only observation **OBS-R17-LENSA-01** (story names the AC-013 metric explicitly as `p99_rtt_ms` where the placement-note refers to it generically as "the p99 metric" — authorial-specificity latitude, same class as F-R16-LENSC-01, non-defect). Lens B CLEAN — zero findings; every technical anchor (compile-gate, SendKeystroke gate ordering, AC-016 window math, AC-017 single-goroutine constraint, `recordingTB`, AC-005 dedup, acyclic lock ordering) re-derived from real source. Lens C CLEAN — zero findings/observations; all 8 traceability axes clean (go-build sweep, phantom-branch sweep, version-qualifier, L62, changelog honesty, AC→BC tracing, input-hash, cross-artifact consistency).
+
+**Orchestrator adjudication (PAT-04):** R17 end-state independently verified against dispatch tip `383ceac6`; converging artifacts byte-identical to the HEAD-committed baseline throughout; the Oracle's injection probe was hash-verified restored, no residual mutation. **PASS VERDICT: CLEAN.** **Convergence counter: 1/3 → 2/3 — R18 next.**
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R17-2026-08-29.md`.
+
+**Next:** R18 fresh-context 4-leg rig (§1.8 Oracle + 3 diverse lenses A/B/C) against the tip after this state-manager commit — story v1.13, placement-note v1.13, input-hash `2b60a3d`, STORY-INDEX v4.151 unchanged — carrying the POL-005 dispatch-integrity tuple. If R18 is CLEAN-or-better, convergence counter reaches 3/3 — THEN re-run the §1.7 consistency audit against v1.13, THEN the human approval gate.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R13 NITPICK_ONLY (artifacts untouched → counts as clean): Oracle GATES GREEN/CITATIONS ACCURATE, Lens B/C CLEAN, Lens A NITPICK_ONLY (1 NEW nitpick F-LENSA-R13-01 — STORY-INDEX v4.145 changelog cites a missing 4.144 row, pre-existing/index-global, adjudged LEAVE-IT); F-ORACLE-R9-01 + R11 Lens B O-1 carried in survivor ledger not re-raised; artifacts UNCHANGED (note v1.11 / story v1.11 / input-hash 1145d15) against tip bab12d07; convergence counter 1/3→2/3; R14 next.** | adversary-nitpick | develop unchanged @ af8eb17. |
