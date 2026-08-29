@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "87f0c03"
+input-hash: "c335121"
 traces_to: STATE.md
 ---
 
@@ -15,6 +15,18 @@ traces_to: STATE.md
 
 <!-- Archived session resume checkpoints extracted from STATE.md on 2026-06-25.
      Only the latest checkpoint lives in STATE.md. -->
+
+---
+
+## Session Resume Checkpoint (2026-08-28) — S-BL.LOOPBACK-FULLSTACK R12 CLEAN — convergence 1/3
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial spec convergence, cycle-1, IN PROGRESS. R12 (2026-08-28) COMPLETE — **CLEAN**: zero findings across all four legs. Oracle GATES GREEN (`go build`/`go vet` both exit 0, code repo develop @ `2ce3a57`) + CITATIONS ACCURATE (all load-bearing citations re-verified exact against real source). Lens A CLEAN (R11 status-note repair verified complete/correct; all 10 version-ledger surfaces consistent at v1.11). Lens B CLEAN (every scaffolding signature re-verified exact; concurrency invariants — lock-free multipath.Send, AC-016 window math, AC-017 single-goroutine, acyclic lock ordering — all hold). Lens C CLEAN (changelog honesty verified; all 17 ACs BC-traced; input-hash `1145d15` recomputed and matches; version-qualifier drift sweep found zero stale live-version claims). **Convergence counter 0/3 → 1/3.** Reviewed tip `a4f3806ff40c8ae4bf7245780f112dc586b047b2` — story v1.11, placement-note v1.11, input-hash `1145d15`, STORY-INDEX v4.149, content identical to the `09d61c54` R11 remediation (the intervening `a4f3806f` R11-record commit did not alter converging artifacts). Full record: `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R12-2026-08-28.md`. develop unchanged @ af8eb17 (no code delivery — spec-only review).
+
+**Deferred items carried to the survivor ledger (for R13's lenses AND the human approval gate):** (1) F-ORACLE-R9-01 (below-LOW, placement-note L476 line-ref off-by-2, deliberately not fixed to avoid unrelated note-version churn); (2) R11 Lens B O-1 (`multipath.Send` error-swallowing) — adjudged non-defect, no action; (3) OBS-LENSB-R10-DBLCREATESESSION (no `sync.Once` guard against double-`CreateSession` — by-design single-call contract, surfaced for human confirmation at the approval gate).
+
+**Next:** R13 fresh-context 4-leg rig (Oracle + 3 diverse lenses A/B/C) against unchanged tip `a4f3806ff40c8ae4bf7245780f112dc586b047b2` (story stays v1.11) — needs 2 more consecutive clean passes (R13, R14) to converge; any finding or edit resets the counter to 0.
+
+**Resume protocol:** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) dispatch R13 adversarial re-review for S-BL.LOOPBACK-FULLSTACK against tip `a4f3806ff40c8ae4bf7245780f112dc586b047b2` (carry the POL-005 verification tuple).
 
 ---
 

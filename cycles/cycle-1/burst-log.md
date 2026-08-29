@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "d8c98b0"
+input-hash: "c335121"
 traces_to: STATE.md
 ---
 
@@ -2022,3 +2022,38 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R6 remediation index-sync: STORY-INDEX row v1.7→v1.8 (POL-002), placement-note citation v1.8→v1.9; STATE.md checkpoint refreshed (note v1.9 @ c7b449b3 / story v1.8 @ e171cbce, R6 remediated — BLOCKER recordingTB fix + O-1 + F-LC-R6-001, R7 pending, counter 0/3).** | index-sync | develop unchanged @ af8eb17. |
+
+## Burst: S-BL.LOOPBACK-FULLSTACK Step-4.5 R13 orchestration record (2026-08-28)
+
+**Parent-commit:** bab12d0793b7177049fd4c9e2bfda1ecdebc3783
+
+**Adversary verdict:** NITPICK_ONLY — R13 four-leg diverse-lens rig against reviewed tip `bab12d0793b7177049fd4c9e2bfda1ecdebc3783` (story v1.11, placement-note v1.11, input-hash `1145d15`, STORY-INDEX v4.149). Oracle GATES GREEN (`go build`/`go vet` both exit 0, code repo develop @ `2ce3a5795009209d4e5eebec8fd9051f26f78055`) + CITATIONS ACCURATE (all load-bearing citations re-verified exact against real source across testenv.go/upstream.go/arq.go/halfchannel/multipath/paths). Lens B technical-soundness/concurrency CLEAN (new signature confirmations: KeystrokeSink.SendInput@upstream.go:68, WithKeystrokeSink@104, no SetSink, Publisher.Publish@session.go:137, RegisterKey, RoleFull, paths.RankedPath/Rank@375/392; all concurrency invariants re-derived and hold; non-blocking observation on loopbackSink.SendInput sketch omitting downstreamHCMu, governed not a defect). Lens C traceability CLEAN (zero findings, all 8 version-ledger surfaces consistent at v1.11, 17 ACs BC-traced, input-hash correct). Lens A spec-fidelity NITPICK_ONLY — story + STORY-INDEX row fully CLEAN on all cross-surface consistency; one NEW nitpick F-LENSA-R13-01 (STORY-INDEX v4.145 changelog row cites a "4.144 → 4.145" predecessor but no 4.144 row exists — pre-existing R5-era gap, index-global, non-gating for this story). Story/note/index content identical to the `09d61c54` R11 remediation commit; the intervening `bab12d07` R12-record commit did not alter any converging artifact. Orchestrator adjudication (PAT-04): F-LENSA-R13-01 confirmed real on disk but adjudged LEAVE-IT (NITPICK severity, single-lens, pre-existing, index-global, orthogonal to this story's spec — fixing it would edit an unrelated STORY-INDEX row and reset the counter for cosmetic index-history). PASS VERDICT: NITPICK_ONLY, artifacts untouched → counts as clean. **Convergence counter 1/3 → 2/3.**
+
+**Files touched (Dim-1): 4 unique files**
+
+- .factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R13-2026-08-28.md
+- .factory/STATE.md
+- .factory/cycles/cycle-1/burst-log.md
+- .factory/cycles/cycle-1/session-checkpoints.md
+
+**Codifications:** none — this burst is orchestration-metadata-only (adversarial re-review round bookkeeping under the POL-005 dispatch-integrity protocol); no D-NNN decision items closed or newly codified. Story, placement-note, STORY-INDEX, and sidecar-learning.md were deliberately left byte-unchanged by this burst to preserve the clean-pass count.
+
+**Dim-2 Attestation:** No code change in this burst's own scope (pure STATE/cycle-record bookkeeping, zero diff to `internal/` or `cmd/`). The reviewed story's referenced scaffolding was independently gate-checked by the R13 Oracle leg: `go build ./...` and `go vet ./...` both exit 0 against code repo develop @ `2ce3a5795009209d4e5eebec8fd9051f26f78055` (GATES GREEN). No cargo/WASM toolchain applies to this Go-based product.
+
+**Dim-5 Attestation:** N/A — no hook-plugin/WASM artifact built or touched in this burst.
+
+**Dim-6 Attestation:** N/A — Go project; no cargo fmt/clippy toolchain in this repo. `go build`/`go vet` clean per Dim-2 above stands as this repo's equivalent format/lint gate.
+
+**Dim-7 Attestation:** N/A — no test suite executed in this burst; story remains spec-only (no `loopback.go` scaffolding exists yet to test — Oracle mutation-honesty: N/A, confirmed no scaffolding to mutate).
+
+**Closes:** none — no D-NNN items closed by this burst. Survivor ledger (F-ORACLE-R9-01, F-LENSA-R13-01, R11 Lens B O-1, R10 double-CreateSession observation) remains open/deferred, carried to R14 + the human approval gate.
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R13-2026-08-28.md`.
+
+**Next:** R14 fresh-context 4-leg rig against unchanged tip `bab12d0793b7177049fd4c9e2bfda1ecdebc3783` — needs 1 more consecutive clean pass (R14) to converge.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R8 remediation index-sync: STORY-INDEX row v1.9→v1.10 (POL-002), placement-note citation v1.10→v1.11; STATE.md checkpoint refreshed (note v1.11 @ 5b88e5df / story v1.10 @ 65c00275, R8 remediated — 1 LOW slash-form t.Helper() citation straggler, erratum-of-the-erratum, R9 pending, counter 0/3); deferred STATE.md staleness swept current (Current Phase Steps/Current Step/OBS-VP-BENCH, S-7.02 sweep) — oldest row archived to burst-log.md.** | index-sync | develop unchanged @ af8eb17. |
