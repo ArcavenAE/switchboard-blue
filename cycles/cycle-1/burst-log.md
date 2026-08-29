@@ -1974,3 +1974,29 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-07-21 | **S-BL.DISCOVERY-WIRE Step-4.5 exhaustive version-pin audit: story v2.27 / def6b7b (2 missed BC-2.03.001 PC-5 structural-variant pins v1.6→v1.7; all declared-input pins confirmed canonical); factory 075bfc0; code 5c8db39 (26 commits) + ruling v1.2 unchanged; counter 0/3 RESET.** | v2.27-pin-audit | develop @ 7fcf0cf. |
+
+---
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 R11 NOT CLEAN + remediation (2026-08-28)
+
+**Context:** R11 adversarial re-review (Oracle + 3 diverse lenses A/B/C, four-leg rig) against reviewed tip `abed804b239e27371a6015a03fdbcbb8e0efb146` — story v1.10 @ that tip, note v1.11 (unchanged since R8), input-hash `1145d15`, STORY-INDEX v4.148. Verdict: NOT CLEAN — convergence counter RESET 2/3→0/3.
+
+**Findings:** Oracle GREEN (gates + citations, zero new findings, mutation-honesty N/A for spec-only draft). Lens B CLEAN (all scaffolding signatures re-verified against real develop source; lock ordering acyclic; F-LENSB-01/02 sound) with one informational O-1 (multipath.Send swallows a per-path fn error when ≥1 path succeeds — adjudged non-defect, AC-017/AC-005 already co-locate the check correctly, only a parenthetical is loose wording). Lens C NITPICK_ONLY — new F-LENSC-R11-01: status-note version-ledger (L72) missing a v1.10 entry vs the formal Changelog. Lens A NOT CLEAN — new F-LENSA-R11-01 (LOW): the same defect independently found — status-note ledger's newest entry stops at v1.9 while frontmatter reads v1.10, an internal contradiction (low practical impact, v1.10 was a cosmetic line-ref sweep with no governing correction lost).
+
+**Orchestrator adjudication (PAT-04):** F-LENSA-R11-01 and F-LENSC-R11-01 are the same real defect, corroborated by two fresh diverse lenses. Lens A's LOW rating accepted over Lens C's NITPICK — corroboration plus the frontmatter-contradicts-ledger reasoning make it genuine; adjudicating down to preserve a wanted convergence would be confirmation bias PAT-04 forbids.
+
+**Fix:** REMEDIATED same day, commit `09d61c541b929bb0923925845fe4592976d96891` (architect/story-writer, story-only, class-complete): frontmatter v1.10→v1.11; status-note backfilled with the missing v1.10 entry + a new v1.11 entry; "corrections govern" enumeration extended to /v1.10/v1.11; new formal v1.11 changelog row (frozen v1.10 row byte-identical per §2.9); POL-002 STORY-INDEX sync (v4.149). Placement-note untouched (stays v1.11). Input-hash STABLE at `1145d15` — declared inputs byte-identical, reconfirmed via read-only `compute-input-hash` (no `--update` needed). AC count unchanged at 17.
+
+**Deferred (survivor ledger, carried to R12 + human approval gate):** F-ORACLE-R9-01 (below-LOW, placement-note L476 `NewWithRouters` line-ref off-by-2 — deliberately not fixed at R11, would force an unrelated note version bump + input-hash churn for a cosmetic ref); R11 Lens B O-1 (multipath.Send error-swallow, non-defect).
+
+**Convergence counter:** 0/3 (RESET — F-LENSA-R11-01/F-LENSC-R11-01 found this pass; last edit is now `09d61c541b929bb0923925845fe4592976d96891`).
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R11-2026-08-28.md`.
+
+**Next:** R12 fresh-context 4-leg rig (oracle + 3 diverse lenses) against tip `09d61c541b929bb0923925845fe4592976d96891` (story now v1.11) — needs 3 consecutive clean passes to converge.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R5 remediation index-sync: STORY-INDEX row v1.1→v1.7 (POL-002 catch-up), placement-note citation v1.1→v1.8, AC-count 14→17; STATE.md checkpoint refreshed (note v1.8 @ 4c7abc2 / story v1.7 @ 8f86a8e0, R5 remediated, R6 pending, counter 0/3).** | index-sync | develop unchanged @ af8eb17. |

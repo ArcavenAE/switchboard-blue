@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "5884882"
+input-hash: "87f0c03"
 traces_to: STATE.md
 ---
 
@@ -797,3 +797,15 @@ Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement a
 **Resume protocol (superseded):** (1) `factory-worktree-health` check FIRST; (2) read STATE.md + `stories/sprint-state.yaml`; (3) proceed to S-7.02 cycle-close disposition.
 
 **Note (2026-08-28):** the "S-7.02 cycle-close disposition" next-action recorded above was NOT what actually happened next in this checkpoint's real successor session — the factory instead ran Step-4.5 spec convergence on S-BL.LOOPBACK-FULLSTACK (R1-R5, R5 not-clean at Lens B 1 MED + 2 LOW, remediated in placement-note v1.8 @ 4c7abc2 / story v1.7 @ 8f86a8e0 this same 2026-08-28 burst). This archive entry preserves the checkpoint's original text verbatim per the append-only convention; see STATE.md's live Session Resume Checkpoint for current position.
+
+---
+
+## Checkpoint: S-BL.LOOPBACK-FULLSTACK Step-4.5 R10 CLEAN (archived from STATE.md at R11 remediation burst, 2026-08-28)
+
+**Timestamp:** 2026-08-28T20:40:00Z
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial spec convergence, cycle-1, IN PROGRESS. R10 (2026-08-28) COMPLETE — CLEAN (zero findings): all 3 diverse lenses CLEAN — Lens A spec-fidelity (all prior remediations verified genuinely cleared and corroborated against Go ground truth; two potential drifts scrutinized and cleared as by-design), Lens B technical-soundness (design sound against real `arq.go`/`halfchannel.go`/`multipath.go`/`paths.go` source; acyclic `sinkMu→downstreamHCMu` lock ordering; no nil-deref; F-LENSB-02 gate ordering exact), Lens C traceability (full multi-notation `460`/`461` sweep — all live citations correctly `461`; AC/POL/hash consistency confirmed). §1.8 oracle gates GREEN (`go build`/`go vet` both clean; no new findings). **F-ORACLE-R9-01** correctly carried in the survivor ledger, NOT re-raised (placement-note L476 line-ref off-by-2, non-load-bearing, deferred). **Convergence counter advances 1/3 → 2/3.** Artifacts left byte-UNCHANGED this pass (metadata-only burst): placement-note v1.11 @ `5b88e5df7fd22d12ac2588d96c13c8e74a23ae70`, story v1.10 @ `65c00275e2af80588907a27e57eea1b804bba159`, input-hash `1145d15`, STORY-INDEX v4.148. Full record: `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R10-2026-08-28.md`. develop unchanged @ af8eb17 (no code delivery this burst).
+
+**Non-blocking observation for the human approval gate (R10 Lens B, declined as a non-finding):** the design has no `sync.Once`/idempotence guard against a double-`CreateSession` call (would overwrite session fields + start duplicate tickers). NOT a defect — a coherent, consistently-applied single-session contract; every AC and the VP-042 benchmark call `CreateSession` exactly once; already scoped docstring-only by the note's Risk 4; not introduced by v1.10/v1.11. At the Step-4.5 human approval gate, confirm the single-call contract is documented at implementation time. Tracked in Open Drift Items as OBS-LENSB-R10-DBLCREATESESSION. Does not block convergence.
+
+**Next action (superseded by R11 NOT CLEAN + same-day remediation):** R11 adversarial re-review (3 diverse lenses + §1.8 oracle) against the unchanged tip `65c00275e2af80588907a27e57eea1b804bba159` — R11 clean was to be the third of 3 consecutive → CONVERGED; instead R11 found F-LENSA-R11-01 (LOW, corroborated by F-LENSC-R11-01), resetting the counter to 0/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R11-2026-08-28.md` and STATE.md's live Session Resume Checkpoint for current position.
