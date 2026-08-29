@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "2f6cbba"
+input-hash: "c22df12"
 traces_to: STATE.md
 ---
 
@@ -2096,3 +2096,58 @@ Archived to make room for Step-4.5 pass-1 fixed row (STATE.md at 200-line budget
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R9 CLEAN (NITPICK_ONLY): all 3 diverse lenses CLEAN, §1.8 oracle gates GREEN, one NITPICK F-ORACLE-R9-01 deferred (non-load-bearing placement-note line-ref off-by-2); artifacts UNCHANGED (note v1.11 @ 5b88e5df / story v1.10 @ 65c00275 / input-hash 1145d15); convergence counter 0/3→1/3; R10 next.** | adversary-clean | develop unchanged @ af8eb17. |
+
+---
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 §1.7 consistency-audit GAPS + remediation + counter RESET (2026-08-29)
+
+**Context:** the MANDATORY §1.7 fresh-context consistency audit (consistency-validator, targeted single-story perimeter audit) was commissioned ahead of the human approval gate for S-BL.LOOPBACK-FULLSTACK v1.11 — the artifacts that had just reached ADVERSARIAL CONVERGENCE 3/3 at R14 (previous burst above). This audit is complementary to, and deliberately different from, the R12/R13/R14 within-package spec-adversarial passes (all clean): it checks whether the story's *premises about things outside the story package* — the real git history/source tree of switchboard-blue, and the BCs/VPs/ARCH docs/sibling stories it cites — still hold, not whether the package is internally clean. POL-005 tuple verified at dispatch: `git -C .factory rev-parse HEAD` = `67e07df54c9b70c691a632a7c2bd2d4cc704d967`, matched expected. Report committed `59d8250f`, full text at `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`.
+
+**Verdict:** FAIL. 2 MAJOR + 3 non-blocking (1 MEDIUM, 2 MINOR/OBS).
+
+**FINDING 1 (MAJOR) — stale cross-branch reference:** the story (frontmatter, Context, AC-013, Package Impact Summary, File Structure Requirements, Task 10, Story-Sizing Rationale reason 3) repeatedly described `internal/bench/keystroke_echo_testenv_bench_test.go` as a "WIP bench test" living "on branch `fix/vp-042-testenv-integrated-bench`." Verified directly against git: that branch does not exist (`git branch -a`, `git ls-remote --heads origin` — no match); the file was already merged to `develop` via PR #121, commit `4c276d935b089`, 2026-07-12 17:32:22 -0500 — the same calendar day this story was first authored (v1.0/v1.1). The story went through 11 revisions across six weeks without correcting this premise.
+
+**FINDING 2 (MAJOR) — AC-013's verification method doesn't exercise its target:** the merged file is guarded by `//go:build integration`; a bare `go build ./internal/bench/...` silently excludes it. `justfile`'s `bench` recipe runs `go test -bench=BenchmarkKeystrokeEcho_P99 ...` (no "To", no `-tags integration`) — a different, untagged function in the separate S-BL.BENCH lower-bound file. `just bench` never invokes the benchmark this story updates; as written it would pass using the old untouched benchmark, giving a false impression AC-013 is satisfied.
+
+**FINDING 3 (MEDIUM) — false self-consistency claim:** the story's Previous Story Intelligence table claimed the S-BL.PE-RECEIVE-LOOP line-number-citation prohibition was "both followed in this story," but the story's own Design Constraints/AC-016/AC-017 sections are saturated with external-source line citations (`testenv.go:384`, `:461`, `:475`, `:528`; `upstream.go:276-301`, `:288`, `289-290`, `:292`) — three entire adversarial repair rounds (v1.9/v1.10/v1.11) were dedicated to correcting drift in exactly these citations. Every citation independently re-verified accurate; the self-consistency claim, not the citations, was false.
+
+**Non-blocking:** MINOR — VP-042.md's Proof Harness Skeleton is superseded but no task named refreshing it. Pre-existing, NOT this story's defect — BC-2.02.002.md body prose ("identified by sequence number") vs ARCH-03 line 130's authoritative "deduplicates by checksum alone" (ARCH-03's own Correction 1); the story's own usage is correct against ARCH-03, but BC-2.02.002.md was never back-patched — routed as a separate ticket, recorded as `DRIFT-BC-2.02.002-ARCH-03-DEDUP-KEY` in STATE.md Open Drift Items.
+
+**Remediation (same session):** architect placement-note v1.11→v1.12, commit `088d49de4f8e661a174223e222c9c1e7ed6e4099` — corrected every phantom-branch citation to the actual merged state; added a Verification Method (AC-013) subsection specifying `go build -tags integration` + `go test -tags integration -bench=BenchmarkKeystrokeToEcho_P99`, adjudicating `just bench` out of AC-013's scope (Option a); added Risks item 6, a forward obligation for story-writer to update VP-042.md's Proof Harness Skeleton to the binding two-call token shape. story-writer story v1.11→v1.12 + STORY-INDEX v4.149→v4.150, commit `db9ed1dc06ee2831e6485ea3211bc362da38ba68` — swept all 11 live-prose citations of the phantom branch; rewrote AC-013's Verification Method to the binding invocation; reconciled the Previous Story Intelligence claim (only self-referential story-line-number citations are forbidden, not disk-verified external-source anchors); encoded the VP-042.md forward obligation as a File Structure Requirements row + Forward Obligation paragraph (not a new AC). Story bumped 1.11→1.12 (AC count 17, points 8 unchanged). Input-hash recomputed `1145d15`→`b924eff` via `compute-input-hash --update`, independently reconfirmed by the orchestrator.
+
+**Convergence counter:** RESET 3/3 → 0/3. Dual rationale: (a) the audit found 2 MAJOR gating findings, so the Step-4.5 gate did not pass; (b) the remediation edited the story + note artifacts — R12/R13/R14's clean-or-better passes were against v1.11 content that no longer exists.
+
+**Deferred/survivor ledger carried forward to R15+ and the eventual human approval gate:** F-ORACLE-R9-01 (below-LOW, placement-note L476 line-ref off-by-2); F-LENSA-R13-01 (NITPICK — STORY-INDEX 4.144 changelog gap, index-global); R14-O-1 (below-LOW — STORY-INDEX L155 "17 ACs total post-R5" imprecision, same index-hygiene surface as F-LENSA-R13-01); R11 Lens B O-1 (`multipath.Send` error-swallowing, non-defect); OBS-LENSB-R10-DBLCREATESESSION (no `sync.Once` guard, by-design single-call contract, for-human-review-at-approval-gate).
+
+**Process-gap items — corrected 2026-08-29:** the two "engine-defect candidate" items previously carried in STATE.md's Session Resume Checkpoint (rc.24 `validate-burst-log` cargo/WASM schema mismatch; `sot_delete` blocking `git checkout -- STATE.md`) were re-verified on disk and are NOT fileable — see `.vsdd-factory-issues-pending.md` "Two queued upstream candidates — VERIFIED NOT FILEABLE, do-not-file (2026-08-29)". (a) is a misdiagnosis of a generic, advisory (`on_error = "continue"`) structural hook (BC-5.39.004) that imposes no cargo/WASM content requirement — the Dim-N attestation slots are generic, a Go project fills them with go/golangci content. (b) is unreproducible — both the single-file and two-file `git checkout --` forms are currently allowed, no `sot_delete` guard definition exists anywhere in this project's `.claude/` or the rc.24 hook registry; the earlier one-off block, if real, most plausibly fired on a then-dirty STATE.md (data-loss prevention working as intended).
+
+**Files touched (Dim-1): 4 unique files**
+
+- .factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md (consistency-validator, prior burst)
+- .factory/decisions/S-BL.LOOPBACK-FULLSTACK-placement-note.md (architect, v1.11→v1.12)
+- .factory/stories/S-BL.LOOPBACK-FULLSTACK.md (story-writer, v1.11→v1.12)
+- .factory/stories/STORY-INDEX.md (story-writer, v4.149→v4.150)
+
+This state-manager burst additionally touches: .factory/STATE.md, .factory/cycles/cycle-1/burst-log.md, .factory/cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-remediation-2026-08-28.md (new cycle record).
+
+**Codifications:** none — no D-NNN decision items closed or newly codified by this remediation. `DRIFT-BC-2.02.002-ARCH-03-DEDUP-KEY` added to STATE.md Open Drift Items as a new, separate, non-gating drift item (not a codification).
+
+**Dim-2 Attestation:** No functional code change (spec/story-artifact remediation only, zero diff to `internal/` or `cmd/`). No new gate-check run by this burst; the underlying `go build`/`go vet` GREEN status from the R14 Oracle leg (code repo develop @ `2ce3a5795009209d4e5eebec8fd9051f26f78055`) is unaffected — develop is unchanged.
+
+**Dim-5 Attestation:** N/A — no hook-plugin/WASM artifact built or touched in this burst.
+
+**Dim-6 Attestation:** N/A — Go project; no cargo fmt/clippy toolchain in this repo.
+
+**Dim-7 Attestation:** N/A — no test suite executed in this burst; story remains spec-only.
+
+**Closes:** none — no D-NNN items closed by this burst. Survivor ledger (see above) remains open/deferred, carried to R15+ and the human approval gate.
+
+**Full audit record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-2026-08-28.md`. **Full remediation record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/consistency-audit-remediation-2026-08-28.md`.
+
+**Next:** dispatch R15 fresh-context 4-leg adversarial rig (Oracle + 3 diverse lenses) against the v1.12 artifacts (story input-hash `b924eff`, STORY-INDEX v4.150), carrying the POL-005 dispatch-integrity tuple. Needs 3 consecutive clean-or-better passes (R15/R16/R17) to reconverge, THEN a re-run of the §1.7 consistency audit against v1.12, THEN the human approval gate.
+
+**Archived Current Phase Steps row (oldest, rotated to make room):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-28 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R10 CLEAN (zero findings): all 3 diverse lenses CLEAN, §1.8 oracle gates GREEN, no new findings; F-ORACLE-R9-01 carried in survivor ledger not re-raised; Lens B non-blocking double-CreateSession observation surfaced for human approval-gate review; artifacts UNCHANGED (note v1.11 @ 5b88e5df / story v1.10 @ 65c00275 / input-hash 1145d15); convergence counter 1/3→2/3; R11 next.** | adversary-clean | develop unchanged @ af8eb17. |
