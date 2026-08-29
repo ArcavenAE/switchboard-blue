@@ -901,3 +901,19 @@ Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement a
 **Survivor ledger:** RECURRING `[process-gap]` re-flagged again — now ~7th instance (R19/R20/R22/R23/R24/R25/R27). SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY all remain standing, unaffected by this pass — carry forward to the human approval gate.
 
 **Next action (superseded by R28 CLEAN):** R28 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the corrected v1.18 tip, pass 1 of a new 3-consecutive-clean-pass streak. R28 ran CLEAN: zero findings across all four legs (§1.8 Oracle CLEAN, Lens A CLEAN — R27's O-1 fix verified complete, Lens B CLEAN, Lens C CLEAN). Zero spec artifacts changed — story stays v1.18/`4902d5d`, note stays v1.15; STORY-INDEX bumped v4.162→v4.163 (plus a cosmetic duplicate-Changelog-header cleanup). Counter ADVANCES 0/3→1/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R28-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.
+
+---
+
+## Checkpoint: S-BL.LOOPBACK-FULLSTACK Step-4.5 R28 CLEAN → counter ADVANCES 0/3→1/3 (archived from STATE.md at the R29 NOT CLEAN burst, 2026-08-29)
+
+**Timestamp:** 2026-08-29T22:45:00Z
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial spec convergence, cycle-1. **R28 fresh-context reconvergence (first pass of a new 3-consecutive-clean-pass streak, against v1.18 tip `a89b2bb9`) — VERDICT CLEAN.** §1.8 Oracle CLEAN (compile-gate injection re-proof re-sound, restore hash `e53ab35f`, no residue); Lens A CLEAN (R27's O-1 fix verified complete and correct, L57/L72 align 1:1 with the formal changelog, no straggler); Lens B CLEAN (one known non-gating LOW re-observed — note L497 stale citation, unchanged deferred status); Lens C CLEAN (O-1-fix completeness sweep clean, triple-ledger 1:1 parity holds, all sweeps clean).
+
+**Zero spec artifacts changed this burst:** story stays v1.18/`4902d5d` (frontmatter unchanged: `version: "1.18"`, `input-hash: "4902d5d"`, `subsystems: [session-networking, multipath-forwarding]`, 17 ACs), note stays v1.15. STORY-INDEX bumped v4.162→v4.163. **Convergence counter: ADVANCES 0/3→1/3.** develop @ 2ce3a57; LOOPBACK has delivered no code. Full record: `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R28-2026-08-29.md`.
+
+**This burst also performed a cosmetic STORY-INDEX cleanup, independent of the reconvergence verdict:** removed a pre-existing spurious duplicate `| Version | Date | Change |` Changelog table header + separator. No changelog ROW content was edited (§2.9 frozen-row discipline preserved).
+
+**Survivor ledger:** RECURRING `[process-gap]` (triple-ledger-parity apparatus) re-observed as non-blocking this round — now ~8th instance (R19/R20/R22/R23/R24/R25/R27/R28), consistent with prior disposition — not re-actioned. SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY all remain standing, unaffected by this pass — carry forward to the human approval gate.
+
+**Next action (superseded by R29 NOT CLEAN, fixed):** R29 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the unchanged v1.18 tip, pass 2 of the streak begun at R28. R29 ran NOT CLEAN: §1.8 Oracle/Lens A/Lens B all CLEAN; Lens C found F-C-01 (MED, STORY-INDEX changelog missing the `4.144` row). Orchestrator git-adjudicated (PAT-04) RESIDUAL not NEW (R28 exonerated) and found a second identical gap (`4.127` row) via the same sweep; both backfilled from git evidence. Counter RESETS 1/3→0/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R29-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.
