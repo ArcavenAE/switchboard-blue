@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "c8c2bc1"
+input-hash: "fd596cf"
 traces_to: STATE.md
 ---
 
@@ -887,3 +887,17 @@ Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement a
 **Survivor ledger:** RECURRING `[process-gap]` (triple-ledger-parity apparatus) re-flagged as a non-blocking observation by BOTH Lens A and Lens C this round, consistent with prior disposition — not re-actioned. SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY all remain standing, unaffected by this pass — carry forward to the human approval gate.
 
 **Next action (superseded by R27 NITPICK_ONLY, fixed):** R27 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the v1.18 tip (unchanged), pass 2 of the new 3-consecutive-clean-pass streak. R27 ran NITPICK_ONLY: §1.8 Oracle/Lens B/Lens C all CLEAN; Lens A found O-1 (LOW, SS-06-drop ledger imprecision at L57/L72), FIXED in-place at v1.18 by story-writer (L57/L72 aligned to the authoritative formal changelog). Counter RESETS 1/3→0/3 (orchestrator elected to fix rather than advance past, per the disposition rationale in the R27 record). See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R27-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.
+
+---
+
+## Checkpoint: S-BL.LOOPBACK-FULLSTACK Step-4.5 R27 NITPICK_ONLY (fixed) → counter RESET 1/3→0/3 (archived from STATE.md at the R28 CLEAN burst, 2026-08-29)
+
+**Timestamp:** 2026-08-29T22:15:00Z
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial spec convergence, cycle-1. **R27 fresh-context reconvergence (second pass of the streak begun at R26, against v1.18 tip `957339a`) — VERDICT NITPICK_ONLY.** §1.8 Oracle CLEAN (compile-gate injection re-proof re-sound, restore hash `e53ab35f`); Lens B CLEAN (all 9 load-bearing `develop@2ce3a57` source-facts re-derived sound, Q4 downstream `OnAck` placement race/deadlock-free); Lens C CLEAN (triple-ledger 1:1 parity, all sweeps clean); Lens A NITPICK_ONLY — O-1 (LOW, SS-06-drop ledger imprecision at L57/L72).
+
+**O-1 FIXED, not deferred:** story-writer aligned L57/L72 to the authoritative formal changelog (L1398) in-place at v1.18 (no version bump). Orchestrator disk-verified exactly 2 ins/2 del confined to L57/L72; frontmatter unchanged. STORY-INDEX bumped v4.161→v4.162. **Convergence counter: RESETS 1/3→0/3.** develop @ 2ce3a57; LOOPBACK has delivered no code. Full record: `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R27-2026-08-29.md`.
+
+**Survivor ledger:** RECURRING `[process-gap]` re-flagged again — now ~7th instance (R19/R20/R22/R23/R24/R25/R27). SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY all remain standing, unaffected by this pass — carry forward to the human approval gate.
+
+**Next action (superseded by R28 CLEAN):** R28 — a fresh-context adversarial reconvergence pass (§1.8 Oracle + 3 diverse lenses A/B/C) against the corrected v1.18 tip, pass 1 of a new 3-consecutive-clean-pass streak. R28 ran CLEAN: zero findings across all four legs (§1.8 Oracle CLEAN, Lens A CLEAN — R27's O-1 fix verified complete, Lens B CLEAN, Lens C CLEAN). Zero spec artifacts changed — story stays v1.18/`4902d5d`, note stays v1.15; STORY-INDEX bumped v4.162→v4.163 (plus a cosmetic duplicate-Changelog-header cleanup). Counter ADVANCES 0/3→1/3. See `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R28-2026-08-29.md` and STATE.md's live Session Resume Checkpoint for current position.

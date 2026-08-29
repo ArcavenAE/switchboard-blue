@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "c0cd057"
+input-hash: "5b0e9e3"
 traces_to: STATE.md
 ---
 
@@ -2521,3 +2521,37 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R23 CLEAN (second consecutive fresh reconvergence pass since the R21 remediation, immediately following R22 CLEAN, against v1.17 tip 0fe9e2d3): zero findings across all 4 legs. §1.8 Oracle GREEN + further fresh compile-gate soundness re-probe (injected compile error into internal/bench, hash-verified restore e53ab35f: R15-fixed gate catches it exit=1, old vacuous gate misses it exit=0 — independently re-confirms F-R15-LENSB-01 fix sound yet again); Lens A/B/C all CLEAN — SURVIVOR-R22 (note L358-370) correctly re-dispositioned (A) NON-DEFECT without reset by both Lens A and Lens C; `[process-gap]` ledger-tooling observation re-flagged as recurring (R19/R20/R22/R23) by both lenses, not actioned. Artifacts UNCHANGED (story v1.17 / placement-note v1.15 / STORY-INDEX v4.156 / input-hash 4902d5d); convergence counter 1/3→2/3; R24 next (1 more clean-or-better pass reaches 3/3).** | adversary-clean | develop unchanged @ 2ce3a57. |
+
+### S-BL.LOOPBACK-FULLSTACK Step-4.5 R28 CLEAN — counter ADVANCES 0/3→1/3 (2026-08-29)
+
+**Context:** R28 — first pass of a new 3-consecutive-clean-pass streak, immediately following R27 NITPICK_ONLY (fixed). Four-leg diverse-lens rig (§1.8 Oracle + 3 diverse lenses A/B/C) dispatched concurrently, POL-005-verified against `.factory` HEAD `a89b2bb947228f6ef47d50e0972a2b472489b5ab` (the R27 record commit) — story v1.18, placement-note v1.15, input-hash `4902d5d`, STORY-INDEX v4.162. Verdict: **CLEAN** — zero findings across all four legs.
+
+**Findings:** §1.8 Oracle CLEAN — executed the AC-013 compile-gate injection re-proof: the sound gate `go test -tags integration -run '^$' -count=1 ./internal/bench/` CAUGHT a deliberately injected compile error (exit 1), while the old vacuous gate `go build -tags integration ./internal/bench/...` MISSED it (exit 0); bench file restored to HEAD-blob `e53ab35f`, no probe residue. Lens A CLEAN — the R27 O-1 fix verified complete and correct: L57/L72 now align 1:1 with the authoritative formal changelog (L1398) on the SS-06-drop reasoning, the prior literal imprecision is gone; registry-conformance exact against ARCH-INDEX; triple-ledger parity holds; STORY-INDEX v4.162 master-row consistent with the story, no straggler. Lens B CLEAN — all load-bearing `develop@2ce3a57` source-facts re-derived exact; the R21 fix (Q4 downstream `OnAck` placement) re-confirmed race/deadlock-free (`sinkMu` ⊃ `downstreamHCMu` ⊃ `driver.mu`, acyclic); no technical defect from any R25/R27 ledger-prose edit; one LOW observation carried, not a finding (placement-note L497 stale `access.go:460` citation, already tracked as S1.7-F3-NOTE-L497-CITATION, deferred, unchanged status). Lens C CLEAN — O-1-fix completeness sweep clean (all three ledgers agree on the SS-06 reasoning, no straggler); triple-ledger 1:1 parity holds; STORY-INDEX/STATE.md consistency clean; version-qualifier drift sweep clean; subsystems-propagation sweep clean; Q4 story↔note agreement clean; input-hash integrity clean.
+
+**Orchestrator adjudication:** No fix needed — zero gating findings. Zero spec-artifact edits this round: story stays v1.18/`4902d5d`, placement-note stays v1.15.
+
+**Convergence counter: ADVANCES 0/3→1/3.** R29 is pass 2 of the streak begun at R28.
+
+**Recurring process observation:** the `RECURRING [process-gap]` triple-ledger-parity apparatus (L57/L72/formal-changelog) was re-observed as non-blocking by Lens A and Lens C — now approximately the **8th instance** of this class across R19/R20/R22/R23/R24/R25/R27/R28. No new defect produced this round (the apparatus is CLEAN, not thrashing). Not actioned unilaterally; carried to the human approval gate and the S-7.02 cycle-close checklist.
+
+**Known deferred items re-observed (non-blocking, no reset):** S1.7-F3-NOTE-L497-CITATION (re-observed by Lens B); SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY all remain standing, unaffected by this pass.
+
+**STORY-INDEX cosmetic cleanup (independent of the reconvergence verdict):** removed a pre-existing spurious duplicate `| Version | Date | Change |` Changelog table header + separator in `stories/STORY-INDEX.md` (previously present at both the top of the table and again mid-table, most likely from an earlier row-prepend that started a new header block instead of inserting above the existing one), merging the changelog back into one continuous table. No changelog ROW content was edited (§2.9 frozen-row discipline preserved). Cosmetic index-hygiene fix only — does not affect the convergence counter, the story, or the placement note.
+
+**Orchestrator disk-verifications (all independently confirmed):** `.factory` HEAD confirmed `a89b2bb947228f6ef47d50e0972a2b472489b5ab` before dispatch, origin-synced; probe-restore hash `e53ab35f` confirmed against on-disk `internal/bench` post-restore, zero residue; story frontmatter confirmed `version: "1.18"` / `input-hash: "4902d5d"` / `subsystems: [session-networking, multipath-forwarding]` / 17 ACs unchanged; placement-note frontmatter confirmed unchanged `version: "1.15"`; STORY-INDEX.md confirmed `version: "4.162"` prior to this burst's bump; working-tree porcelain confirmed to show only the two known-disjoint auto-files (`regression-state.json`, `sidecar-learning.md`) prior to this burst's writes; STORY-INDEX Changelog table confirmed exactly one `| Version | Date | Change |` header after the duplicate-header cleanup.
+
+**Defect taxonomy:** N/A — clean pass, no defect.
+
+**Remediation chain:** N/A (no remediation this round) → state-manager (cycle record + STORY-INDEX/STATE.md bookkeeping + duplicate-header cleanup, single atomic commit).
+
+**Survivor ledger:** carried forward unchanged — F-ORACLE-R9-01, F-LENSA-R13-01, R14-O-1, R11 Lens B O-1, OBS-LENSB-R10-DBLCREATESESSION, DRIFT-BC-2.02.002-ARCH-03-DEDUP-KEY (routed separately), OBS-R16-LENSA-DATE, F-R16-LENSC-01, OBS-R17-LENSA-01, R18-EQUIV-L256-SWEEP, O-1-STORY-INDEX-COUNT-DRIFT, R19-M2-REJECTED-OPTION-LOOSE-BOUND, LEDGER-PARITY-CONVENTION-DECLARED, O-R20-LENSB-01, O-R20-LENSB-02, SURVIVOR-R22, O-R22-LENSB-01/02/03, R24 Lens B O-1, R24 Lens B O-2, S1.7-F2-VP042-HARNESS (deferred), S1.7-F3-NOTE-L497-CITATION (deferred), S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (human-gate decision item). **R22-LENSA-PROCESS-GAP re-flagged this round — now ~8th instance (R19/R20/R22/R23/R24/R25/R27/R28), consistent with the standing disposition — not actioned.** No new standing-ledger items this round.
+
+**Full review record:** `cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R28-2026-08-29.md`.
+
+**Next:** R29 fresh-context 4-leg rig (§1.8 Oracle + 3 diverse lenses A/B/C) against the tip after this state-manager commit — story v1.18 (unchanged), placement-note v1.15 (unchanged), input-hash `4902d5d` (unchanged), STORY-INDEX v4.163 — carrying the POL-005 dispatch-integrity tuple. Pass 2 of the streak begun at R28; needs 2 more consecutive clean-or-better passes to reconverge, THEN a re-run of the §1.7 consistency audit against v1.18, THEN the human approval gate.
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the R28 row):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R24 CLEAN (third consecutive fresh reconvergence pass since the R21 remediation, immediately following R22/R23 CLEAN, against v1.17 tip ced81384): zero findings across all 4 legs. §1.8 Oracle GREEN + further fresh compile-gate soundness re-probe (hash-verified restore e53ab35f: independently re-confirms F-R15-LENSB-01 fix sound an eighth time; binding-RUN p99=0.1075ms); Lens A CLEAN, Lens C CLEAN — SURVIVOR-R22 correctly re-dispositioned (A) NON-DEFECT without reset; Lens B CLEAN with 2 new non-gating LOW observations (O-1 WaitForEcho-timeout/pending[id] moot-under-Fatalf, O-2 [process-gap] loop-thrashing-not-design-defect); `[process-gap]` ledger-tooling observation re-flagged as recurring (now R19/R20/R22/R23/R24), not actioned. Artifacts UNCHANGED (story v1.17 / placement-note v1.15 / STORY-INDEX v4.158 / input-hash 4902d5d); **convergence counter 2/3→3/3 — STORY RECONVERGED at v1.17.** RECONVERGED ≠ gate-ready: §1.7 consistency audit re-run + human approval gate remain; story stays draft/unscheduled.** | adversary-clean | develop unchanged @ 2ce3a57. |
