@@ -371,8 +371,18 @@ type LoopbackConfig struct {
 // LoopbackEnv is a minimal single-session loopback environment for
 // benchmark use (VP-042, S-BL.BENCH).  Frames sent via SendKeystroke are
 // immediately reflected as downstream frames via DeliverFrame.
+//
+// S-BL.LOOPBACK-FULLSTACK (Design Constraints Q2): LoopbackEnv additionally
+// owns a *loopbackDriver (loopback.go) backing the tick-driven,
+// protocol-accurate SendKeystroke/WaitForEcho/CreateSession methods on
+// *LoopbackEnv — a separate method set from *Env's (Env is a named field,
+// not embedded, so the two never collide).
 type LoopbackEnv struct {
 	Env *Env
+
+	// driver is unexported and owned by LoopbackEnv (Q2). Constructed by
+	// NewLoopback.
+	driver *loopbackDriver
 }
 
 // NewLoopback creates a minimal single-session environment optimised for
