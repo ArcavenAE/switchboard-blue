@@ -2,11 +2,11 @@
 artifact_id: STORY-INDEX
 document_type: story-index
 level: ops
-version: "4.174"
+version: "4.175"
 status: draft
 producer: state-manager
 timestamp: 2026-07-07T10:00:00
-modified: 2026-08-29T23:59:45
+modified: 2026-08-30T09:00:00
 phase: 2
 cycle: v1.0.0-greenfield
 inputDocuments:
