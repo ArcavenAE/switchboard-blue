@@ -247,9 +247,18 @@ func TestLoopbackDriver_TicksFireOnSchedule(t *testing.T) {
 	})
 	t.Cleanup(lb.Env.Close)
 
+	// start is captured BEFORE CreateSession, not after: CreateSession is
+	// what starts the ticker goroutines, and each ticker arms its
+	// time.NewTicker BEFORE CreateSession returns — so an epoch captured
+	// after CreateSession can already sit part-way into the first tick
+	// window. Under scheduler preemption the first tick can then fire at
+	// start+(interval-ε), making elapsed < upstreamInterval below flaky
+	// even for a correct implementation. Capturing start first guarantees
+	// start <= every ticker's own epoch, so elapsed >= interval holds by
+	// construction whenever delivery genuinely waited for a scheduled tick.
+	start := time.Now()
 	sid := lb.CreateSession(t)
 
-	start := time.Now()
 	rt := lb.SendKeystroke(t, sid, "x")
 	payload, ok := lb.WaitForEcho(t, rt, 500*time.Millisecond)
 	elapsed := time.Since(start)
