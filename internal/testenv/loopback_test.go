@@ -26,6 +26,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -96,6 +97,74 @@ func (d *diagnosticRecordingTB) calls() []string {
 	return out
 }
 
+// fatalTB is the detection mechanism for TestNewLoopback_RejectsOutOfBoundsTickInterval
+// (AC-002(a)). It EMBEDS the real enclosing t (constructed as &fatalTB{TB:
+// t}) so Helper/Cleanup/Logf/etc. promote through to a live TB — but its own
+// Fatal-family methods (Fatal/Fatalf/FailNow) never delegate to the embedded
+// real TB's Fatal-family methods: they record failed=true locally and call
+// runtime.Goexit() themselves, exactly mirroring what testing.T.Fatalf does
+// internally, without ever touching the real *testing.T's failure state.
+// Error-family methods (Error/Errorf/Fail) record failed=true without
+// aborting, matching testing.TB's own non-fatal semantics.
+//
+// This sidesteps the documented restriction that FailNow/Fatal/Fatalf must
+// be called only from "the goroutine running the Test function": since
+// fatalTB's Fatal-family methods never call through to the real TB's
+// Fatal-family methods, the real t.Fatal is never invoked from the
+// background goroutine NewLoopback runs on below.
+//
+// Detecting rejection via `!t.Run(...)` (the prior shape of this test)
+// marked the SUBTEST — and therefore the parent test and the package's
+// process exit code — FAILED whenever NewLoopback correctly called
+// b.Fatalf on an out-of-bounds config: a correct implementation could never
+// make that test report success. fatalTB replaces only that detection
+// mechanism; the three cases and their assertion semantics are unchanged.
+type fatalTB struct {
+	testing.TB
+
+	mu     sync.Mutex
+	failed bool
+}
+
+func (f *fatalTB) Fatal(args ...any) {
+	f.setFailed()
+	runtime.Goexit()
+}
+
+func (f *fatalTB) Fatalf(format string, args ...any) {
+	f.setFailed()
+	runtime.Goexit()
+}
+
+func (f *fatalTB) FailNow() {
+	f.setFailed()
+	runtime.Goexit()
+}
+
+func (f *fatalTB) Error(args ...any) {
+	f.setFailed()
+}
+
+func (f *fatalTB) Errorf(format string, args ...any) {
+	f.setFailed()
+}
+
+func (f *fatalTB) Fail() {
+	f.setFailed()
+}
+
+func (f *fatalTB) setFailed() {
+	f.mu.Lock()
+	f.failed = true
+	f.mu.Unlock()
+}
+
+func (f *fatalTB) didFail() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.failed
+}
+
 // --- AC-002 (traces to BC-2.01.001, BC-2.01.003; Q6) ------------------------
 
 // TestNewLoopback_RejectsOutOfBoundsTickInterval — AC-002(a): NewLoopback
@@ -106,10 +175,16 @@ func (d *diagnosticRecordingTB) calls() []string {
 // downstreamInterval, 50ms — legal boundary case).
 //
 // Safe to execute directly (does not panic): b.Fatalf uses runtime.Goexit,
-// which t.Run's subtest goroutine catches cleanly — unlike the panic("TODO")
-// stubs elsewhere in this file, this test fails via a genuine, non-crashing
-// assertion today (NewLoopback's current unmodified body performs no
-// interval validation at all).
+// which the fatalTB-driven goroutine below catches cleanly — unlike the
+// panic("TODO") stubs elsewhere in this file, this test fails via a
+// genuine, non-crashing assertion today (NewLoopback's current unmodified
+// body performs no interval validation at all).
+//
+// Detection mechanism: each case runs NewLoopback(ctx, ft, cfg) on its own
+// goroutine against a fresh fatalTB. A rejection (b.Fatalf) is captured as
+// ft.didFail() == true via runtime.Goexit on that goroutine, never as a
+// failure of the real enclosing t — so a correct implementation reports
+// this test as PASSING, not failing-by-design (see fatalTB doc above).
 func TestNewLoopback_RejectsOutOfBoundsTickInterval(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -142,13 +217,16 @@ func TestNewLoopback_RejectsOutOfBoundsTickInterval(t *testing.T) {
 
 	for _, tt := range tests {
 		tt := tt
-		ok := t.Run(tt.name, func(t *testing.T) {
-			_ = NewLoopback(ctx, t, LoopbackConfig{
+		ft := &fatalTB{TB: t}
+		done := make(chan bool, 1)
+		go func() {
+			defer func() { done <- ft.didFail() }()
+			NewLoopback(ctx, ft, LoopbackConfig{
 				TickIntervalUpstream:   tt.upstream,
 				TickIntervalDownstream: tt.downstream,
 			})
-		})
-		rejected := !ok
+		}()
+		rejected := <-done
 		if rejected != tt.wantReject {
 			t.Errorf("AC-002(a): reject=%v (want %v) for upstream=%v downstream=%v — NewLoopback must b.Fatalf on out-of-bounds intervals against halfchannel.MinTickInterval/MaxTickInterval",
 				rejected, tt.wantReject, tt.upstream, tt.downstream)
@@ -657,7 +735,7 @@ func TestLoopbackEnv_RoundTripCompletes_SingleSharedARQInstance(t *testing.T) {
 		t.Fatalf("AC-014: WaitForEcho timed out — a full round trip did not complete. This is the exact silent-failure symptom of a two-instance arqServer/arqClient split (AC-001 Addendum): OnAck on a never-EnqueueSend'd instance returns (nil, nil) forever")
 	}
 	id, ok2 := decodeRTID(payload)
-	if !(ok2 && id == rt.id) {
+	if !ok2 || id != rt.id {
 		t.Fatalf("AC-014: delivered payload did not decode to the sent round trip id (ok2=%v id=%d want=%d) — non-empty, correctly-correlated delivery is the load-bearing assertion, not merely that WaitForEcho returned",
 			ok2, id, rt.id)
 	}

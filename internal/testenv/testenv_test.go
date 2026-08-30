@@ -394,7 +394,14 @@ func TestRouterHandle_Restart_TwicePE(t *testing.T) {
 func TestNewLoopback_Compiles(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	lb := testenv.NewLoopback(ctx, t, testenv.LoopbackConfig{})
+	// AC-002(a) validates tick intervals against
+	// halfchannel.MinTickInterval/MaxTickInterval ([5ms, 50ms]); the
+	// zero-value config this test used to pass is now correctly rejected,
+	// so use a valid config (10ms in-range, 50ms at the legal boundary).
+	lb := testenv.NewLoopback(ctx, t, testenv.LoopbackConfig{
+		TickIntervalUpstream:   10 * time.Millisecond,
+		TickIntervalDownstream: 50 * time.Millisecond,
+	})
 	if lb == nil {
 		t.Fatal("NewLoopback returned nil")
 	}
