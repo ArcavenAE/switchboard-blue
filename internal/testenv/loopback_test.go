@@ -430,6 +430,13 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 // exactly once. Verified end-to-end by a completed round trip (proving
 // EnqueueSend/OnAck ran on the same *arq.ARQ instance — see AC-014) and by
 // confirming no DegradationEvent (TLPKTDROP) fired for this no-loss tick.
+//
+// Uses createSessionNoTicker (F1 remediation): this test drives both ticks
+// manually via the onUpstreamTick()/onDownstreamTick() seams. CreateSession's
+// auto-started downstream ticker goroutine would race those manual calls on
+// the SAME un-locked downstreamARQ (ARQ is single-goroutine-only per
+// arq.ARQ's contract) — the same hazard class AC-003/AC-005 already guard
+// against.
 func TestLoopbackDriver_DownstreamARQWiring(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -439,7 +446,7 @@ func TestLoopbackDriver_DownstreamARQWiring(t *testing.T) {
 	})
 	t.Cleanup(lb.Env.Close)
 
-	sid := lb.CreateSession(t)
+	sid := lb.createSessionNoTicker(t)
 	rt := lb.SendKeystroke(t, sid, "x")
 	lb.driver.onUpstreamTick()
 	lb.driver.onDownstreamTick()
@@ -453,6 +460,11 @@ func TestLoopbackDriver_DownstreamARQWiring(t *testing.T) {
 		t.Errorf("AC-006: delivered payload decode mismatch (ok2=%v id=%d want=%d)", ok2, id, rt.id)
 	}
 
+	// Deliberate construction-invariant guard, not a redundant assertion:
+	// TLPKTDROP/GapsToRetransmit is never wired into the downstream path in
+	// this no-loss harness, so this branch is unreachable by construction
+	// today. It exists to catch a future regression that accidentally wires
+	// loss/degradation handling into the downstream tick.
 	select {
 	case ev := <-lb.driver.downstreamARQ.DegradationEvents:
 		t.Errorf("AC-006: unexpected DegradationEvent (TLPKTDROP) fired: %+v — GapsToRetransmit/TLPKTDROP must never be called in this no-loss harness", ev)
