@@ -389,11 +389,33 @@ type LoopbackEnv struct {
 // benchmarks.  The loopback config controls tick intervals for the
 // halfchannel paths.
 //
+// S-BL.LOOPBACK-FULLSTACK: cfg.TickIntervalUpstream/TickIntervalDownstream
+// are validated against halfchannel.MinTickInterval/MaxTickInterval (Q6)
+// and drive a tick-driven, protocol-accurate loopbackDriver (loopback.go)
+// spanning halfchannel + arq + multipath + paths — no longer discarded.
+//
 // Required by: VP-042 (S-BL.BENCH).
 func NewLoopback(ctx context.Context, b testing.TB, cfg LoopbackConfig) *LoopbackEnv {
 	b.Helper()
+	validateLoopbackConfig(b, cfg)
+
 	env := newEnv(ctx, b, 1)
-	return &LoopbackEnv{Env: env}
+	driver := newLoopbackDriver(env, cfg)
+	lb := &LoopbackEnv{Env: env, driver: driver}
+
+	// AC-011: non-fatal diagnostic if a round trip is never delivered/drained
+	// (driver.pending non-empty at teardown) — mirrors Console.Detach's
+	// non-fatal Logf idiom.
+	b.Cleanup(func() {
+		driver.mu.Lock()
+		leaked := len(driver.pending)
+		driver.mu.Unlock()
+		if leaked > 0 {
+			b.Logf("testenv: LoopbackEnv teardown: %d pending round trip(s) never delivered", leaked)
+		}
+	})
+
+	return lb
 }
 
 // Env is the in-process test environment.  Construct with New or NewWithRouters.

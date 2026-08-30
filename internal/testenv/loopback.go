@@ -4,20 +4,21 @@
 // internal/arq + internal/multipath + internal/paths, so VP-042's benchmark
 // measures the real round-trip path instead of an in-process echo shortcut.
 //
-// STUB NOTICE (S-BL.LOOPBACK-FULLSTACK, Red Gate ①): every non-trivial body
-// in this file is panic("TODO: ...") per BC-5.38.001. Shapes only — the
-// implementer stage fills these in against the story's Design Constraints
-// (Q2-Q8) and the placement note's Q4 Addendum (AC-001 DISCHARGED — ONE
-// shared *arq.ARQ instance for the downstream direction; never split into
+// Implements S-BL.LOOPBACK-FULLSTACK's Design Constraints (Q2-Q8) and the
+// placement note's Q4 Addendum (AC-001 DISCHARGED — ONE shared *arq.ARQ
+// instance for the downstream direction; never split into
 // arqServer/arqClient).
 package testenv
 
 import (
+	"encoding/binary"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/arcavenae/switchboard/internal/admission"
 	"github.com/arcavenae/switchboard/internal/arq"
 	"github.com/arcavenae/switchboard/internal/halfchannel"
 	"github.com/arcavenae/switchboard/internal/multipath"
@@ -101,6 +102,65 @@ type loopbackDriver struct {
 	sessionName        string
 }
 
+// validateLoopbackConfig enforces NewLoopback's tick-interval bounds (Q6):
+// cfg.TickIntervalUpstream/TickIntervalDownstream must fall within
+// [halfchannel.MinTickInterval, halfchannel.MaxTickInterval] (5ms-50ms).
+// b.Fatalf on an out-of-bounds value, matching the existing fail-loud
+// convention (t.Fatalf on illegal construction throughout this package,
+// e.g. NewWithRouters). VP-042's own downstreamInterval (50ms) sits exactly
+// at MaxTickInterval — legal (AC-002).
+func validateLoopbackConfig(b testing.TB, cfg LoopbackConfig) {
+	b.Helper()
+	if cfg.TickIntervalUpstream < halfchannel.MinTickInterval || cfg.TickIntervalUpstream > halfchannel.MaxTickInterval {
+		b.Fatalf("testenv.NewLoopback: TickIntervalUpstream %v out of bounds [%v, %v]",
+			cfg.TickIntervalUpstream, halfchannel.MinTickInterval, halfchannel.MaxTickInterval)
+	}
+	if cfg.TickIntervalDownstream < halfchannel.MinTickInterval || cfg.TickIntervalDownstream > halfchannel.MaxTickInterval {
+		b.Fatalf("testenv.NewLoopback: TickIntervalDownstream %v out of bounds [%v, %v]",
+			cfg.TickIntervalDownstream, halfchannel.MinTickInterval, halfchannel.MaxTickInterval)
+	}
+}
+
+// newLoopbackDriver constructs a loopbackDriver fully initialized and
+// immediately usable — pub/auth/access triple, both Multipath instances,
+// both HalfChannels, and the single shared downstreamARQ instance — but
+// with the console UN-PROVISIONED (Driver lifecycle pin, §H3). Only
+// CreateSession provisions the console (Publish/RegisterKey/Attach) and
+// starts the ticker goroutines.
+//
+// The driver needs its own dedicated Publisher/SessionAuth/AccessNode
+// triple, not env.defaultShard (Q2): newShard hardcodes
+// session.WithKeystrokeSink(session.NoOpSink{}), and session.AccessNode has
+// no SetSink — the KeystrokeSink is fixed at construction. This duplication
+// is isolated to the loopback path; it does not touch newShard or any other
+// VP's shard (AC-007).
+func newLoopbackDriver(env *Env, cfg LoopbackConfig) *loopbackDriver {
+	ks := admission.NewAdmittedKeySet()
+	pub := session.NewPublisher(ks)
+	auth := session.NewSessionAuth()
+
+	d := &loopbackDriver{
+		env:  env,
+		pub:  pub,
+		auth: auth,
+
+		upstreamHC:   halfchannel.New(1, halfchannel.Upstream, cfg.TickIntervalUpstream),
+		downstreamHC: halfchannel.New(2, halfchannel.Downstream, cfg.TickIntervalDownstream),
+
+		upstreamMP:   multipath.NewMultipath(newLoopbackPaths(), multipath.DefaultDropCacheSize),
+		downstreamMP: multipath.NewMultipath(newLoopbackPaths(), multipath.DefaultDropCacheSize),
+
+		// AC-001 DISCHARGED (Q4 Addendum): a single shared *arq.ARQ instance
+		// for the downstream direction — EnqueueSend and OnAck are called on
+		// this SAME instance (AC-014).
+		downstreamARQ: arq.New(arq.Config{TickInterval: cfg.TickIntervalDownstream}),
+
+		pending: make(map[uint64]chan []byte),
+	}
+	d.access = session.NewAccessNode(pub, auth, session.WithKeystrokeSink(&loopbackSink{driver: d}))
+	return d
+}
+
 // onUpstreamTick drives one upstream tick: HalfChannel.Tick() under
 // upstreamHCMu, then — for a data frame — dispatch through upstreamMP.Send
 // to deliverUpstream (Q3, AC-002, AC-004). Required directly-callable seam,
@@ -109,7 +169,23 @@ type loopbackDriver struct {
 // test invokes it directly and synchronously with no ticker goroutine
 // running.
 func (d *loopbackDriver) onUpstreamTick() {
-	panic("TODO: loopbackDriver.onUpstreamTick — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	d.upstreamHCMu.Lock()
+	f := d.upstreamHC.Tick()
+	d.upstreamHCMu.Unlock()
+
+	if f.FrameType != halfchannel.FrameTypeData {
+		// Empty ticks are produced (BC-2.01.002) but not wire-dispatched
+		// (Non-Goals).
+		return
+	}
+
+	// [v1.14 F-R18-LENSB-01] The per-path SendKeystroke error is checked
+	// IN-PLACE inside deliverUpstream, not on Send's own return value here —
+	// Send returns nil whenever at least one selected path's Sent is true,
+	// and the dedup sibling always returns nil without calling
+	// SendKeystroke, so a check here can never observe a failing delivering
+	// path's error.
+	_, _ = d.upstreamMP.Send(toMPFrame(f), d.deliverUpstream)
 }
 
 // onDownstreamTick drives one downstream tick: HalfChannel.Tick() under
@@ -125,7 +201,52 @@ func (d *loopbackDriver) onUpstreamTick() {
 // tickBody, and AC-016's fault-injection test invokes it directly and
 // synchronously with no ticker goroutine running.
 func (d *loopbackDriver) onDownstreamTick() {
-	panic("TODO: loopbackDriver.onDownstreamTick — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	d.downstreamHCMu.Lock()
+	f := d.downstreamHC.Tick()
+	d.downstreamHCMu.Unlock()
+
+	if f.FrameType != halfchannel.FrameTypeData {
+		// Empty ticks are produced (BC-2.01.002) but not wire-dispatched
+		// (Non-Goals) — and never fed into downstreamARQ.
+		return
+	}
+
+	// [B1] Capture chanSeq from the ChannelFrame BEFORE toMPFrame — multipath.Frame
+	// has no ChanSeq field/method.
+	chanSeq := f.ChanSeq
+	d.downstreamARQ.EnqueueSend(chanSeq, f.Payload, time.Now().UTC())
+
+	// deliverDownstream runs synchronously (once per selected path, up to 2)
+	// within this goroutine before Send returns (Q3 rationale); chanSeq
+	// remains valid, in scope, at the OnAck call site below regardless of
+	// how deliverDownstream's dedup resolved.
+	_, _ = d.downstreamMP.Send(toMPFrame(f), d.deliverDownstream)
+
+	// [Q4 Addendum / AC-001] OnAck fires exactly once per tick, on the SAME
+	// shared downstreamARQ instance that received EnqueueSend above — NOT
+	// gated by, and not invoked from inside, deliverDownstream's dedup.
+	delivered, err := d.downstreamARQ.OnAck(chanSeq, zeroSACK)
+	if err != nil {
+		// [M2] err MUST be checked and fail loud — not swallowed.
+		d.failLoud(fmt.Errorf("downstreamARQ.OnAck seq=%d: %w", chanSeq, err))
+		return
+	}
+
+	for _, payload := range delivered {
+		id, ok := decodeRTID(payload)
+		if !ok {
+			// Decode failure: payload too short — cannot be a real pending
+			// key (rtSeq.Add(1) starts ids at 1, so id=0 never collides).
+			continue
+		}
+		d.mu.Lock()
+		ch := d.pending[id]
+		delete(d.pending, id)
+		d.mu.Unlock()
+		if ch != nil {
+			ch <- payload
+		}
+	}
 }
 
 // failLoud surfaces err as a loud test failure via t.Errorf (never
@@ -134,7 +255,8 @@ func (d *loopbackDriver) onDownstreamTick() {
 // NOT used (v1.5 F-B-4): a buffered-1 channel deadlocks when both ticker
 // goroutines call failLoud concurrently.
 func (d *loopbackDriver) failLoud(err error) {
-	panic("TODO: loopbackDriver.failLoud — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	d.env.t.Helper()
+	d.env.t.Errorf("loopbackDriver: %v", err)
 }
 
 // deliverUpstream is upstreamMP's multipath.SendFunc (Q3): endpoint
@@ -147,8 +269,20 @@ func (d *loopbackDriver) failLoud(err error) {
 // the masked per-path error (multipath.Send returns nil whenever at least
 // one selected path's Sent is true, and the dedup sibling always returns
 // nil without ever calling SendKeystroke).
-func (d *loopbackDriver) deliverUpstream(pathID uint64, f multipath.Frame) error {
-	panic("TODO: loopbackDriver.deliverUpstream — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+func (d *loopbackDriver) deliverUpstream(_ uint64, f multipath.Frame) error {
+	if err := d.upstreamMP.Receive(f); err != nil {
+		// ErrDuplicate: second-arriving copy of a duplicate-and-raced frame
+		// (BC-2.02.002) — discard without ever calling SendKeystroke.
+		return nil
+	}
+
+	if err := d.access.SendKeystroke(d.loopbackConsoleKey, d.sessionName, f.Payload); err != nil {
+		// [v1.14 F-R18-LENSB-01] Checked IN-PLACE here — see onUpstreamTick's
+		// comment for why a post-Send check would be unsound.
+		d.failLoud(err)
+		return err
+	}
+	return nil
 }
 
 // deliverDownstream is downstreamMP's multipath.SendFunc (Q4): endpoint
@@ -157,8 +291,13 @@ func (d *loopbackDriver) deliverUpstream(pathID uint64, f multipath.Frame) error
 // downstreamARQ.OnAck fires exactly once per downstream data tick, from
 // onDownstreamTick's tick body, unconditionally — not gated by this dedup
 // outcome (AC-005, AC-006).
-func (d *loopbackDriver) deliverDownstream(pathID uint64, f multipath.Frame) error {
-	panic("TODO: loopbackDriver.deliverDownstream — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+func (d *loopbackDriver) deliverDownstream(_ uint64, f multipath.Frame) error {
+	// Endpoint checksum dedup only (BC-2.02.002); ErrDuplicate discards the
+	// second-arriving copy silently. downstreamARQ.OnAck fires exactly once
+	// per downstream data tick from onDownstreamTick's own tick body,
+	// unconditionally — not gated by this dedup outcome (AC-005, AC-006).
+	_ = d.downstreamMP.Receive(f)
+	return nil
 }
 
 // RoundTrip identifies one SendKeystroke → echo round trip in a loopback
@@ -189,7 +328,9 @@ type loopbackSink struct {
 // is also the correct modeling of BC-2.01.001: the echo is queued, not
 // delivered synchronously.
 func (s *loopbackSink) SendInput(payload []byte) error {
-	panic("TODO: loopbackSink.SendInput — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	s.driver.downstreamHCMu.Lock()
+	defer s.driver.downstreamHCMu.Unlock()
+	return s.driver.downstreamHC.Enqueue(payload)
 }
 
 // SendKeystroke drives a keystroke through the full loopback protocol stack
@@ -206,8 +347,27 @@ func (s *loopbackSink) SendInput(payload []byte) error {
 // session-existence guard would abort AC-017 before onUpstreamTick ever
 // runs, defeating the failLoud path AC-017 exercises. No such guard is
 // permitted.
-func (lb *LoopbackEnv) SendKeystroke(t testing.TB, sessionID SessionID, key string) RoundTrip {
-	panic("TODO: LoopbackEnv.SendKeystroke — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+func (lb *LoopbackEnv) SendKeystroke(t testing.TB, _ SessionID, key string) RoundTrip {
+	t.Helper()
+	d := lb.driver
+
+	id := d.rtSeq.Add(1)
+	done := make(chan []byte, 1)
+
+	d.mu.Lock()
+	d.pending[id] = done
+	d.mu.Unlock()
+
+	payload := encodeRTID(key, id)
+
+	d.upstreamHCMu.Lock()
+	err := d.upstreamHC.Enqueue(payload)
+	d.upstreamHCMu.Unlock()
+	if err != nil {
+		t.Fatalf("LoopbackEnv.SendKeystroke: upstreamHC.Enqueue: %v", err)
+	}
+
+	return RoundTrip{id: id, done: done}
 }
 
 // WaitForEcho blocks until the echo tagged with rt arrives, or timeout
@@ -218,7 +378,13 @@ func (lb *LoopbackEnv) SendKeystroke(t testing.TB, sessionID SessionID, key stri
 // channel — a concurrent or stale round trip's frame cannot satisfy it
 // (Q5, AC-008). Does NOT read Env.CollectFrames' accumulating buffer.
 func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Duration) (payload []byte, ok bool) {
-	panic("TODO: LoopbackEnv.WaitForEcho — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	t.Helper()
+	select {
+	case payload := <-rt.done:
+		return payload, true
+	case <-time.After(timeout):
+		return nil, false
+	}
 }
 
 // CreateSession provisions the loopback driver's dedicated console (Q2,
@@ -233,7 +399,28 @@ func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Dura
 // does NOT construct the driver, the multipath instances, or the
 // half-channels; those already exist from NewLoopback.
 func (lb *LoopbackEnv) CreateSession(t testing.TB) SessionID {
-	panic("TODO: LoopbackEnv.CreateSession — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	t.Helper()
+	d := lb.driver
+
+	sessionName := fmt.Sprintf("loopback-session-%d", d.env.sessionSeq.Add(1))
+	d.sessionName = sessionName
+	d.loopbackConsoleKey = d.env.newConsoleKey()
+
+	// [v1.3 B-F1] Publish BEFORE Attach — Attach's pub.Get gate requires it.
+	if err := d.pub.Publish(sessionName); err != nil {
+		t.Fatalf("loopbackDriver: Publish session %q: %v", sessionName, err)
+	}
+	d.auth.RegisterKey(sessionName, d.loopbackConsoleKey, session.RoleFull)
+	if _, _, err := d.access.Attach(d.loopbackConsoleKey, sessionName); err != nil {
+		t.Fatalf("loopbackDriver: Attach loopback console: %v", err)
+	}
+
+	// [M2, v1.10 F-LENSB-01] Sole start-site for both ticker goroutines,
+	// symmetric — unordered relative to the provisioning steps above.
+	startLoopbackTicker(d.env, d.upstreamHC.TickInterval(), d.onUpstreamTick)
+	startLoopbackTicker(d.env, d.downstreamHC.TickInterval(), d.onDownstreamTick)
+
+	return SessionID{name: sessionName}
 }
 
 // startLoopbackTicker registers a ticker goroutine on env's EXISTING
@@ -244,7 +431,20 @@ func (lb *LoopbackEnv) CreateSession(t testing.TB) SessionID {
 // how the goroutine invokes the body. Wired: upstream ticker's tickBody is
 // d.onUpstreamTick; downstream ticker's tickBody is d.onDownstreamTick.
 func startLoopbackTicker(env *Env, interval time.Duration, tickBody func()) {
-	panic("TODO: startLoopbackTicker — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	env.wg.Add(1)
+	go func() {
+		defer env.wg.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-env.closeCh:
+				return
+			case <-ticker.C:
+				tickBody()
+			}
+		}
+	}()
 }
 
 // newLoopbackPaths constructs the two synthetic paths.RankedPath used by
@@ -254,7 +454,10 @@ func startLoopbackTicker(env *Env, interval time.Duration, tickBody func()) {
 // construction, so a fresh tracker is immediately eligible for Rank without
 // any probe history — no OnProbe calls needed.
 func newLoopbackPaths() []paths.RankedPath {
-	panic("TODO: newLoopbackPaths — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	return []paths.RankedPath{
+		{ID: 1, Tracker: paths.NewPathTracker(1.0, 0.125)},
+		{ID: 2, Tracker: paths.NewPathTracker(1.0, 0.125)},
+	}
 }
 
 // toMPFrame converts a halfchannel.ChannelFrame to a multipath.Frame:
@@ -263,7 +466,7 @@ func newLoopbackPaths() []paths.RankedPath {
 // caller MUST capture chanSeq := f.ChanSeq BEFORE calling toMPFrame and use
 // that captured value at the OnAck call site.
 func toMPFrame(f halfchannel.ChannelFrame) multipath.Frame {
-	panic("TODO: toMPFrame — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	return multipath.Frame{Payload: f.Payload}
 }
 
 // encodeRTID encodes a round-trip id as an 8-byte big-endian suffix
@@ -272,7 +475,10 @@ func toMPFrame(f halfchannel.ChannelFrame) multipath.Frame {
 // the inverse of decodeRTID: decodeRTID(encodeRTID(key, id)) == (id, true)
 // for all key, id (§M4 obligation).
 func encodeRTID(key string, id uint64) []byte {
-	panic("TODO: encodeRTID — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	buf := make([]byte, len(key)+8)
+	copy(buf, key)
+	binary.BigEndian.PutUint64(buf[len(key):], id)
+	return buf
 }
 
 // decodeRTID extracts the round-trip id from the last 8 bytes of payload.
@@ -281,7 +487,10 @@ func encodeRTID(key string, id uint64) []byte {
 // id=0 (the !ok sentinel) never collides with a real driver.pending key —
 // a decode failure is safely diagnosable, not a false hit.
 func decodeRTID(payload []byte) (id uint64, ok bool) {
-	panic("TODO: decodeRTID — Red Gate stub, S-BL.LOOPBACK-FULLSTACK")
+	if len(payload) < 8 {
+		return 0, false
+	}
+	return binary.BigEndian.Uint64(payload[len(payload)-8:]), true
 }
 
 // zeroSACK is the all-zero SACK bitmap passed to downstreamARQ.OnAck in the
