@@ -166,8 +166,8 @@ forever).
 
 ### AC-015 — race-clean under concurrent send/echo
 
-Run under `go test -race` with 6 writer goroutines (alternating 250ms/50ms-equivalent load) and 6 reader
-goroutines hitting `SendKeystroke`/`WaitForEcho` concurrently. Zero `DATA RACE` annotations — the
+Run under `go test -race` with 8 concurrent goroutines, each performing one `SendKeystroke` →
+`WaitForEcho` round trip (`internal/testenv/loopback_test.go:862`). Zero `DATA RACE` annotations — the
 per-direction `upstreamHCMu`/`downstreamHCMu` mutexes (H2) hold.
 
 ### AC-016 — downstream `OnAck` error surfaces loud
