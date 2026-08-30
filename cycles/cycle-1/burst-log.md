@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "1f0917a"
+input-hash: "cb92abe"
 traces_to: STATE.md
 ---
 
@@ -2661,3 +2661,9 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R32 CLEAN → RECONVERGED (pass 3 of the 3-consecutive-clean-pass streak begun at R30, against the unchanged v1.18 tip 13bcca1f, the R31 record commit): zero findings across all four legs, zero new observations. §1.8 Oracle CLEAN (AC-013 compile-gate injection re-proof re-sound, restore hash e53ab35f, no leak); Lens A CLEAN ("Story fully converged on the spec-fidelity axis"); Lens B CLEAN (all 8 load-bearing develop@2ce3a57 source-facts re-derived exact, Q4 downstream OnAck placement race/deadlock-free, RoundTrip.done buffered-1 liveness re-confirmed); Lens C CLEAN ("Expected terminal-convergence signature"). Zero spec artifacts changed — story stays v1.18/4902d5d, note stays v1.15 (5th consecutive byte-stable round); STORY-INDEX v4.166→v4.167 (new row + master-row R32 tail note). **Convergence counter RECONVERGES 2/3→3/3 — STEP-4.5 STORY RECONVERGED at v1.18 (BC-5.39.001 satisfied for this streak).** NEXT: §1.7 fresh-context consistency-validator audit against v1.18, then the human approval gate.** | adversary-clean-reconverged | develop @ 2ce3a57; LOOPBACK has delivered no code. |
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the R36 row, 2026-08-29 R36 clean-pass compaction pass):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK §1.7 audit-2 (post-R32) against the R32-reconverged v1.18 tip: VERDICT PERIMETER GAPS FOUND (4, ALL NON-BLOCKING) — GAP-4 (MED, NEW, human-gate decision): BC-2.01.003 exercised but not anchored, Precondition 3 (replay) not met by this harness; GAP-3 (MED): S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY drift entry corrected (LOOPBACK-FULLSTACK removed from offender list — now FIXED; true transport-layer footprint 6 stories not 4; session-management second invalid token found; 2 story-delivery files noted); GAP-1 (LOW, cosmetic, carried): BC-2.02.005 anchor comment mislabels TLPKTDROP; GAP-2 (LOW, ergonomic, carried): no just recipe for the new integration-tagged benchmark. None of the four gaps forces a story/note edit — zero spec artifacts changed, story stays v1.18/4902d5d, note stays v1.15. Reconvergence (R30/R31/R32, 3/3, BC-5.39.001 satisfied) STANDS — unlike audit-1's counter RESET. Full record: cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/s1.7-audit-2-post-R32-2026-08-29.md. NEXT: structured human approval gate.** | audit-gaps-nonblocking | develop @ 2ce3a57; LOOPBACK has delivered no code. |
