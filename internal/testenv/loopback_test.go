@@ -9,17 +9,13 @@
 // black-box testenv_test package. This mirrors the story's own binding
 // requirement for AC-016/AC-017's fault-injection tests.
 //
-// RED GATE NOTICE: every non-trivial body in loopback.go is
-// panic("TODO: ...") (Red Gate ①, BC-5.38.001). Most tests below therefore
-// FAIL BY PANIC when run — Go's testing package re-panics an unrecovered
-// test panic, which aborts the whole test binary process (verified
-// empirically; see the Red Gate log). This is the expected, sanctioned
-// signal (S-BL.LOOPBACK-FULLSTACK dispatch: "the stubs panic(...), so tests
-// fail by panic/assertion — that IS the Red Gate signal") — do NOT add
-// recover(), t.Skip, or build tags to dodge it. Because a panic aborts the
-// whole binary, each test in this file must be verified individually via
-// `go test -run '^TestName$'`, not via a single combined `go test ./...`
-// run; see the Red Gate log for the full per-test verification matrix.
+// GREEN STATE: loopback.go's loopbackDriver is fully implemented — every
+// body below is real (no panic("TODO: ...") stubs remain, Red Gate ①/②
+// discharged per BC-5.38.001). Every test in this file passes against the
+// current loopback.go, individually and as part of a single combined
+// `go test ./...` run; the Red Gate log documents the (now historical)
+// per-test verification matrix that was required while the stubs were in
+// place.
 package testenv
 
 import (

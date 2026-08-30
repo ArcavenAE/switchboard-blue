@@ -15,23 +15,24 @@
 //	Both are methods on *LoopbackEnv (Q2), not *Env — CreateSession/
 //	SendKeystroke/WaitForEcho are all called on lb directly, not lb.Env.
 //
-//	Once loopback.go's loopbackDriver is implemented, this benchmark drives
-//	the real tick-driven, protocol-accurate loopback stack (internal/
+//	Now that loopback.go's loopbackDriver is implemented, this benchmark
+//	drives the real tick-driven, protocol-accurate loopback stack (internal/
 //	halfchannel + internal/arq + internal/multipath + internal/paths)
 //	instead of the prior same-goroutine DeliverFrame shortcut. The "lower
 //	bound only" framing this file previously carried (disclosing that the
 //	measured path bypassed arq/multipath/tick-scheduling) is retired — that
-//	divergence no longer exists once the token-based API is backed by the
-//	full stack.
+//	divergence no longer exists now that the token-based API is backed by
+//	the full stack.
 //
-//	AS OF THIS COMMIT (S-BL.LOOPBACK-FULLSTACK Red Gate ②): loopback.go's
-//	loopbackDriver is stub-only (every non-trivial body panics per
-//	BC-5.38.001) — CreateSession/SendKeystroke/WaitForEcho below will PANIC
-//	when this benchmark actually runs, until the implementer stage fills
-//	those stubs in. That is the intended Red Gate signal for this file too;
-//	do not treat a failing/panicking run as evidence against the token-based
-//	API shape itself — see AC-013's Verification Method (compile-only gate)
-//	for what this story's Red Gate requires of this file.
+//	GREEN STATE: loopback.go's loopbackDriver is fully implemented (no
+//	panic("TODO: ...") stubs remain, BC-5.38.001 Red Gate discharged) —
+//	CreateSession/SendKeystroke/WaitForEcho below run for real when this
+//	benchmark executes. AC-013's Verification Method for THIS file remains
+//	the compile-only gate — `go test -tags integration -run '^$' -count=1
+//	./internal/bench/` — because this file has no `//go:build integration`
+//	counterpart exercised in the default `go test ./...` run; running the
+//	benchmark itself (`go test -tags integration -bench=. ./internal/bench/`)
+//	is a valid additional check but is not what AC-013 requires.
 package bench_test
 
 import (
