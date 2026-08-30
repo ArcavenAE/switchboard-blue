@@ -84,3 +84,23 @@ benchmarks:
     cycle_1_value: "NONE"
     unit: "boolean/status"
     notes: "No cost-summary.md exists. Dimension 1 fully skipped this run."
+
+  - metric: sidecar_markers_unsynthesized_at_review_time
+    cycle_1_value: "809 (2026-08-30) — was 599 (2026-08-28), was 165 (2026-07-12)"
+    unit: "count"
+    notes: "Trend WORSENING: +210 markers in ~2 days (2026-08-28 to 2026-08-30), following +434 in the prior interval (2026-07-12 to 2026-08-28). IP-C2-01 (2026-08-28 review) remains the open fix, still pending human disposition. Suggest converting this metric to a running series (append-only, one entry per review) rather than overwriting the seed value — this entry and the original 2026-07-12 seed above are both kept as the first two points of that series."
+
+  - metric: loopback_fullstack_reconvergence_round_first_try_rate_this_window
+    cycle_1_value: "6/6 (100%) R35-R40"
+    unit: "ratio"
+    notes: "S-BL.LOOPBACK-FULLSTACK Step-4.5 adversarial rounds R35 through R40, 2026-08-29 to 2026-08-30 sub-cycle only. Contrast with the cycle-1 gate_first_try_clean_rate benchmark of 2/11 (18%) — this window's rate is a selection effect (tail end of a longer, rougher R16-R32 process), not evidence PAT-07 is reversing project-wide. Do not average the two rates together."
+
+  - metric: loopback_fullstack_perimeter_audit_first_try_rate
+    cycle_1_value: "1/2 (50%) — audit vs v1.20 found F-S1.7-R37-01, audit vs v1.21 CLEAN"
+    unit: "ratio"
+    notes: "The two §1.7 fresh-context perimeter audits run against S-BL.LOOPBACK-FULLSTACK's reconverged tips (post-R37 v1.20, post-R40 v1.21). The one 'failure' (audit vs v1.20) is a correct catch (F-S1.7-R37-01, QUESTION-severity, resolved via the v1.21 human-gate anchor) — the perimeter-audit mechanism working as designed, not a quality regression."
+
+  - metric: cost_data_availability
+    cycle_1_value: "NONE (confirmed absent 2026-08-30, third review in a row)"
+    unit: "boolean/status"
+    notes: "Cross-ref drbothen/vsdd-factory#583. No cost-summary.md exists at any of the three review dates (2026-07-12, 2026-08-28, 2026-08-30). Dimension 1 fully skipped again this sub-cycle review; this is a spec-only sub-cycle with no implementation/PR/cost activity to measure regardless."
