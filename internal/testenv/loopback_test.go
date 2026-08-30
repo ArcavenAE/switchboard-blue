@@ -313,6 +313,30 @@ func TestLoopbackDriver_EmptyTicksNotDispatched(t *testing.T) {
 			emptyTicks, got, emptyTicks)
 	}
 
+	// AC-003/BC-2.01.002: direct observable assertion that empty upstream
+	// ticks are never wire-dispatched. An empty upstream tick enqueues no
+	// keystroke, so accessNode.SendKeystroke is never called, so no echo is
+	// ever enqueued into downstreamHC. Draining downstreamHC here — before
+	// the real keystroke is sent below — and finding zero FrameTypeData
+	// frames proves the 5 empty ticks above produced no downstream
+	// delivery. This is stronger than the upstreamHC.Seq() check above,
+	// which only proves Tick() was called the right number of times, not
+	// that those calls stayed off the wire; a driver that (incorrectly)
+	// wire-dispatched every tick as data would still pass the Seq() check
+	// but would fail this one.
+	lb.driver.downstreamHCMu.Lock()
+	preSendDataFrames := 0
+	for i := 0; i < 4; i++ {
+		if cf := lb.driver.downstreamHC.Tick(); cf.FrameType == halfchannel.FrameTypeData {
+			preSendDataFrames++
+		}
+	}
+	lb.driver.downstreamHCMu.Unlock()
+	if preSendDataFrames != 0 {
+		t.Errorf("AC-003: downstreamHC produced %d FrameTypeData frame(s) after only empty onUpstreamTick() calls, want 0 — empty ticks must never be wire-dispatched",
+			preSendDataFrames)
+	}
+
 	rt := lb.SendKeystroke(t, sid, "x")
 	lb.driver.onUpstreamTick()
 	lb.driver.onDownstreamTick()
@@ -400,12 +424,14 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 	lb.driver.onUpstreamTick()
 
 	dataFrames := 0
+	lb.driver.downstreamHCMu.Lock()
 	for i := 0; i < 4; i++ {
 		cf := lb.driver.downstreamHC.Tick()
 		if cf.FrameType == halfchannel.FrameTypeData {
 			dataFrames++
 		}
 	}
+	lb.driver.downstreamHCMu.Unlock()
 	if dataFrames != 1 {
 		t.Errorf("AC-005: downstreamHC received %d data frames after one upstream tick, want exactly 1 — endpoint dedup must discard the second-arriving duplicate before SendKeystroke ever runs a second time",
 			dataFrames)
