@@ -914,7 +914,7 @@ func TestLoopbackDriver_UpstreamDeliveryError_SurfacesLoud(t *testing.T) {
 	// session-existence validation, so this call succeeds at the
 	// mint/encode/enqueue level regardless of sessionID.
 	sid := SessionID{}
-	_ = lb.SendKeystroke(stub, sid, "x")
+	rt := lb.SendKeystroke(stub, sid, "x")
 
 	// Step 3: drive the upstream tick body directly and synchronously.
 	lb.driver.onUpstreamTick()
@@ -924,4 +924,16 @@ func TestLoopbackDriver_UpstreamDeliveryError_SurfacesLoud(t *testing.T) {
 		t.Errorf("AC-017: driver.failLoud fired %d times, want exactly 1 (accessNode.SendKeystroke's ErrConsoleNotFound must be checked and surfaced loud, in-place inside deliverUpstream): %v",
 			len(calls), calls)
 	}
+
+	// This test's fault-injection intentionally fails upstream delivery
+	// (accessNode.SendKeystroke -> ErrConsoleNotFound, driving the failLoud
+	// path asserted above), so rt's round trip never completes and its
+	// pending entry would otherwise sit undrained until teardown and trip
+	// the AC-011 diagnostic (testenv.go) — benign here but would mask a
+	// genuine future leak with expected noise. Drain it explicitly now
+	// that the failLoud assertion above has already observed the state it
+	// needs.
+	lb.driver.mu.Lock()
+	delete(lb.driver.pending, rt.id)
+	lb.driver.mu.Unlock()
 }
