@@ -357,16 +357,26 @@ func TestLoopbackDriver_DuplicateAndRaceDispatch(t *testing.T) {
 
 // TestLoopbackDriver_EndpointDedupDiscardsSecondArrival — AC-005: the
 // second-arriving copy of a duplicate-and-raced frame is discarded by
-// multipath.Receive's endpoint checksum dedup. Upstream, this gates
-// accessNode.SendKeystroke directly: of the two deliverUpstream calls per
-// tick, exactly one payload reaches downstreamHC via
-// loopbackSink.SendInput, never two. Verified by draining downstreamHC
+// multipath.Receive's endpoint checksum dedup, both upstream and downstream
+// (story text lines 882-887).
+//
+// Upstream leg: this gates accessNode.SendKeystroke directly — of the two
+// deliverUpstream calls per tick, exactly one payload reaches downstreamHC
+// via loopbackSink.SendInput, never two. Verified by draining downstreamHC
 // directly after one upstream tick and counting data frames.
 //
+// Downstream leg (F2 remediation): downstreamARQ.OnAck's cadence is
+// tick-driven, NOT gated by deliverDownstream's dedup outcome (see AC-006)
+// — so this leg asserts the dedup separately, via the
+// downstreamDeliverNilCount/downstreamDeliverDupCount/downstreamOnAckCount
+// test-instrumentation counters: exactly one nil Receive, one ErrDuplicate
+// Receive (deliverDownstream fires twice, once per synthetic path), and
+// exactly one OnAck call, per ticked downstream data frame.
+//
 // Uses createSessionNoTicker (F1 remediation): this test drives every tick
-// manually via the onUpstreamTick() seam and the downstreamHC.Tick() seam.
-// CreateSession's auto-started ticker goroutines would race those manual
-// calls on the SAME un-locked HalfChannels (H2, AC-015) — and the
+// manually via the onUpstreamTick()/onDownstreamTick()/downstreamHC.Tick()
+// seams. CreateSession's auto-started ticker goroutines would race those
+// manual calls on the SAME un-locked HalfChannels (H2, AC-015) — and the
 // downstream ticker could itself consume the queued data frame before this
 // test's own drain loop observes it, driving dataFrames to 0.
 func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
@@ -379,6 +389,8 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 	t.Cleanup(lb.Env.Close)
 
 	sid := lb.createSessionNoTicker(t)
+
+	// --- upstream leg: dedup gates accessNode.SendKeystroke ---
 	_ = lb.SendKeystroke(t, sid, "x")
 	lb.driver.onUpstreamTick()
 
@@ -392,6 +404,25 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 	if dataFrames != 1 {
 		t.Errorf("AC-005: downstreamHC received %d data frames after one upstream tick, want exactly 1 — endpoint dedup must discard the second-arriving duplicate before SendKeystroke ever runs a second time",
 			dataFrames)
+	}
+
+	// --- downstream leg: dedup does NOT gate OnAck (see AC-006) ---
+	rt2 := lb.SendKeystroke(t, sid, "y")
+	lb.driver.onUpstreamTick()
+	lb.driver.onDownstreamTick()
+
+	if n := lb.driver.downstreamDeliverNilCount.Load(); n != 1 {
+		t.Errorf("AC-005: deliverDownstream's Receive returned nil %d time(s) for the ticked data frame, want exactly 1 (the first-arriving path)", n)
+	}
+	if n := lb.driver.downstreamDeliverDupCount.Load(); n != 1 {
+		t.Errorf("AC-005: deliverDownstream's Receive returned ErrDuplicate %d time(s) for the ticked data frame, want exactly 1 (the second-arriving path)", n)
+	}
+	if n := lb.driver.downstreamOnAckCount.Load(); n != 1 {
+		t.Errorf("AC-005: downstreamARQ.OnAck fired %d time(s) for the ticked data frame, want exactly 1 — its cadence is tick-driven, not gated by deliverDownstream's dedup outcome (see AC-006)", n)
+	}
+
+	if _, ok := lb.WaitForEcho(t, rt2, 200*time.Millisecond); !ok {
+		t.Errorf("AC-005: downstream leg's round trip did not complete despite exactly one OnAck delivery")
 	}
 }
 

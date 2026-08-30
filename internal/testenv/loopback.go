@@ -103,6 +103,20 @@ type loopbackDriver struct {
 	// to observe ErrConsoleNotFound via failLoud.
 	loopbackConsoleKey session.ConsoleKey
 	sessionName        string
+
+	// downstreamDeliverNilCount/downstreamDeliverDupCount/
+	// downstreamOnAckCount are test-visible instrumentation counters for
+	// AC-005's downstream assertions (story text lines 882-887): per ticked
+	// downstream data frame, deliverDownstream's dedup Receive call must
+	// return nil exactly once and ErrDuplicate exactly once (one count
+	// each), and downstreamARQ.OnAck must fire exactly once. atomic.Uint64
+	// because they are read from a test goroutine while a ticker goroutine
+	// (or a direct onDownstreamTick() call) may be running concurrently for
+	// other in-flight round trips — pure counters, incrementing them changes
+	// no control flow.
+	downstreamDeliverNilCount atomic.Uint64
+	downstreamDeliverDupCount atomic.Uint64
+	downstreamOnAckCount      atomic.Uint64
 }
 
 // validateLoopbackConfig enforces NewLoopback's tick-interval bounds (Q6):
@@ -229,6 +243,11 @@ func (d *loopbackDriver) onDownstreamTick() {
 	// shared downstreamARQ instance that received EnqueueSend above — NOT
 	// gated by, and not invoked from inside, deliverDownstream's dedup.
 	delivered, err := d.downstreamARQ.OnAck(chanSeq, zeroSACK)
+	// [F2/AC-005] Counted unconditionally, alongside the real call above —
+	// the counter's cadence must match OnAck's own cadence exactly,
+	// including the error path (AC-016's ErrAckOutOfWindow case still
+	// called OnAck once).
+	d.downstreamOnAckCount.Add(1)
 	if err != nil {
 		// [M2] err MUST be checked and fail loud — not swallowed.
 		d.failLoud(fmt.Errorf("downstreamARQ.OnAck seq=%d: %w", chanSeq, err))
@@ -299,7 +318,15 @@ func (d *loopbackDriver) deliverDownstream(_ uint64, f multipath.Frame) error {
 	// second-arriving copy silently. downstreamARQ.OnAck fires exactly once
 	// per downstream data tick from onDownstreamTick's own tick body,
 	// unconditionally — not gated by this dedup outcome (AC-005, AC-006).
-	_ = d.downstreamMP.Receive(f)
+	//
+	// [F2/AC-005] The nil/ErrDuplicate outcome is counted here — pure
+	// instrumentation, does not change which branch runs or what is
+	// returned.
+	if err := d.downstreamMP.Receive(f); err != nil {
+		d.downstreamDeliverDupCount.Add(1)
+		return nil
+	}
+	d.downstreamDeliverNilCount.Add(1)
 	return nil
 }
 
