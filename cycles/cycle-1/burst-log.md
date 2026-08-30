@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "14d9d52"
+input-hash: "6446e63"
 traces_to: STATE.md
 ---
 
@@ -2673,3 +2673,9 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK v1.19 human-gate-directed spec edit: the human reviewed §1.7 audit-2's GAP-4 and directed "anchor it" — BC-2.01.003 ("Upstream and Downstream Half-Channels Operate with Independent Clocks and Sequence Spaces") anchored PARTIAL/HARNESS-SCOPE (consistent with the BC-2.01.002 precedent): added to behavioral_contracts:/bc_traces: (now 6 BCs each), a new Anchors Consumed row, and AC-002's trace header. The carried GAP-1 (LOW cosmetic TLPKTDROP mislabel) swept same burst — removed from 3 anchor-comment spots. Story v1.18→v1.19 (formal changelog, status-note blockquote, and the L57 inputDocuments provenance clause each carry a v1.19 entry); placement note UNCHANGED v1.15; input-hash UNCHANGED 4902d5d; AC count unchanged 17. PAT-04-verified by the orchestrator; only the story file touched. This is a substantive spec-content edit, so per the R14/R18/R24 precedent (a converged spec that is then edited must reconverge), the Step-4.5 clean-pass counter RESETS 3/3→0/3 — the v1.18 reconvergence (R30/R31/R32) is retracted. STORY-INDEX v4.168→v4.169. NOT gate-ready. GAP-3 (systemic subsystems-registry) and GAP-2 (bench recipe) remain open, unaffected. Full record: cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/v1.19-human-gate-edit-2026-08-29.md. NEXT: fresh Step-4.5 3/3 reconvergence against v1.19, then a §1.7 perimeter re-audit against the reconverged tip.** | human-gate-edit+counter-reset | develop @ 2ce3a57; LOOPBACK has delivered no code. |
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the v1.21 §1.7-anchor row, 2026-08-30 v1.21 anchor+reset compaction pass):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK R33 4-leg adversarial reconvergence pass (POL-005 dispatch, HEAD-SHA tuple 326e5e5) — REMEDIATED: §1.8 Oracle GREEN (AC-013 compile-gate injection re-proof PASS, bench blob e53ab35f); Lens A CLEAN; Lens B NITPICK_ONLY; Lens C CLEAN. Four sub-findings, all architect-ruled FIX (none carried as survivors): F-R33-LENSB-01/F-R33-LENSC-01 (placement note L15 bc_traces stale TLPKTDROP comment mislabel → note v1.15→v1.16); F-R33-LENSB-02 (AC-002(b) + BC-2.01.003 Anchors Consumed row precision-tightened — clock/interval independence test-exercised, sequence-space independence by-construction not test-asserted); F-R33-LENSA-O1 (STORY-INDEX L155 reference-column BC-2.01.003 undercount, 5 vs 6 BCs, fixed); F-R33-LENSC-02 (STORY-INDEX v4.169 row's own fix-spot locators erratum 'L30/L42' corrected to disk-verified L31/L44 + L165 via a new v4.170 erratum row). Note is this story's declared input, so story input-hash recomputed 4902d5d→7967a2f via rc.24 compute-input-hash --update. Story v1.19→v1.20 (triple-ledger parity disk-verified). STORY-INDEX v4.169→v4.170. Step-4.5 convergence counter STAYS RESET at 0/3 (unchanged — R33 remediates findings the reconvergence attempt itself surfaced, not a clean pass). NOT gate-ready. NEXT: fresh Step-4.5 3/3 reconvergence against v1.20 (R34, pass 1 of a new streak).** | adversary-notclean+remediated | develop @ 2ce3a57; LOOPBACK has delivered no code. |
