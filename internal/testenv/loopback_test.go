@@ -281,6 +281,13 @@ func TestLoopbackDriver_TicksFireOnSchedule(t *testing.T) {
 // upstreamHC.Seq() is the tick-count proxy (every call increments it), and a
 // subsequent data-bearing tick must still complete a full round trip,
 // proving the empty ticks above did not corrupt the driver's tick cadence.
+//
+// Uses createSessionNoTicker (F1 remediation): this test drives every tick
+// manually via the onUpstreamTick()/onDownstreamTick() seams and reads
+// upstreamHC.Seq() directly. CreateSession's auto-started upstream ticker
+// goroutine would race those manual Tick() calls on the SAME un-locked
+// HalfChannel (H2, AC-015) and could itself fire extra ticks, inflating
+// upstreamHC.Seq() past the exact emptyTicks count this test asserts on.
 func TestLoopbackDriver_EmptyTicksNotDispatched(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -290,7 +297,7 @@ func TestLoopbackDriver_EmptyTicksNotDispatched(t *testing.T) {
 	})
 	t.Cleanup(lb.Env.Close)
 
-	sid := lb.CreateSession(t)
+	sid := lb.createSessionNoTicker(t)
 
 	const emptyTicks = 5
 	for i := 0; i < emptyTicks; i++ {
@@ -355,6 +362,13 @@ func TestLoopbackDriver_DuplicateAndRaceDispatch(t *testing.T) {
 // tick, exactly one payload reaches downstreamHC via
 // loopbackSink.SendInput, never two. Verified by draining downstreamHC
 // directly after one upstream tick and counting data frames.
+//
+// Uses createSessionNoTicker (F1 remediation): this test drives every tick
+// manually via the onUpstreamTick() seam and the downstreamHC.Tick() seam.
+// CreateSession's auto-started ticker goroutines would race those manual
+// calls on the SAME un-locked HalfChannels (H2, AC-015) — and the
+// downstream ticker could itself consume the queued data frame before this
+// test's own drain loop observes it, driving dataFrames to 0.
 func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -364,7 +378,7 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 	})
 	t.Cleanup(lb.Env.Close)
 
-	sid := lb.CreateSession(t)
+	sid := lb.createSessionNoTicker(t)
 	_ = lb.SendKeystroke(t, sid, "x")
 	lb.driver.onUpstreamTick()
 

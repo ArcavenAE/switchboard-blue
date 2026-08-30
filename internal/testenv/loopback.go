@@ -34,8 +34,11 @@ import (
 // once, from NewLoopback, before CreateSession is ever called) builds pub/
 // auth/access, both Multipath instances, and both HalfChannels fully
 // initialized and immediately usable — but with the console UN-PROVISIONED
-// (no Publish/RegisterKey/Attach has run). Only CreateSession provisions the
-// console and starts both ticker goroutines.
+// (no Publish/RegisterKey/Attach has run). CreateSession is the only
+// production/non-deterministic-test entry point that provisions the console
+// and starts both ticker goroutines; createSessionNoTicker (F1 remediation)
+// provisions the SAME console via the shared provisionConsole body but starts
+// neither ticker, for deterministic tests that drive ticks manually.
 type loopbackDriver struct {
 	env *Env
 
@@ -387,18 +390,18 @@ func (lb *LoopbackEnv) WaitForEcho(t testing.TB, rt RoundTrip, timeout time.Dura
 	}
 }
 
-// CreateSession provisions the loopback driver's dedicated console (Q2,
+// provisionConsole provisions the loopback driver's dedicated console (Q2,
 // H3): sh.pub.Publish(sessionName) — BEFORE Attach, whose pub.Get gate
 // requires it — then sh.auth.RegisterKey(sessionName, loopbackConsoleKey,
 // session.RoleFull), then sh.access.Attach(loopbackConsoleKey, sessionName).
 // sessionName and loopbackConsoleKey are stored on the driver at this point
-// (never earlier — "Driver lifecycle pin"). CreateSession additionally
-// starts BOTH ticker goroutines, upstream and downstream — its sole
-// start-site (M2, v1.10 F-LENSB-01, symmetric for both directions) — as a
-// separate concern, unordered relative to the provisioning steps above. It
-// does NOT construct the driver, the multipath instances, or the
-// half-channels; those already exist from NewLoopback.
-func (lb *LoopbackEnv) CreateSession(t testing.TB) SessionID {
+// (never earlier — "Driver lifecycle pin"). It does NOT start either ticker
+// goroutine and does NOT construct the driver, the multipath instances, or
+// the half-channels; those already exist from NewLoopback. Extracted so
+// CreateSession (starts both tickers) and createSessionNoTicker (starts
+// neither, for deterministic tests — F1 remediation) share this single
+// provisioning body instead of diverging.
+func (lb *LoopbackEnv) provisionConsole(t testing.TB) SessionID {
 	t.Helper()
 	d := lb.driver
 
@@ -415,12 +418,42 @@ func (lb *LoopbackEnv) CreateSession(t testing.TB) SessionID {
 		t.Fatalf("loopbackDriver: Attach loopback console: %v", err)
 	}
 
+	return SessionID{name: sessionName}
+}
+
+// CreateSession provisions the loopback driver's dedicated console (via
+// provisionConsole) and additionally starts BOTH ticker goroutines, upstream
+// and downstream — its sole start-site (M2, v1.10 F-LENSB-01, symmetric for
+// both directions) — as a separate concern, unordered relative to the
+// provisioning steps. This is the external contract every non-deterministic
+// caller (AC-006/AC-014, the VP-042 benchmark) depends on; it is unchanged
+// by the provisionConsole extraction.
+func (lb *LoopbackEnv) CreateSession(t testing.TB) SessionID {
+	t.Helper()
+	sid := lb.provisionConsole(t)
+	d := lb.driver
+
 	// [M2, v1.10 F-LENSB-01] Sole start-site for both ticker goroutines,
 	// symmetric — unordered relative to the provisioning steps above.
 	startLoopbackTicker(d.env, d.upstreamHC.TickInterval(), d.onUpstreamTick)
 	startLoopbackTicker(d.env, d.downstreamHC.TickInterval(), d.onDownstreamTick)
 
-	return SessionID{name: sessionName}
+	return sid
+}
+
+// createSessionNoTicker provisions the loopback driver's console (via
+// provisionConsole) WITHOUT starting either ticker goroutine (F1
+// remediation). For deterministic tests that drive every tick manually via
+// the onUpstreamTick()/onDownstreamTick()/downstreamHC.Tick() seams: a live
+// ticker goroutine on the SAME HalfChannel would race those manual calls
+// (HalfChannel has no internal lock — H2, AC-015) and could also consume or
+// inflate the exact tick counts those tests assert on. Package-private:
+// every non-deterministic caller (production code, the benchmark, and every
+// other test) keeps using CreateSession, whose external contract is
+// unchanged.
+func (lb *LoopbackEnv) createSessionNoTicker(t testing.TB) SessionID {
+	t.Helper()
+	return lb.provisionConsole(t)
 }
 
 // startLoopbackTicker registers a ticker goroutine on env's EXISTING
