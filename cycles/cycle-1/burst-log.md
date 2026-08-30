@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "cb92abe"
+input-hash: "14d9d52"
 traces_to: STATE.md
 ---
 
@@ -2667,3 +2667,9 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK §1.7 audit-2 (post-R32) against the R32-reconverged v1.18 tip: VERDICT PERIMETER GAPS FOUND (4, ALL NON-BLOCKING) — GAP-4 (MED, NEW, human-gate decision): BC-2.01.003 exercised but not anchored, Precondition 3 (replay) not met by this harness; GAP-3 (MED): S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY drift entry corrected (LOOPBACK-FULLSTACK removed from offender list — now FIXED; true transport-layer footprint 6 stories not 4; session-management second invalid token found; 2 story-delivery files noted); GAP-1 (LOW, cosmetic, carried): BC-2.02.005 anchor comment mislabels TLPKTDROP; GAP-2 (LOW, ergonomic, carried): no just recipe for the new integration-tagged benchmark. None of the four gaps forces a story/note edit — zero spec artifacts changed, story stays v1.18/4902d5d, note stays v1.15. Reconvergence (R30/R31/R32, 3/3, BC-5.39.001 satisfied) STANDS — unlike audit-1's counter RESET. Full record: cycles/cycle-1/S-BL.LOOPBACK-FULLSTACK/s1.7-audit-2-post-R32-2026-08-29.md. NEXT: structured human approval gate.** | audit-gaps-nonblocking | develop @ 2ce3a57; LOOPBACK has delivered no code. |
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the R37 row, 2026-08-29 R37 clean-pass/RECONVERGENCE compaction pass):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK v1.19 human-gate-directed spec edit: the human reviewed §1.7 audit-2's GAP-4 and directed "anchor it" — BC-2.01.003 ("Upstream and Downstream Half-Channels Operate with Independent Clocks and Sequence Spaces") anchored PARTIAL/HARNESS-SCOPE (consistent with the BC-2.01.002 precedent): added to behavioral_contracts:/bc_traces: (now 6 BCs each), a new Anchors Consumed row, and AC-002's trace header. The carried GAP-1 (LOW cosmetic TLPKTDROP mislabel) swept same burst — removed from 3 anchor-comment spots. Story v1.18→v1.19 (formal changelog, status-note blockquote, and the L57 inputDocuments provenance clause each carry a v1.19 entry); placement note UNCHANGED v1.15; input-hash UNCHANGED 4902d5d; AC count unchanged 17. PAT-04-verified by the orchestrator; only the story file touched. This is a substantive spec-content edit, so per the R14/R18/R24 precedent (a converged spec that is then edited must reconverge), the Step-4.5 clean-pass counter RESETS 3/3→0/3 — the v1.18 reconvergence (R30/R31/R32) is retracted. STORY-INDEX v4.168→v4.169. NOT gate-ready. GAP-3 (systemic subsystems-registry) and GAP-2 (bench recipe) remain open, unaffected. Full record: cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/v1.19-human-gate-edit-2026-08-29.md. NEXT: fresh Step-4.5 3/3 reconvergence against v1.19, then a §1.7 perimeter re-audit against the reconverged tip.** | human-gate-edit+counter-reset | develop @ 2ce3a57; LOOPBACK has delivered no code. |
