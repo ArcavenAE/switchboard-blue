@@ -6,13 +6,13 @@ title: "Full-stack loopback testenv extension: tick-driven halfchannel + arq + m
 status: draft
 producer: architect
 timestamp: 2026-07-12T00:00:00Z
-version: "1.15"
+version: "1.16"
 bc_traces:
   - BC-2.01.001   # timeslice clock fires every tick regardless of data availability
   - BC-2.01.002   # empty-tick frame semantics
   - BC-2.02.001   # duplicate-and-race dispatch
   - BC-2.02.002   # endpoint checksum-only dedup
-  - BC-2.02.005   # downstream ARQ (piggybacked ACK/SACK, TLPKTDROP)
+  - BC-2.02.005   # downstream ARQ (piggybacked ACK/SACK)
 vp_traces:
   - VP-042        # keystroke-to-echo p99 <= 100ms
 architecture_modules:
@@ -31,6 +31,7 @@ related_documents:
 
 | Version | Change |
 |---------|--------|
+| 1.16 | R33 adversarial reconvergence repair (2026-08-29, POL-005 dispatch): LOW (F-R33-LENSB-01 / F-R33-LENSC-01, two lenses independently flagged) — the `bc_traces:` frontmatter's BC-2.02.005 descriptive comment (L15) carried a stale ", TLPKTDROP" qualifier, the identical annotation GAP-1 (story v1.19) removed from the story's three BC-2.02.005 anchor comments as a harness-scope mislabel. This note's own Q1 and Q4 sections are unambiguous that `GapsToRetransmit`/`TLPKTDROP` are deliberately NOT called anywhere in this design ("Why not call `GapsToRetransmit`/`TLPKTDROP` at all: see Non-Goals — there is no simulated loss") — the note is harness-scoped throughout, the same scope as the story, not a contract-scope restatement of BC-2.02.005's own text (which does reference TLPKTDROP in its Invariant 2 and Related-BCs "composes with" row, but that is BC-2.02.005.md's own document, not this note's trace-line gloss). The other four `bc_traces` comments on L11-L14 each gloss the traced BC's own core postcondition/title, not a laundry list of neighboring BCs — TLPKTDROP is BC-2.02.006's subject. Corrected L15 to `# downstream ARQ (piggybacked ACK/SACK)`, matching the story's GAP-1 form. Comment-only; no binding design change. See "v1.16 R33 Reconvergence Repair (2026-08-29)" section. |
 | 1.15 | R19 adversarial reconvergence repair (2026-08-29, POL-005 dispatch): MED (F-R19-LENSC-01) — one stale naked `story L442` example-pointer citation in §M2 live prose ("`closeOnce sync.Once` in the note / story L442") de-anchored: `L442` on disk resolves to `closeOnce sync.Once`'s call sites at `story L498`/`L666` (and the note's own definition at `L452`/`L453`), not to note L442 (Q5 correlation-ID prose) or story L442 (`OnAck`/`reorderBuf` topology) — WRONG on both readings. Corrected to the clean parenthetical `` (`closeOnce sync.Once`) `` — dropping the naked cross-reference entirely — matching the already-clean form at note L1808 and story L498 (neither carries a line-number pointer). This corrects a false completeness claim in the v1.14 changelog row ("Whole-file grep found no other naked `L<digits>` binding-rule citations in live prose"): that sweep scoped itself to citations functioning as *binding-rule authority* (the `L256` mutex-rule class) and did not cover this citation, which functions as an *example/navigational* pointer, not a binding-rule citation — a real gap in the v1.14 sweep's stated scope, not a contradiction of what it actually checked. A full whole-class re-sweep (every naked `story L<digits>` / `note L<digits>` / bare `L<digits>` citation in the file, all ~90 occurrences) found: this one live-prose naked citation (fixed here); the frozen v1.6-section `story L868-875` AC-017 citation (dated repair-section provenance, left untouched per §2.9); and the remainder are either disk-verified external-source `file.go:NNN`/`ARCH-03 line NNN` anchors or sit inside frozen dated changelog rows / repair-addendum sections describing historical defects at the line numbers then current — none require correction. Zero live-prose naked line citations remain anywhere in the note. See "v1.15 R19 Reconvergence Repair (2026-08-29)" section. |
 | 1.14 | R18 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R18-LENSC-01) — four live-prose citations of a stale naked `L256` line number as "the per-direction-mutex binding rule" (§H2 concrete-shape wiring note; §F-B-1 defect/fix narrative ×2; the v1.5 "Ground truth source" line) de-anchored: `L256` on disk is `loopbackSink.SendInput`'s doc comment, unrelated to the mutex rule. All four replaced with a mechanism anchor — "the §H2 per-direction-mutex binding rule (every `Enqueue`/`Tick` call site acquires the corresponding mutex)" — carrying no naked line number, per the story's L62 no-self-referential-line-citation convention; the co-located valid `§H2` anchors (including the `onDownstreamTick` cross-reference) are preserved. Whole-file grep found no other naked `L<digits>` binding-rule citations in live prose. MED (F-R18-LENSB-01) — Q3's upstream-flow design corrected: `multipath.Send` (`multipath.go:244-286`) returns `nil` whenever `sent >= 1`, and the upstream duplicate-and-race dispatch (two paths, Q7) always has at least one path's `deliverUpstream` call return `nil` via the dedup `ErrDuplicate` short-circuit (`multipath.go:323`) even when the delivering path's `accessNode.SendKeystroke` call fails — so a `failLoud` check placed on `upstreamMP.Send`'s return value in `onUpstreamTick()` can never observe the masked per-path error. Corrected the Q3 pseudocode/prose and the AC-017 fault-injection procedure (step 3) to pin `failLoud` to the IN-PLACE `SendKeystroke` error site inside `deliverUpstream` — symmetric with §M2's already-correct in-place downstream `OnAck` check — while `deliverUpstream` still returns the error afterward so `multipath.Send`'s `SendResult{Sent:false}` accounting and the all-paths-failed `sent==0` wrapped error are preserved; documented why exactly one `failLoud` call fires (only the delivering path ever reaches `SendKeystroke`) and why the post-`Send` placement is unsound (the masking rationale). Downstream (`OnAck`) description untouched — already correct. See "v1.14 R18 Reconvergence Repair (2026-08-28)" section. |
 | 1.13 | R15 adversarial reconvergence repair (2026-08-28, POL-005 dispatch): MED (F-R15-LENSB-01) — the v1.12 "### Verification Method (AC-013)" subsection's compile-check bullet was itself vacuous and its causal claim wrong. `internal/bench/` is a TEST-ONLY package (both files are `_test.go`); `go build` never compiles `_test.go` files, WITH OR WITHOUT `-tags integration` — the tag is irrelevant to the exclusion, so the prescribed `go build -tags integration ./internal/bench/...` compile-check verified nothing (empirically confirmed: exits 0 even with a deliberately injected compile error in the tagged file). Replaced with `go test -tags integration -run '^$' -count=1 ./internal/bench/` (Option (a) below) as the binding compile-gate — empirically confirmed to fail (exit 1) against the same injected error, while the untagged form does not see it. Causal claim corrected: exclusion is because the file is a test file, not because the tag is absent. See "v1.13 R15 Reconvergence Repair (2026-08-28)" section. |
@@ -2885,3 +2886,98 @@ HEAD` (`7b8b655...`, the spec worktree, confirmed at dispatch); the
 story file's `closeOnce sync.Once` occurrences at `L498`/`L666`
 (confirmed present, `story L442` confirmed absent of any `sync.Once`
 content) — all read and confirmed in this session.
+
+## v1.16 R33 Reconvergence Repair (2026-08-29)
+
+An R33 adversarial reconvergence pass, plus separate architect
+adjudication, found one LOW note/story-internal consistency defect
+(two lenses independently flagged the same site) plus a related
+AC-002 precision finding disposed as no-change to this note (the
+story governs that one — see below).
+
+### Finding F-R33-LENSB-01 / F-R33-LENSC-01 (LOW, stale sibling annotation) — L15 `bc_traces` TLPKTDROP mislabel
+
+**Defect:** the `bc_traces:` frontmatter's BC-2.02.005 line (L15) read
+`# downstream ARQ (piggybacked ACK/SACK, TLPKTDROP)`. This is the
+identical annotation GAP-1 removed from the story's three BC-2.02.005
+anchor comments in story v1.19, on the ruling that TLPKTDROP is
+BC-2.02.006's subject, deliberately excluded from this design's scope
+per Non-Goals, and naming it on a BC-2.02.005 anchor is a mislabel.
+
+**Adjudication (architect):** the same ruling applies here, and for
+the same reason — this note is not exempt from it. A competing reading
+was considered and rejected: BC-2.02.005.md's own text (Invariant 2,
+"loss beyond window: TLPKTDROP, see BC-2.02.006"; Related BCs,
+"composes with: TLPKTDROP fires when ARQ timeout exceeds perception
+deadline") does reference TLPKTDROP, so a contract-scope gloss of
+BC-2.02.005 could legitimately name it. But that is not what this
+line is glossing. This note's own Q1 and Q4 sections are explicit and
+harness-scoped throughout, not a contract-scope restatement of
+BC-2.02.005.md: Q1 states plainly "Why not call
+`GapsToRetransmit`/`TLPKTDROP` at all: see Non-Goals — there is no
+simulated loss, so `arqServer.inFlight` never accumulates a real gap.
+Wiring an active poll for a condition that structurally cannot occur
+in this harness would be dead code exercised by nothing" — and the
+Non-Goals section (~L703-708) repeats the same exclusion. The four
+sibling `bc_traces` comments (L11-L14) each gloss the traced BC's own
+core postcondition or title — "timeslice clock fires every tick",
+"empty-tick frame semantics", "duplicate-and-race dispatch",
+"endpoint checksum-only dedup" — not a survey of every BC the trace
+target composes with elsewhere in the spec corpus; L15 following that
+same convention should gloss BC-2.02.005's own subject (downstream ARQ
+with piggybacked ACK/SACK), not import BC-2.02.006's subject. Since
+this note's design explicitly never exercises TLPKTDROP anywhere,
+keeping the qualifier here would misrepresent what this note's
+BC-2.02.005 usage actually covers — an internal inconsistency between
+the frontmatter gloss and the note's own body, not a legitimate
+contract-vs-harness scope divergence from the story.
+
+**Fix:** L15 corrected from
+`# downstream ARQ (piggybacked ACK/SACK, TLPKTDROP)` to
+`# downstream ARQ (piggybacked ACK/SACK)`, matching the story's GAP-1
+form. No other TLPKTDROP occurrence in this note required correction
+— all other hits (Q1 ~L372, Non-Goals ~L703-708, ~L934) are prose
+correctly stating TLPKTDROP is NOT called in this design; only the L15
+frontmatter gloss asserted the opposite by inclusion.
+
+### AC-002 seq-space trace precision (F-R33-LENSB-02) — disposed as story-only, no note change
+
+A related R33 finding (F-R33-LENSB-02) concerns the story's AC-002(b)
+prose and its Anchors Consumed row for BC-2.01.003, which attribute
+"separate sequence spaces this exercises" to AC-002's named tests.
+Sequence-space independence in this design is true by construction —
+two `halfchannel.New()` instances, each with its own private
+`seq uint32`; `multipath.Frame` carries no cross-channel sequence
+field — not asserted by either `TestNewLoopback_RejectsOutOfBoundsTickInterval`
+or `TestLoopbackDriver_TicksFireOnSchedule`, which exercise interval
+validation and clock/tick-timing independence only. This finding is
+about story body wording (AC-002(b) parenthetical, ~story L818-822,
+and the BC-2.01.003 Anchors Consumed row), not this note's design or
+its `bc_traces`/Q6 content, which never overclaimed test coverage of
+sequence-space independence in the first place — Q6's ticker/lifecycle
+design section makes no such claim. No edit to this note is
+warranted; the wording tightening (if adopted) is a story-writer
+obligation against the story body only. See the story's own changelog
+for disposition.
+
+### Governance
+
+The L15 fix is a one-line frontmatter comment edit; no design
+decision, call contract, or binding rule elsewhere in the note
+changed. No frozen dated changelog row or prior repair-addendum
+section's defect/fix narrative was altered. Story, STORY-INDEX, and
+code are untouched by this note edit — per dispatch, this correction
+is independent of the AC-002 precision finding, which is a
+story-body-only matter.
+
+**Ground truth sources (v1.16):** `BC-2.02.005.md`
+(`.factory/specs/behavioral-contracts/ss-02/BC-2.02.005.md`, disk-read
+in full this session — Description, Invariants 1-4, Related BCs); this
+note's own Q1 (~L99-124), Q4 (~L372-377), and Non-Goals
+(~L700-710) sections (disk-read, confirmed TLPKTDROP excluded
+throughout); the story's v1.19 GAP-1 changelog row (confirmed
+identical annotation removed from the story's three BC-2.02.005 anchor
+comments for the same reason); `git -C
+/Users/skippy/work/aae-orc/run/switchboard-blue/.factory rev-parse
+HEAD` (`326e5e5...`, confirmed at dispatch) — all read and confirmed
+in this session.
