@@ -396,7 +396,7 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 	sid := lb.createSessionNoTicker(t)
 
 	// --- upstream leg: dedup gates accessNode.SendKeystroke ---
-	_ = lb.SendKeystroke(t, sid, "x")
+	rt1 := lb.SendKeystroke(t, sid, "x")
 	lb.driver.onUpstreamTick()
 
 	dataFrames := 0
@@ -410,6 +410,17 @@ func TestLoopbackDriver_EndpointDedupDiscardsSecondArrival(t *testing.T) {
 		t.Errorf("AC-005: downstreamHC received %d data frames after one upstream tick, want exactly 1 — endpoint dedup must discard the second-arriving duplicate before SendKeystroke ever runs a second time",
 			dataFrames)
 	}
+
+	// This leg inspects downstreamHC directly via Tick() (to count raw data
+	// frames pre-dedup) rather than driving onDownstreamTick(), so rt1's
+	// round trip is deliberately never completed — its pending entry would
+	// otherwise sit undrained until teardown and trip the AC-011 diagnostic
+	// (testenv.go), which is benign here but would mask a genuine future
+	// leak with expected noise. Drain it explicitly now that the
+	// dedup-count assertion above has already observed the state it needs.
+	lb.driver.mu.Lock()
+	delete(lb.driver.pending, rt1.id)
+	lb.driver.mu.Unlock()
 
 	// --- downstream leg: dedup does NOT gate OnAck (see AC-006) ---
 	rt2 := lb.SendKeystroke(t, sid, "y")
