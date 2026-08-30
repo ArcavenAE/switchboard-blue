@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "8d81c8b"
+input-hash: "5d93e32"
 traces_to: STATE.md
 ---
 
@@ -1008,6 +1008,26 @@ Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement a
 
 **Step-4.5 convergence counter RESET 3/3→0/3** (R14/R18/R24/v1.19-precedent — a converged spec that is then edited must reconverge) — the v1.20 reconvergence (R35/R36/R37) is retracted.
 
-**Superseded by the R38 clean-pass burst:** a fresh Step-4.5 4-leg adversarial reconvergence pass (R38, POL-005 dispatch, HEAD-SHA tuple `8018ab5`, pass 1 of the fresh streak against v1.21) returned CLEAN across all four legs, zero findings, zero spec artifacts changed — **the Step-4.5 convergence counter ADVANCES 0/3→1/3.** Full record: `cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R38-2026-08-30.md` and STATE.md's live Session Resume Checkpoint for current position.
+**Superseded by the R38 clean-pass burst:** a fresh Step-4.5 4-leg adversarial reconvergence pass (R38, POL-005 dispatch, HEAD-SHA tuple `8018ab5`, pass 1 of the fresh streak against v1.21) returned CLEAN across all four legs, zero findings, zero spec artifacts changed — **the Step-4.5 convergence counter ADVANCES 0/3→1/3.** Full record: `cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R38-2026-08-30.md`.
+
+**Survivor/drift ledger carried forward (as of the archived v1.21 anchor burst):** SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (scope-corrected), R14-LENSA-O1, RECURRING triple-ledger-parity `[process-gap]`, OBS-LENSB-R10-DBLCREATESESSION, OBS-LENSB-R30-ONACK-EQUIV-LOOSE — all unaffected.
+
+## Checkpoint: S-BL.LOOPBACK-FULLSTACK R40 CLEAN → RECONVERGED at v1.21 (archived from STATE.md at the v1.21 human-approval + compaction burst, 2026-08-30)
+
+**Timestamp:** 2026-08-30T18:00:00Z
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5, cycle-1. **R40 4-leg adversarial reconvergence pass, CLEAN — RECONVERGED (2026-08-30).** R40 was pass 3 of 3 — the reconverging pass — of the fresh 3-consecutive-clean-pass streak required against the v1.21 tip (POL-005 dispatch, `.factory` HEAD-SHA tuple `1fc3dff`, the R39 CLEAN record commit), following R38's and R39's CLEAN passes 1 and 2.
+
+**Verdict:** §1.8 Oracle **GREEN** (input-hash `7967a2f` verified, AC-013 injection re-proof PASS — SOUND gate caught exit 1, OLD gate missed exit 0, bench blob `e53ab35f` no leak; develop unchanged `2ce3a57`); Lens A **CLEAN** (all 5 spec-fidelity axes; AC↔BC bidirectional coverage complete over all 7 BCs; STORY-INDEX v4.177 frontmatter matched its changelog — no lag; triple-ledger parity holds at v1.21); Lens B **CLEAN** (all standing load-bearing facts re-derived from real develop@2ce3a57, no regression — concurrency acyclic/no-deadlock, race-free by construction; BC-2.02.003 accurate/non-overclaiming); Lens C **CLEAN** (BC-2.02.003 propagated to all 4 story-keyed sites, no straggler; note-pin all-v1.16 with frozen tokens correctly preserved; input-hash integrity; STORY-INDEX v4.177 carried no lag; triple-ledger 1:1).
+
+**New documented observation:** **F-R40-LENSB-01** (Severity: NONE — observation only, resets nothing, pending human-gate discretionary action), raised by Lens B: `loopbackSink.SendInput` hands its payload to `downstreamHC.Enqueue`, which does not copy it (`halfchannel.go:139-141`), technically contravening `KeystrokeSink.SendInput`'s "must not retain after return" clause (`upstream.go:65-68`) read in isolation. NOT a bug — upstream delivery hands a FRESH per-tick copy (`toMPFrame` copies `f.Payload`, story L1210) that nothing reuses, so the retained slice is never mutated/freed/concurrently-accessed after the call; ownership transfer preserves the invariant, not a copy at the `SendInput` boundary. Orchestrator adjudicated **NONE** — no failure scenario for the spec as written, documentation-completeness only. Flagged for the human gate as an OPTIONAL §1.12-style hardening addition — the human decides; no story edit made this burst.
+
+**Zero BLOCKER/HIGH/MED/LOW findings across all four legs, zero spec artifacts changed.** Story stays v1.21/`7967a2f`, note stays v1.16 — byte-stable across the whole R38-R40 streak. STORY-INDEX v4.177→**v4.178** (R40 status-cell clause + POL-001 changelog row only).
+
+**Step-4.5 convergence counter ADVANCES 2/3→3/3 — THREE CONSECUTIVE CLEAN PASSES (R38/R39/R40) — story S-BL.LOOPBACK-FULLSTACK RECONVERGED at v1.21/`7967a2f`** (BC-5.39.001 satisfied for this streak).
+
+**Superseded by the v1.21 human-approval + compaction burst:** the mandatory §1.7 fresh-context perimeter re-audit against the newly-reconverged v1.21 tip returned **CLEAN — zero perimeter gaps found.** Both gate-prerequisite steps (3/3 reconvergence, §1.7 perimeter audit) complete. The human then reviewed the gate and chose **"Approve as reconverged."** F-R40-LENSB-01 reviewed and **ACCEPTED AS-IS** (NONE; optional §1.12 hardening declined, no spec edit). **S-BL.LOOPBACK-FULLSTACK is now spec-converged AND human-approved at v1.21/`7967a2f`. The Step-4.5 adversarial spec-convergence loop for this story is CLOSED.** Story remains draft/unscheduled; ready for Phase 3 (TDD implementation) whenever scheduled — steady-state: no autonomous phase start without direction. STORY-INDEX v4.178→**v4.179**. Full record: `cycles/cycle-1/convergence-trajectory.md`.
+
+**Survivor/observation ledger carried forward (folded into the overall APPROVE verdict, disposition unchanged):** SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (scope-corrected, open human-decision item, independent of this story's approval), R14-LENSA-O1, RECURRING triple-ledger-parity `[process-gap]`, OBS-LENSB-R10-DBLCREATESESSION, OBS-LENSB-R30-ONACK-EQUIV-LOOSE, OBS-LENSB-R39-WINDOW-STEADYSTATE, F-R40-LENSB-01 (resolved — see `cycles/cycle-1/closed-drift.md`).ounter ADVANCES 0/3→1/3.** Full record: `cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R38-2026-08-30.md` and STATE.md's live Session Resume Checkpoint for current position.
 
 **Survivor/drift ledger carried forward (as of the archived v1.21 anchor burst):** SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (scope-corrected), R14-LENSA-O1, RECURRING triple-ledger-parity `[process-gap]`, OBS-LENSB-R10-DBLCREATESESSION, OBS-LENSB-R30-ONACK-EQUIV-LOOSE — all unaffected. (S1.7-A2-GAP4-BC2.01.003, S1.7-A2-GAP1-TLPKTDROP-COMMENT, F-R34-LENSC-01, and S1.7-R37-BC2.02.003-ANCHOR were RESOLVED as of this checkpoint.)
