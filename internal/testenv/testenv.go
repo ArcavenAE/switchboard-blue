@@ -371,19 +371,51 @@ type LoopbackConfig struct {
 // LoopbackEnv is a minimal single-session loopback environment for
 // benchmark use (VP-042, S-BL.BENCH).  Frames sent via SendKeystroke are
 // immediately reflected as downstream frames via DeliverFrame.
+//
+// S-BL.LOOPBACK-FULLSTACK (Design Constraints Q2): LoopbackEnv additionally
+// owns a *loopbackDriver (loopback.go) backing the tick-driven,
+// protocol-accurate SendKeystroke/WaitForEcho/CreateSession methods on
+// *LoopbackEnv — a separate method set from *Env's (Env is a named field,
+// not embedded, so the two never collide).
 type LoopbackEnv struct {
 	Env *Env
+
+	// driver is unexported and owned by LoopbackEnv (Q2). Constructed by
+	// NewLoopback.
+	driver *loopbackDriver
 }
 
 // NewLoopback creates a minimal single-session environment optimised for
 // benchmarks.  The loopback config controls tick intervals for the
 // halfchannel paths.
 //
+// S-BL.LOOPBACK-FULLSTACK: cfg.TickIntervalUpstream/TickIntervalDownstream
+// are validated against halfchannel.MinTickInterval/MaxTickInterval (Q6)
+// and drive a tick-driven, protocol-accurate loopbackDriver (loopback.go)
+// spanning halfchannel + arq + multipath + paths — no longer discarded.
+//
 // Required by: VP-042 (S-BL.BENCH).
 func NewLoopback(ctx context.Context, b testing.TB, cfg LoopbackConfig) *LoopbackEnv {
 	b.Helper()
+	validateLoopbackConfig(b, cfg)
+
 	env := newEnv(ctx, b, 1)
-	return &LoopbackEnv{Env: env}
+	driver := newLoopbackDriver(env, cfg)
+	lb := &LoopbackEnv{Env: env, driver: driver}
+
+	// AC-011: non-fatal diagnostic if a round trip is never delivered/drained
+	// (driver.pending non-empty at teardown) — mirrors Console.Detach's
+	// non-fatal Logf idiom.
+	b.Cleanup(func() {
+		driver.mu.Lock()
+		leaked := len(driver.pending)
+		driver.mu.Unlock()
+		if leaked > 0 {
+			b.Logf("testenv: LoopbackEnv teardown: %d pending round trip(s) never delivered", leaked)
+		}
+	})
+
+	return lb
 }
 
 // Env is the in-process test environment.  Construct with New or NewWithRouters.
