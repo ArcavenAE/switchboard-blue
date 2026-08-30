@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "794b998"
+input-hash: "1069dd9"
 traces_to: STATE.md
 ---
 
@@ -2691,3 +2691,9 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R35 4-leg reconvergence pass (POL-005 dispatch, HEAD-SHA tuple 286529d, pass 1 of the fresh 3-consecutive-clean streak against v1.20) CLEAN — all four legs, zero findings, zero spec artifacts changed: §1.8 Oracle GREEN (input-hash 7967a2f verified, AC-013 re-proof PASS, bench blob e53ab35f); Lens A CLEAN (STORY-INDEX ref-column all pins current, triple-ledger v1.20 parity, spec has converged); Lens B CLEAN (all load-bearing facts re-derived from develop@2ce3a57, race-free/deadlock-free); Lens C CLEAN (all 7 traceability mandates, F-R34-LENSC-01 fully propagated, no successor straggler). Story stays v1.20/7967a2f, note stays v1.16 — byte-stable. STORY-INDEX v4.171→v4.172. Step-4.5 convergence counter ADVANCES 0/3→1/3. NOT gate-ready. NEXT: R36 (pass 2 of 3) fresh Step-4.5 reconvergence against v1.20.** | adversary-clean | develop @ 2ce3a57; LOOPBACK has delivered no code. |
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the R40 row, 2026-08-30 R40 clean-pass/RECONVERGENCE compaction pass):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R36 4-leg reconvergence pass (POL-005 dispatch, HEAD-SHA tuple 314e4f4, pass 2 of the fresh 3-consecutive-clean streak against v1.20) CLEAN — all four legs, zero findings, zero spec artifacts changed: §1.8 Oracle GREEN (input-hash 7967a2f verified, AC-013 compile-gate injection re-proof PASS, bench blob e53ab35f, probe restored no leak, develop unchanged 2ce3a57); Lens A CLEAN (all 6 spec-fidelity axes, AC↔BC bidirectional coverage, STORY-INDEX ref-column all pins current, triple-ledger v1.20 parity, v4.172 row honest); Lens B CLEAN (all load-bearing facts re-derived from real develop@2ce3a57 source, race-free/deadlock-free — acyclic sinkMu⊃downstreamHCMu⊃driver.mu, single-writer ARQ, wg.Add-before-go, buffered-1 done; failLoud placement correct; BC-2.01.003 partial/harness-scope honest; the one observation is documented survivor OBS-LENSB-R30-ONACK-EQUIV-LOOSE, not reset); Lens C CLEAN (all 7 traceability mandates, ref-column full-sync held, no straggler reintroduced, note-version/input-hash/AC-002/BC-2.01.003/TLPKTDROP all clean). Story stays v1.20/7967a2f, note stays v1.16 — byte-stable. STORY-INDEX v4.172→v4.173. Step-4.5 convergence counter ADVANCES 1/3→2/3. NOT gate-ready. NEXT: R37 (pass 3 of 3, the reconvergence pass) fresh Step-4.5 reconvergence against v1.20.** | adversary-clean | develop @ 2ce3a57; LOOPBACK has delivered no code. |
