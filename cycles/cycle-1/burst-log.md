@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-25T00:00:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "6446e63"
+input-hash: "8d81c8b"
 traces_to: STATE.md
 ---
 
@@ -2679,3 +2679,9 @@ This state-manager burst additionally touches: .factory/STATE.md, .factory/cycle
 | Date | Step | Status | Result |
 |------|------|--------|--------|
 | 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK R33 4-leg adversarial reconvergence pass (POL-005 dispatch, HEAD-SHA tuple 326e5e5) — REMEDIATED: §1.8 Oracle GREEN (AC-013 compile-gate injection re-proof PASS, bench blob e53ab35f); Lens A CLEAN; Lens B NITPICK_ONLY; Lens C CLEAN. Four sub-findings, all architect-ruled FIX (none carried as survivors): F-R33-LENSB-01/F-R33-LENSC-01 (placement note L15 bc_traces stale TLPKTDROP comment mislabel → note v1.15→v1.16); F-R33-LENSB-02 (AC-002(b) + BC-2.01.003 Anchors Consumed row precision-tightened — clock/interval independence test-exercised, sequence-space independence by-construction not test-asserted); F-R33-LENSA-O1 (STORY-INDEX L155 reference-column BC-2.01.003 undercount, 5 vs 6 BCs, fixed); F-R33-LENSC-02 (STORY-INDEX v4.169 row's own fix-spot locators erratum 'L30/L42' corrected to disk-verified L31/L44 + L165 via a new v4.170 erratum row). Note is this story's declared input, so story input-hash recomputed 4902d5d→7967a2f via rc.24 compute-input-hash --update. Story v1.19→v1.20 (triple-ledger parity disk-verified). STORY-INDEX v4.169→v4.170. Step-4.5 convergence counter STAYS RESET at 0/3 (unchanged — R33 remediates findings the reconvergence attempt itself surfaced, not a clean pass). NOT gate-ready. NEXT: fresh Step-4.5 3/3 reconvergence against v1.20 (R34, pass 1 of a new streak).** | adversary-notclean+remediated | develop @ 2ce3a57; LOOPBACK has delivered no code. |
+
+**Archived Current Phase Steps row (oldest, rotated to make room for the R38 row, 2026-08-30 R38 clean-pass compaction pass):**
+
+| Date | Step | Status | Result |
+|------|------|--------|--------|
+| 2026-08-29 | **S-BL.LOOPBACK-FULLSTACK Step-4.5 R34 4-leg reconvergence pass (POL-005 dispatch, HEAD-SHA tuple b721b64, pass 1 of a new streak against v1.20) NOT CLEAN → REMEDIATED: §1.8 Oracle GREEN (input-hash 7967a2f verified, AC-013 re-proof PASS, bench blob e53ab35f); Lens A CLEAN; Lens B CLEAN; Lens C NOT CLEAN — one MED finding, F-R34-LENSC-01: STORY-INDEX L155 reference-column note-pin left stale at v1.15 by the v4.170 sweep (which touched the same cell for F-R33-LENSA-O1 but did not advance the pin to match the note's actual v1.16). Lens A had re-blessed this cell CLEAN; orchestrator adjudicated Lens C correct and overturned that disposition — the ref-column leading pin is a LIVE reference, not frozen historical narrative. Remediated STORY-INDEX-only (story stays v1.20/7967a2f, note stays v1.16, both untouched): pin v1.15→v1.16 + version-history extended + master-row tail note. STORY-INDEX v4.170→v4.171. Step-4.5 convergence counter STAYS RESET at 0/3 (a bookkeeping fix, not a spec edit). NOT gate-ready. THIRD incomplete-propagation straggler on this mega-cell (F-R25, F-R33-LENSA-O1, F-R34-LENSC-01) — RECURRING [process-gap] logged. NEXT: fresh Step-4.5 3/3 reconvergence against v1.20 (R35, pass 1 of a new streak).** | adversary-notclean+remediated | develop @ 2ce3a57; LOOPBACK has delivered no code. |

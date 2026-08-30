@@ -7,7 +7,7 @@ producer: state-manager
 timestamp: 2026-06-27T23:30:00Z
 cycle: cycle-1
 inputs: [STATE.md]
-input-hash: "2f35836"
+input-hash: "8d81c8b"
 traces_to: STATE.md
 ---
 
@@ -997,3 +997,17 @@ Prior position (2026-07-12 board close): VP-042 testenv-integrated measurement a
 **Superseded by the v1.21 §1.7-anchor burst:** the mandatory §1.7 fresh-context perimeter re-audit against this reconverged v1.20 tip found F-S1.7-R37-01 (BC-2.02.003 exercised-but-unanchored); the human directed anchoring it PARTIAL/HARNESS-SCOPE (GAP-4 precedent), applied story-only at v1.21 — **this RETRACTS the v1.20 reconvergence recorded above and RESETS the Step-4.5 counter 3/3→0/3.** Full record: `cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/s1.7-audit-R37-bc2.02.003-anchor-2026-08-30.md` and STATE.md's live Session Resume Checkpoint for current position.
 
 **Survivor/drift ledger carried forward (as of the archived R37 pass):** SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION (unchanged), S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (scope-corrected), R14-LENSA-O1, RECURRING triple-ledger-parity `[process-gap]` (not re-raised across R35-R37), OBS-LENSB-R10-DBLCREATESESSION, OBS-LENSB-R30-ONACK-EQUIV-LOOSE.
+
+## Checkpoint: S-BL.LOOPBACK-FULLSTACK v1.21 human-gate-directed spec edit — BC-2.02.003 anchored, counter RESET (archived from STATE.md at the R38 clean-pass burst, 2026-08-30)
+
+**Timestamp:** 2026-08-30T06:15:00Z
+
+**Position:** S-BL.LOOPBACK-FULLSTACK Step-4.5, cycle-1. **v1.21 human-gate-directed spec edit (2026-08-30) — §1.7 finding F-S1.7-R37-01, BC-2.02.003 anchored PARTIAL/HARNESS-SCOPE.** The R37 4-leg reconvergence pass had reached CLEAN/RECONVERGED at v1.20 (R35/R36/R37, 3/3, BC-5.39.001 — archived checkpoint above). The mandatory §1.7 fresh-context consistency-validator perimeter re-audit against that reconverged v1.20 tip then found **F-S1.7-R37-01** (QUESTION-severity): BC-2.02.003 ("Per-Path RTT and Loss Tracked via Keep-Alive Probes; Paths Ranked by Quality", `internal/paths`) exercised-but-unanchored — `multipath.Send` calls `paths.Rank()` on every send (`multipath.go:252`), incidental to AC-004's duplicate-and-race assertion, not itself asserted; probe-driven RTT/loss tracking itself is not exercised (static trackers, zero `OnProbe` calls, consistent with Non-Goals). The human directed **"anchor it"** — PARTIAL/HARNESS-SCOPE, the identical disposition already applied to GAP-4/BC-2.01.003 at v1.19.
+
+**Applied story-only, GAP-4-faithful:** `behavioral_contracts:`/`bc_traces:` gain BC-2.02.003 (numeric order, now **7 BCs**), a new Anchors Consumed row, and AC-004's trace header (`### AC-004 (traces to BC-2.02.001, BC-2.02.003; Q3, Q7)`). Placement note left **UNCHANGED at v1.16** — a v1.17 note-edit was drafted then reverted before this burst closed, to avoid an input-hash cascade and to treat BC-2.01.003/BC-2.02.003 identically (both story-only, note untouched). Story bumped v1.20→**v1.21**; input-hash **UNCHANGED `7967a2f`**; AC count unchanged 17. STORY-INDEX v4.174→**v4.175** (ref-column BC enumeration + master-row v1.21 clause + new changelog row).
+
+**Step-4.5 convergence counter RESET 3/3→0/3** (R14/R18/R24/v1.19-precedent — a converged spec that is then edited must reconverge) — the v1.20 reconvergence (R35/R36/R37) is retracted.
+
+**Superseded by the R38 clean-pass burst:** a fresh Step-4.5 4-leg adversarial reconvergence pass (R38, POL-005 dispatch, HEAD-SHA tuple `8018ab5`, pass 1 of the fresh streak against v1.21) returned CLEAN across all four legs, zero findings, zero spec artifacts changed — **the Step-4.5 convergence counter ADVANCES 0/3→1/3.** Full record: `cycles/steady-state-post-cycle-1/S-BL.LOOPBACK-FULLSTACK/rereview-R38-2026-08-30.md` and STATE.md's live Session Resume Checkpoint for current position.
+
+**Survivor/drift ledger carried forward (as of the archived v1.21 anchor burst):** SURVIVOR-R22, S1.7-F2-VP042-HARNESS, S1.7-F3-NOTE-L497-CITATION, S1.7-SYSTEMIC-SUBSYSTEMS-REGISTRY (scope-corrected), R14-LENSA-O1, RECURRING triple-ledger-parity `[process-gap]`, OBS-LENSB-R10-DBLCREATESESSION, OBS-LENSB-R30-ONACK-EQUIV-LOOSE — all unaffected. (S1.7-A2-GAP4-BC2.01.003, S1.7-A2-GAP1-TLPKTDROP-COMMENT, F-R34-LENSC-01, and S1.7-R37-BC2.02.003-ANCHOR were RESOLVED as of this checkpoint.)
