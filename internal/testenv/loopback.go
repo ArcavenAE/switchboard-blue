@@ -230,6 +230,25 @@ func (d *loopbackDriver) onDownstreamTick() {
 
 	// [B1] Capture chanSeq from the ChannelFrame BEFORE toMPFrame — multipath.Frame
 	// has no ChanSeq field/method.
+	//
+	// Accepted, bounded coupling (documented, not a defect): chanSeq is
+	// downstreamHC's own tick counter — halfchannel increments it on every
+	// Tick(), including empty ticks (see the early return above) — fed here
+	// directly as the ARQ cumulative-ACK sequence passed to OnAck below.
+	// arq.ARQ's SACK window covers only arq.SackWindowSize (64) sequence
+	// positions; OnAck rejects with arq.ErrAckOutOfWindow once chanSeq
+	// drifts more than 64 ticks ahead of downstreamARQ.nextExpected (see
+	// arq.go). In this harness that gap can only open if >64 downstream
+	// ticks elapse between two DATA frames — e.g. 64 ticks at the legal
+	// 50ms MaxTickInterval is a 3.2s all-empty stall, well past every
+	// WaitForEcho/bench timeout used against this driver (500ms in the
+	// VP-042 benchmark and TestLoopbackDriver_TicksFireOnSchedule; 2s in
+	// TestLoopbackEnv_RoundTripCompletes_SingleSharedARQInstance) — so a
+	// real round trip can never hit ErrAckOutOfWindow by accident. AC-016
+	// (TestLoopbackDriver_OnAckError_SurfacesLoud) deliberately drives 65
+	// empty onDownstreamTick() calls via the direct seam to exercise this
+	// path on purpose. Bounded within the story's Non-Goals (no loss); a
+	// future loss/reordering story would need to revisit this coupling.
 	chanSeq := f.ChanSeq
 	d.downstreamARQ.EnqueueSend(chanSeq, f.Payload, time.Now().UTC())
 
