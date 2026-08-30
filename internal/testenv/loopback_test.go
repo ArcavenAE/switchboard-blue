@@ -766,7 +766,7 @@ func TestLoopbackEnv_TickerGoroutines_JoinOnClose(t *testing.T) {
 		TickIntervalDownstream: 50 * time.Millisecond,
 	})
 	sid := lb.CreateSession(t)
-	_ = lb.SendKeystroke(t, sid, "x")
+	rt := lb.SendKeystroke(t, sid, "x")
 
 	done := make(chan struct{})
 	go func() {
@@ -775,7 +775,18 @@ func TestLoopbackEnv_TickerGoroutines_JoinOnClose(t *testing.T) {
 	}()
 	select {
 	case <-done:
-		// OK — both ticker goroutines joined.
+		// OK — both ticker goroutines joined. rt's round trip was
+		// deliberately left in flight to exercise the Close-join path
+		// (ticker goroutines must join even mid-round-trip) and never
+		// completes, so its pending entry would otherwise sit undrained
+		// until teardown and trip the AC-011 diagnostic (testenv.go) —
+		// benign here but would mask a genuine future leak with expected
+		// noise. Drain it explicitly now that Close has joined both
+		// ticker goroutines (same hygiene as AC-005/AC-017); driver.mu is
+		// uncontended at this point since no ticker remains running.
+		lb.driver.mu.Lock()
+		delete(lb.driver.pending, rt.id)
+		lb.driver.mu.Unlock()
 	case <-time.After(1 * time.Second):
 		t.Error("AC-012: Env.Close() did not complete within 1s — ticker goroutine leak suspected")
 	}
