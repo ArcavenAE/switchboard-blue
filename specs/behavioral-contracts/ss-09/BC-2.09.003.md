@@ -2,7 +2,7 @@
 artifact_id: BC-2.09.003
 document_type: behavioral-contract
 level: L3
-version: "2.2"
+version: "2.3"
 status: draft
 producer: product-owner
 timestamp: 2026-06-28T00:00:00
@@ -12,7 +12,7 @@ inputs:
   - '.factory/specs/domain-spec/invariants.md'
   - '.factory/specs/domain-spec/failure-modes.md'
   - '_bmad-output/planning-artifacts/prd.md'
-input-hash: "5da12a8"
+input-hash: "594b972"
 extracted_from: null
 bc_id: BC-2.09.003
 subsystem: SS-09
@@ -25,6 +25,32 @@ origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
 modified:
+  - date: 2026-08-31
+    version: "2.3"
+    actor: product-owner
+    change: >
+      S-BL.ACCESS-CONNECTOR spec-completeness item 4 (Access-Connector Config
+      Field Validation): PC-16 added (router_addr: required for access mode,
+      validated as host:port via the existing validateHostPort helper,
+      E-CFG-018); PC-17 added (svtn_id: required for access mode, validated
+      as a 32-character lowercase hex string decoding to exactly 16 bytes via
+      encoding/hex.DecodeString, no I/O in Validate, E-CFG-019). Resolves the
+      story/placement-note residual open question "possible new BC or
+      BC-2.09.003 extension for internal/config validation of
+      RouterAddr/SVTNID" — this BC's Validate()-purity-contract pattern is
+      the established, precedented home for ALL internal/config field
+      validation regardless of daemon mode (PC-12 through PC-15 already set
+      this precedent for other mode-scoped fields), so extending it here
+      (option a) is chosen over leaving validation solely implicit in
+      BC-2.04.009 Precondition 2 (option b) — BC-2.04.009 explicitly declines
+      to own this ("it does not itself define how"). E-CFG-018/E-CFG-019
+      added to Error Codes table; EC-026 through EC-028 added; Canonical Test
+      Vectors added for both fields; test-as-evidence VP rows added,
+      mirroring PC-12 through PC-15's own no-formal-VP treatment. Owning
+      story: S-BL.ACCESS-CONNECTOR AC-001. Note (pre-existing, unrelated):
+      this modified: list has no v2.2 entry even though the top-level
+      version/body/Changelog table carry v2.2 (2026-07-17, PC-15 addition) —
+      a frontmatter gap that predates this edit; not remediated here.
   - date: 2026-07-15
     version: "2.1"
     change: >
@@ -310,6 +336,41 @@ When the router daemon starts with a malformed, incomplete, or invalid configura
     This is structurally identical to the existing `UpstreamRouters []UpstreamRouter` pattern.
     This is a S-BL.ADMISSION-SYNC-WIRE implementer responsibility.
 
+### Access-connector config field validation postconditions (v2.3 additions)
+
+16. `router_addr` is a **required** config field for access mode (unlike PC-12/PC-13's
+    optional-with-default fields, this field has no sensible daemon default — an access
+    node with no router to dial cannot start). When **empty or malformed**, Validate()
+    exits with E-CFG-018:
+    `"config error: router_addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'"`.
+    Validated as `host:port` via the same `validateHostPort` helper already applied to
+    `UpstreamRouter.Addr` (PC-6) and `RouterManagementEndpoint.Addr` (PC-14) — no I/O in
+    `Validate()` (ARCH-06 §Config purity). PC-16 is **access-mode only**; other modes do
+    not read this field. Validate() does not enforce mode restrictions at parse time
+    (consistent with PC-12 through PC-15's own posture).
+
+    **Config-schema impact note:** A new field is added to `internal/config.Config`:
+    - `router_addr string` (yaml: `router_addr`) — required for access mode, validated
+      by PC-16. This is a `S-BL.ACCESS-CONNECTOR` implementer responsibility.
+
+17. `svtn_id` is a **required** config field for access mode (same no-sensible-default
+    reasoning as PC-16 — an access node has no way to derive which SVTN it belongs to).
+    When **empty, whitespace-only, containing non-hex characters, or not decoding via
+    `encoding/hex.DecodeString` to exactly 16 bytes**, Validate() exits with E-CFG-019:
+    `"config error: svtn_id: '<value>' is not a valid 32-character lowercase hex string decoding to 16 bytes. Fix: provide the access node's SVTN identifier as 32 lowercase hex characters (16 bytes) — copy the value from 'sbctl admin svtn create' output"`.
+    All three sub-cases (empty, non-hex, wrong-length) share this one code and message
+    template — mirrors E-CFG-002's own single-code treatment of `listen_addr`'s multiple
+    host:port failure sub-cases, rather than PC-12/PC-13's narrower "present-and-blank
+    only" scope, since `svtn_id` has no optional/default path to fall back to. No I/O in
+    `Validate()` (ARCH-06 §Config purity — `hex.DecodeString` is a pure string operation,
+    not a lookup against `SVTNManager`; PC-17 does NOT perform a live control-plane query
+    to confirm the SVTN exists). PC-17 is **access-mode only**; other modes do not read
+    this field.
+
+    **Config-schema impact note:** A new field is added to `internal/config.Config`:
+    - `svtn_id string` (yaml: `svtn_id`) — required for access mode, validated by PC-17.
+      This is a `S-BL.ACCESS-CONNECTOR` implementer responsibility.
+
 ### Config application postcondition (v1.3 right-sized)
 
 9. When `--config` is supplied and validation passes, the daemon initializes all subsystems using the validated config struct for fields whose target subsystems exist today. Specifically, the following field IS applied immediately:
@@ -358,6 +419,8 @@ Daemon startup config parsing failure; config reload with invalid config.
 | E-CFG-015 | `admission_state_file` is present but empty or whitespace-only | broken | 1 | `"config error: admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/admission-state.json', or remove the field to start with an empty keyset"` |
 | E-CFG-016 | `router_management_endpoints[N].addr` is not a valid `host:port` | broken | 1 | `"config error: router_management_endpoints[<N>].addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' or '<hostname>:<port>' format, e.g. '10.0.0.2:9093'"` |
 | E-CFG-017 | `control_admission_state_file` is present but empty or whitespace-only | broken | 1 | `"config error: control_admission_state_file: must not be empty. Fix: set to a valid writable file path, e.g. '/var/lib/switchboard/control-admission-state.json', or remove the field to disable control-side persistence"` |
+| E-CFG-018 | `router_addr` is empty or not a valid `host:port` (access mode, required field) | broken | 1 | `"config error: router_addr: '<value>' is not a valid host:port. Fix: use '<ip>:<port>' format, e.g. '10.0.0.1:9090'"` |
+| E-CFG-019 | `svtn_id` is empty, whitespace-only, non-hex, or does not decode to exactly 16 bytes (access mode, required field) | broken | 1 | `"config error: svtn_id: '<value>' is not a valid 32-character lowercase hex string decoding to 16 bytes. Fix: provide the access node's SVTN identifier as 32 lowercase hex characters (16 bytes) — copy the value from 'sbctl admin svtn create' output"` |
 
 ## Edge Cases
 
@@ -388,6 +451,9 @@ Daemon startup config parsing failure; config reload with invalid config.
 | EC-023 | `control_admission_state_file: "/var/lib/switchboard/control-state.json"` (non-whitespace, file may not exist) | Validate() accepts (no I/O). At daemon startup, loadSnapshotFromFile handles missing→empty, corrupt→E-KEY-002+exit-1. |
 | EC-024 | `management_socket: "0.0.0.0:9091"` in control or access mode config | `buildMgmtListener` returns E-CFG-008 at bind time: "management_socket: control mode requires a loopback address..."; daemon exits 1. |
 | EC-025 | `management_socket: "127.0.0.1:9091"` in control or access mode config | `buildMgmtListener` accepts; daemon binds TCP loopback listener; INFO log "control management listener bound to 127.0.0.1:9091"; starts normally. |
+| EC-026 | `router_addr` empty (`""`), missing port (e.g. `"10.0.0.1"`), or non-numeric port (e.g. `"10.0.0.1:notaport"`) in access-mode config | E-CFG-018 naming the offending value; exit 1. |
+| EC-027 | `svtn_id` empty (`""`) or whitespace-only (`"   "`) in access-mode config | E-CFG-019 "config error: svtn_id: '' is not a valid 32-character lowercase hex string..."; exit 1. |
+| EC-028 | `svtn_id` present but malformed — non-hex characters (e.g. `"not-hex-zzzzzzzzzzzzzzzzzzzzzzzzz"`) or wrong length (e.g. 30 or 34 hex characters, decoding to 15 or 17 bytes) in access-mode config | E-CFG-019 naming the offending value; exit 1. Exhaustive error collection: if `router_addr` is also invalid, both errors are reported together (Inv-4). |
 
 ## Canonical Test Vectors
 
@@ -423,6 +489,13 @@ Daemon startup config parsing failure; config reload with invalid config.
 | `management_socket: "0.0.0.0:9091"` in access-mode config | `buildMgmtListener` fails at bind time with E-CFG-008 "management_socket: access mode requires a loopback address..."; exit 1 | error (PC-11b, Ruling 12, v2.2) |
 | `management_socket: "127.0.0.1:9091"` in control-mode config | `buildMgmtListener` accepts; TCP loopback bind succeeds; INFO log emitted; daemon starts normally | happy-path (PC-11b, Ruling 12, v2.2) |
 | `management_socket: "0.0.0.0:9093"` in router-mode config | `buildMgmtListener` accepts (no loopback restriction for router per Ruling 9); daemon starts normally | happy-path (Ruling 9 router-mode exemption, unchanged) |
+| `router_addr: ""` (empty) in access-mode config | E-CFG-018 "config error: router_addr: '' is not a valid host:port..."; exit 1 | error (PC-16, v2.3) |
+| `router_addr: "10.0.0.1"` (missing port) in access-mode config | E-CFG-018 "config error: router_addr: '10.0.0.1' is not a valid host:port..."; exit 1 | error (PC-16, v2.3) |
+| `router_addr: "10.0.0.1:9090"` in access-mode config | Validate() accepts; exit 0 | happy-path (PC-16, v2.3) |
+| `svtn_id: ""` (empty) in access-mode config | E-CFG-019 "config error: svtn_id: '' is not a valid 32-character lowercase hex string..."; exit 1 | error (PC-17, v2.3) |
+| `svtn_id: "not-hex-zzzzzzzzzzzzzzzzzzzzzzzzz"` (non-hex) in access-mode config | E-CFG-019 naming the offending value; exit 1 | error (PC-17, v2.3) |
+| `svtn_id: "a1b2c3"` (valid hex, wrong length — decodes to 3 bytes) in access-mode config | E-CFG-019 naming the offending value; exit 1 | error (PC-17, v2.3) |
+| `svtn_id: "a1b2c3d4e5f60102a1b2c3d4e5f60102"` (32 lowercase hex chars, decodes to 16 bytes) in access-mode config | Validate() accepts; exit 0 | happy-path (PC-17, v2.3) |
 
 ## Verification Properties
 
@@ -444,6 +517,8 @@ Daemon startup config parsing failure; config reload with invalid config.
 | test-as-evidence | `control_admission_state_file` present-and-blank rejected with E-CFG-017; absent accepted (no I/O in Validate) | unit (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | PC-15, v2.2 |
 | test-as-evidence | Control and access modes with non-loopback TCP `management_socket` rejected with E-CFG-008 at bind time; loopback TCP accepted; INFO log emitted on successful bind | integration (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | PC-11b, Ruling 12, v2.2 |
 | test-as-evidence | Router mode with non-loopback TCP `management_socket` accepted (no loopback guard; Ruling 9 exemption unchanged) | integration (S-BL.ADMISSION-SYNC-WIRE AC; no formal VP assigned) | PC-11b, Ruling 9 router-mode exemption |
+| test-as-evidence | `router_addr` empty or malformed host:port rejected with E-CFG-018 (access mode, required field, no default); valid host:port accepted | unit (S-BL.ACCESS-CONNECTOR AC-001; no formal VP assigned) | PC-16, v2.3. No formal VP — mirrors PC-6/PC-14's own host:port-validation treatment (no dedicated VP for host:port parsing anywhere in this BC to date). |
+| test-as-evidence | `svtn_id` empty, non-hex, or wrong-length rejected with E-CFG-019 (access mode, required field, no default); valid 32-hex-char/16-byte value accepted; no I/O in Validate() | unit (S-BL.ACCESS-CONNECTOR AC-001; no formal VP assigned) | PC-17, v2.3. No formal VP — bounded input space (empty / non-hex / wrong-length / valid), same class as PC-12/PC-13's own no-formal-VP treatment. |
 
 ## Traceability
 
@@ -452,7 +527,7 @@ Daemon startup config parsing failure; config reload with invalid config.
 | L2 Capability | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 |
 | L2 Domain Invariants | (none directly; anchored to FM-010 via capability CAP-028) |
 | Architecture Module | internal/config |
-| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation); S-BL.NODE-ADMISSION-PROVISIONING (PC-12: admission_key_file validation); S-BL.ADMISSION-SYNC-WIRE (PC-13: admission_state_file validation; PC-14: router_management_endpoints validation; PC-15: control_admission_state_file validation; PC-11b: loopback guard scope correction for control+access modes) |
+| Stories | S-6.01 (AC-001 through AC-009); S-W5.01 (PC-10 → AC-011: management_socket validation; PC-11 → AC-012: authorized_operator_keys PEM validation); S-BL.NODE-ADMISSION-PROVISIONING (PC-12: admission_key_file validation); S-BL.ADMISSION-SYNC-WIRE (PC-13: admission_state_file validation; PC-14: router_management_endpoints validation; PC-15: control_admission_state_file validation; PC-11b: loopback guard scope correction for control+access modes); S-BL.ACCESS-CONNECTOR (PC-16 → AC-001: router_addr validation, E-CFG-018; PC-17 → AC-001: svtn_id validation, E-CFG-019) |
 | Capability Anchor Justification | CAP-028 ("Daemon startup config validation") per capabilities.md §CAP-028 — this BC directly realizes the guarantee that a daemon exits non-zero with an actionable error message before accepting any connections, which is exactly the scope of CAP-028. The config-application postcondition (PC-9) is a necessary corollary: validation is meaningless if the validated config is then discarded. Anchored to FM-010 (deployment misconfig). |
 
 ## Related BCs
@@ -471,6 +546,7 @@ S-6.01 — AC-001 through AC-009 trace to postconditions in this BC.
 S-W5.01 — AC-011 (PC-10: management_socket) and AC-012 (PC-11: authorized_operator_keys) trace to v1.6 postconditions in this BC.
 S-BL.NODE-ADMISSION-PROVISIONING — ACs for PC-12 (admission_key_file validation, E-CFG-014) trace to v2.1 postconditions in this BC.
 S-BL.ADMISSION-SYNC-WIRE — ACs for PC-13 (admission_state_file validation, E-CFG-015), PC-14 (router_management_endpoints validation, E-CFG-016), PC-15 (control_admission_state_file validation, E-CFG-017), and PC-11b (loopback guard scope for control+access modes, Ruling 12) trace to postconditions in this BC.
+S-BL.ACCESS-CONNECTOR — AC-001 traces to PC-16 (router_addr validation, E-CFG-018) and PC-17 (svtn_id validation, E-CFG-019) added in v2.3.
 
 ## VP Anchors
 
@@ -482,6 +558,7 @@ Both VPs scope strictly to Config.Validate behavior in internal/config. They do 
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.3 | 2026-08-31 | S-BL.ACCESS-CONNECTOR spec-completeness item 4 (product-owner): PC-16 added (`router_addr`: required for access mode, host:port validated via existing `validateHostPort` helper, E-CFG-018); PC-17 added (`svtn_id`: required for access mode, 32-lowercase-hex-char decoding to 16 bytes via `encoding/hex.DecodeString`, no I/O in `Validate()`, E-CFG-019). Resolves the product-owner's decision on the residual open question "possible new BC or BC-2.09.003 extension for `internal/config` validation of `RouterAddr`/`SVTNID`" (`S-BL.ACCESS-CONNECTOR-placement-note.md` §11 item 3) in favor of extending this BC (precedented by PC-12 through PC-15's identical mode-scoped-field pattern) rather than leaving validation solely implicit in BC-2.04.009 Precondition 2, which explicitly declines to own it. E-CFG-018/E-CFG-019 added to Error Codes table; EC-026 through EC-028 added; Canonical Test Vectors added for both fields; test-as-evidence VP rows added (no formal VP, mirroring PC-12 through PC-15's own treatment). Stories/Story Anchor updated: S-BL.ACCESS-CONNECTOR AC-001 owns PC-16/PC-17. |
 | 2.2 | 2026-07-17 | add PC-15 `control_admission_state_file` / E-CFG-017 per Ruling 11 (F-P3-01); extend mgmt-listener loopback restriction to control+access modes (router-only exemption) per Ruling 12 (F-P3-02) — PC-11b added; EC-021..EC-025 added; test-vector rows + VP rows added for both rulings. |
 | 2.1 | 2026-07-15 | Identity-cluster BC groundwork consolidated amendment (items N3+A3+A4): PC-12 added (`admission_key_file`: non-empty when present, no file I/O in Validate, E-CFG-014); PC-13 added (`admission_state_file`: non-empty when present, E-CFG-015); PC-14 added (`router_management_endpoints`: each `addr` validated as `host:port` per E-CFG-016, NO loopback restriction per Ruling 9 — ADR-012 is the auth boundary, control-mode-only field); E-CFG-014/015/016 added to Error Codes table; EC-015 through EC-020 added; Canonical Test Vectors for all three fields added; test-as-evidence VP rows added. Added `inputs`/`input-hash`/`extracted_from` frontmatter fields (template conformance). |
 | 2.0 | 2026-07-06 | Governance-only: narrowed Verification Properties table to correct pre-existing authoring drift (PO ruling S-6.04-disposition-ruling.md §"Spec Note: BC-2.09.003 Verification Properties Table Drift"). VP-028 and VP-029 were overstated as covering all 9 VP-table rows including "Config reload failure leaves daemon on previous config" and host:port/drain/keepalive/management/keys properties. Both VPs scope strictly to Config.Validate startup-validation behavior (tick_interval out-of-range; missing required fields). Table rebuilt: two rows retain VP-028/VP-029 citations for the properties they actually prove; all other rows reclassified as test-as-evidence with owning story/AC citations. Reload-integration fail-closed property (Inv-3/EC-004) explicitly annotated as S-7.04-FU-SIGHUP-RELOAD AC-002 obligation with no formal VP. No PC/EC/Inv semantic changes; no runtime behavior implied. Governance-leaf change. |
