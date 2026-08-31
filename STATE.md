@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-access-connector-l3-l4-authored-architect-placement-note-next
+phase_step: steady-state-access-connector-architect-placement-note-complete-story-writer-decomposition-next
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -43,9 +43,9 @@ sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: "Human decision on what to take into the spec pipeline next — RECOMMENDED: S-BL.ACCESS-CONNECTOR first (buildable now, unblocks Layer 2); S-BL.RESYNC-FRAME Layer 1 (protocol machinery) is parallel-eligible. Steady-state: no autonomous next-story start without direction."
-current_step: "S-BL.ACCESS-CONNECTOR spec pipeline: product-owner authored L3/L4 — BC-2.04.009 v1.0 commissioned (access-node dials its router, completes genuine client-side NODE_IDENTIFY admission per BC-2.01.009, wires the live ARQ send-path; session-access/CAP-013, internal/accessdial, P2/PE) plus VP-081 (dial→admit→first-write round trip; every BC-2.01.009 handshake-phase failure mode retried via backoff, never fatal, wire-indistinguishable from a network drop; private key never on the wire) and VP-082 (arq.ARQ in-flight SendBuffer + session.AccessNode console-attachment/authorization state survive reconnect unchanged), both integration/P2/draft per the VP-080 backlog-stub precedent. BC-2.04.001 v1.1→v1.2 and BC-2.04.003 v1.3→v1.4 citation-only amendments cross-reference BC-2.04.009 as the connection-establishment authority each already presupposed (no behavioral content changed; both remain transport-agnostic). BC-INDEX v3.8→v3.9 (53→54 BCs); VP-INDEX v2.47→v2.48 (80→82 VPs). NEXT: architect placement note resolving product-owner's 3 flagged open items — SVTN-ID/router-addr sourcing, regular (non-retransmit) send-path composition, and inbound upstream-frame delivery target. S-BL.RESYNC-FRAME (Layer 1 protocol machinery, independent/buildable now) and S-BL.CONSOLE-CONNECTOR (design-blocked, RULING-W6TB-C) remain open in parallel. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+current_step: "S-BL.ACCESS-CONNECTOR spec pipeline: architect placement note COMPLETE (decomposition-ready) — all 3 product-owner-flagged open items resolved: (1) Config.RouterAddr/SVTNID sourcing; (2) shared Connector.Send() regular+retransmit send path; (3) inbound upstream-frame delivery via AccessNode.SendKeystroke through a connector-owned binding registry. Net-new scope surfaced: extract internal/nodeidentify codec pkg + client-side DecodeChallenge. Placement note also drove an additive BC-2.04.009 v1.0→v1.1 amendment — EC-006 (inbound frame with no resolvable console binding is silently dropped, mirroring BC-2.01.008 PC-4's silent-ignore posture; the expected common path in this story's own scope since the binding registry is populated only by a later story) plus a minimal Postcondition-5 cross-reference; no other BC content changed. Decomposition plan: 7 new + 5 touched files, 12 tasks, revised estimate ~11-13 pts. NEXT: story-writer decomposition → Step-4.5 spec convergence. S-BL.RESYNC-FRAME (Layer 1 protocol machinery, independent/buildable now) and S-BL.CONSOLE-CONNECTOR (design-blocked, RULING-W6TB-C) remain open in parallel. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-08-31T19:12:08Z
+timestamp: 2026-08-31T19:50:11Z
 last_update: 2026-08-31
 ---
 

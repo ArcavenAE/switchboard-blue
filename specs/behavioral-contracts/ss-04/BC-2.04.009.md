@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.009
 document_type: behavioral-contract
 level: L3
-version: "1.0"
+version: "1.1"
 status: draft
 producer: product-owner
 timestamp: 2026-08-31T00:00:00Z
@@ -17,7 +17,7 @@ inputs:
   - '.factory/specs/behavioral-contracts/ss-02/BC-2.02.005.md'
   - '.factory/specs/domain-spec/capabilities.md'
   - '.factory/specs/domain-spec/invariants.md'
-input-hash: "a4f1004"
+input-hash: "934ffbc"
 extracted_from: null
 bc_id: BC-2.04.009
 subsystem: session-access
@@ -29,7 +29,19 @@ scope_phase: PE
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-08-31
+    version: "1.1"
+    actor: product-owner
+    change: >
+      Additive edge-case amendment recommended by
+      S-BL.ACCESS-CONNECTOR-placement-note.md Open Item 3 / §11 item 1: added
+      EC-006 (inbound upstream frame with no resolvable console binding is
+      silently dropped, mirroring BC-2.01.008 PC-4's silent-ignore posture;
+      this is the expected common path in this story's own scope since the
+      binding registry is populated only by a later story). Added a minimal
+      cross-reference from Postcondition 5. No existing postcondition,
+      invariant, precondition, or EC-001..EC-005 behavior changed.
 deprecated: null
 deprecated_by: null
 replacement: null
@@ -155,7 +167,8 @@ zero-envelope bootstrap.
    keystroke frames is not identified by this BC — `AccessNode.DeliverFrame`
    has a matching `(hdr frame.OuterHeader)` shape but fans frames OUT to
    attached consoles (the opposite direction), so it is not self-evidently
-   the right target.
+   the right target. When no binding can be resolved for an inbound frame,
+   see Edge Cases EC-006 for the expected (silent-drop) behavior.
 
 6. **Per-connection lifecycle and reconnect.** The connector's lifecycle
    has exactly three states — *dialing*, *admitting*, *live* — collapsing
@@ -217,6 +230,7 @@ connection loss at any point after establishment.
 | EC-003 | Connection lost mid-session, after having reached *live* | Connector transitions to *dialing*. ARQ in-flight `SendBuffer` state and session/console-authorization state are NOT discarded (Postcondition 7). Any frames that should have been delivered during the outage window are a `S-BL.RESYNC-FRAME` concern, not this BC's. |
 | EC-004 | Two or more rapid successive connection drops (flapping) | Backoff increases per Invariant 2 rather than tight-looping. This BC does not define a give-up ceiling — reconnect attempts continue indefinitely, matching `internal/upstreamdial`'s own unbounded-retry precedent. |
 | EC-005 | The access node's SVTN ID or router address is not resolvable at startup (Precondition 2's open gap) | Out of this BC's scope to resolve. The connector cannot begin dialing until that value is available by whatever mechanism the owning story settles on; this BC does not invent one. |
+| EC-006 | Inbound upstream frame arrives with no resolvable console binding (`SrcAddr`/`chan_id` not present in the connector's binding registry) | The frame is silently dropped — no error surfaced, no connection closed, no crash — mirroring BC-2.01.008 Postcondition 4's silent-ignore posture for unrecognized `control_type` values, applied here to an unrecognized-sender inbound frame. This is the expected common path in `S-BL.ACCESS-CONNECTOR`'s own scope: the binding registry is populated only by a future story, so an inbound frame with no resolvable binding is not an anomaly during this story's window. |
 
 ## Canonical Test Vectors
 
@@ -311,4 +325,5 @@ or does it already survive independently?").
 
 | Version | Date | Change |
 |---------|------|--------|
+| 1.1 | 2026-08-31 | Additive edge-case amendment per `S-BL.ACCESS-CONNECTOR-placement-note.md` Open Item 3 / §11 item 1: added EC-006 (inbound upstream frame with no resolvable console binding is silently dropped, mirroring BC-2.01.008 PC-4's silent-ignore posture — the expected common path in this story's own scope, since the connector-owned binding registry is populated only by a later story). Added a minimal cross-reference from Postcondition 5 to EC-006. No change to any existing postcondition, invariant, precondition, or EC-001 through EC-005. |
 | 1.0 | 2026-08-31 | Initial commission. Authors the access-node data-plane connection-establishment BC named and bounded by `S-BL.DATAPLANE-CONNECTOR-scoping-note.md` §2 and §5 item 1, discharging `BC-2.04.001` Precondition 3. Flags three open architecture questions (SVTN-ID/router-address sourcing; regular-send-path composition with the retransmit dispatch; inbound upstream-keystroke-frame delivery target) for architect resolution rather than inventing designs for them. Mints VP-081 (dial+admit+first-write round trip) and VP-082 (reconnect preserves ARQ/session state — also closes the open question in `S-BL.RESYNC-FRAME-placement-note.md` §7.3/§9 item 6). |
