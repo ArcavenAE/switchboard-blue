@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-loopback-fullstack-v1.21-DELIVERED-PR135-squash-72e6e36d-on-develop
+phase_step: steady-state-next-story-RESYNC-FRAME-planning-layer2-prereqs-named
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -42,16 +42,16 @@ develop_head: 2ce3a5795009209d4e5eebec8fd9051f26f78055
 sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
-awaiting: "No story currently in flight. S-BL.LOOPBACK-FULLSTACK DELIVERED 2026-08-30 (PR #135 squash-merged develop @72e6e36d). Steady-state — no autonomous next-story start without direction. Forward obligations remain: VP-042 verification_lock flip and the Task-14 manual evidence run (both out-of-scope of the delivered story)."
-current_step: "S-BL.LOOPBACK-FULLSTACK DELIVERED (PR #135, squash 72e6e36d, develop, 2026-08-30). Phase-3 delivery complete: Red Gate → Green (race-clean) → Step-4.5 3/3 NITPICK_ONLY zero product defects → per-AC demo evidence → review+security CLEAN → Quality Gate green → squash-merged. VP-042 harness evidence p99=52.04ms<100ms. Awaiting direction for next story. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+awaiting: "Human decision on what to take into the spec pipeline next — RECOMMENDED: S-BL.ACCESS-CONNECTOR first (buildable now, unblocks Layer 2); S-BL.RESYNC-FRAME Layer 1 (protocol machinery) is parallel-eligible. Steady-state: no autonomous next-story start without direction."
+current_step: "S-BL.RESYNC-FRAME selected as next story; architect elaboration COMPLETE — frame-model corrected (RESYNC rides ctl(0x03)/control_type=0x02, not a new top-level FrameType; sketched AC-001 superseded). Layer 1 (protocol machinery) is independent, buildable now; Layer 2 (true end-to-end) is blocked on two new connector prerequisites, both NAMED and registered as backlog stubs: S-BL.ACCESS-CONNECTOR (buildable now, recommended-first) and S-BL.CONSOLE-CONNECTOR (design-blocked pending console-transport architecture, RULING-W6TB-C). Two BC amendments flagged for product-owner: candidate BC-2.02.010 (RESYNC extended payload) and candidate BC-2.04.009 (access-node connection establishment). RESYNC-FRAME carries a CWE-306 forward obligation: control_type=0x02 rides the unauthenticated terminal-consumer ctl path — must thread auth or re-adjudicate BC-2.01.004 Inv-2 before shipping. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-08-30T18:34:49Z
-last_update: 2026-08-30
+timestamp: 2026-08-31T16:34:54Z
+last_update: 2026-08-31
 ---
 
 <!--
   STATE.md SIZE BUDGET (per D-421(c)):
-  221 lines (wc-l); margin from soft-target = 500 - 200 = 300; margin from actual = 500 - 221 = 279 (D-446(c) dual-margin form). ~21 lines over the 200-line soft target — the residual is structural standing content (13-row Open Drift table, 8-row Wave 6 table, 8-row Phase Progress table, the DISCOVERY-WIRE decision arc), not new burst narrative bloat. Prior burst recorded the story's Phase-3 (TDD Implementation) Step-4.5 adversarial convergence (3/3 NITPICK_ONLY at frozen code HEAD `235bb5a`, zero product defects) — see prior commit for detail. This burst records S-BL.LOOPBACK-FULLSTACK's full delivery: PR #135 squash-merged to `develop` @ `72e6e36d` (2026-08-30). Current Phase Steps trimmed to last 5 (2 already-archived rows dropped per `cycles/cycle-1/convergence-trajectory.md`'s prior extraction, 1 DELIVERED row added — net -1 row), `phase_step` frontmatter updated. No other STATE.md section touched.
+  221 lines (wc-l); margin from soft-target = 500 - 200 = 300; margin from actual = 500 - 221 = 279 (D-446(c) dual-margin form). ~21 lines over the 200-line soft target — the residual is structural standing content (13-row Open Drift table, 8-row Wave 6 table, 8-row Phase Progress table, the DISCOVERY-WIRE decision arc), not new burst narrative bloat. Prior burst recorded S-BL.LOOPBACK-FULLSTACK's full delivery (PR #135 squash-merged to `develop` @ `72e6e36d`, 2026-08-30) — see prior commit for detail. This burst is frontmatter-only: S-BL.RESYNC-FRAME selected as next story and architect elaboration recorded (frame-model correction — RESYNC is ctl(0x03)/control_type=0x02, not a top-level FrameType; Layer 1/Layer 2 split; two new Layer-2 connector prerequisite stories named as backlog stubs — S-BL.ACCESS-CONNECTOR, S-BL.CONSOLE-CONNECTOR — plus two BC amendments flagged for product-owner). `phase_step`, `awaiting`, `current_step` updated; no table, row, or section added or removed. Line count unchanged at 221.
   Hard cap: 500 lines.
 -->
 
