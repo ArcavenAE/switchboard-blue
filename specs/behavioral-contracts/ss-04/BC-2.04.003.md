@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.003
 document_type: behavioral-contract
 level: L3
-version: "1.3"
+version: "1.4"
 status: draft
 producer: product-owner
 timestamp: 2026-06-26T12:00:00
@@ -24,12 +24,22 @@ modified:
   - date: 2026-06-26
     version: "1.3"
     change: "adversary pass-4 F-H-2: strengthen Inv-4 — SendKeystroke MUST validate sessionName matches attached session; mismatch returns E-SES-006 / ErrSessionMismatch"
+  - date: 2026-08-31
+    version: "1.4"
+    change: "mechanical citation only (S-BL.DATAPLANE-CONNECTOR-scoping-note.md §5 item 1, extended to the access-node leg): Description and Related BCs annotated with a cross-reference to the new BC-2.04.009, which now defines the access-node-side network connection this BC's transport-agnostic 'channel with the access node' presupposes exists. No behavioral content changed; this BC remains transport-agnostic."
 deprecated: null
 deprecated_by: null
 replacement: null
 retired: null
 removed: null
 removal_reason: null
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/edge-cases.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "8b3b473"
+extracted_from: null
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
   - '.factory/specs/domain-spec/invariants.md'
@@ -46,6 +56,8 @@ kos_anchors:
 ## Description
 
 A console attaches to a remote session by specifying the session name (not a hostname or IP). The console establishes a channel with the access node hosting that session. On successful attach: the console receives the downstream output stream and sends upstream keystrokes. The session becomes interactive. Tier 2 authorization is verified by the access node before the channel is established.
+
+**Mechanism cross-reference (2026-08-31):** this BC remains deliberately transport-agnostic about how "the console establishes a channel with the access node" — it does not itself specify the physical transport. BC-2.04.009 defines the access-node-side half of that transport (the access node's own live, admitted network connection to its router), which this BC's channel presupposes exists. This BC's own content is unchanged; see Related BCs.
 
 ## Preconditions
 
@@ -117,3 +129,4 @@ Console operator runs `sbctl sessions attach <session-name>` or equivalent API c
 - BC-2.05.003 — depends on: Tier 2 authorization enforcement
 - BC-2.04.004 — composes with: detach is the inverse of this BC
 - BC-2.04.006 — related to: multi-console attach allowed
+- BC-2.04.009 — related to: this BC's transport-agnostic "channel with the access node" presupposes the access node has a live, admitted network connection to its router, which BC-2.04.009 defines. This BC is not itself amended for transport and does not name a console-side connector (see BC-2.04.009's own Non-Goals — the console leg is a separate, lower-confidence story per `S-BL.DATAPLANE-CONNECTOR-scoping-note.md` §3).

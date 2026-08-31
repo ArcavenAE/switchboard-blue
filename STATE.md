@@ -10,7 +10,7 @@ input-hash: "[live-state]"
 traces_to: ""
 pipeline: STEADY_STATE
 phase: steady-state-post-cycle-1
-phase_step: steady-state-next-story-RESYNC-FRAME-planning-layer2-prereqs-named
+phase_step: steady-state-access-connector-l3-l4-authored-architect-placement-note-next
 product: switchboard
 mode: greenfield
 current_cycle: cycle-1
@@ -21,9 +21,9 @@ internal_packages: 23
 plugin_version_adopted: "1.0.0-rc.22"
 l2_complete: true
 l3_complete: true
-l3_bc_count: 45
+l3_bc_count: 54
 l4_complete: true
-l4_vp_count: 77
+l4_vp_count: 82
 vp_proven: 68
 vp_justified_deferred: 9
 arch_sections: 13
@@ -43,9 +43,9 @@ sprint_state_code_lane_head: cee8e8b
 open_prs: 0
 alpha_release_tag: alpha-20260629-165045-d854978
 awaiting: "Human decision on what to take into the spec pipeline next — RECOMMENDED: S-BL.ACCESS-CONNECTOR first (buildable now, unblocks Layer 2); S-BL.RESYNC-FRAME Layer 1 (protocol machinery) is parallel-eligible. Steady-state: no autonomous next-story start without direction."
-current_step: "S-BL.RESYNC-FRAME selected as next story; architect elaboration COMPLETE — frame-model corrected (RESYNC rides ctl(0x03)/control_type=0x02, not a new top-level FrameType; sketched AC-001 superseded). Layer 1 (protocol machinery) is independent, buildable now; Layer 2 (true end-to-end) is blocked on two new connector prerequisites, both NAMED and registered as backlog stubs: S-BL.ACCESS-CONNECTOR (buildable now, recommended-first) and S-BL.CONSOLE-CONNECTOR (design-blocked pending console-transport architecture, RULING-W6TB-C). Two BC amendments flagged for product-owner: candidate BC-2.02.010 (RESYNC extended payload) and candidate BC-2.04.009 (access-node connection establishment). RESYNC-FRAME carries a CWE-306 forward obligation: control_type=0x02 rides the unauthenticated terminal-consumer ctl path — must thread auth or re-adjudicate BC-2.01.004 Inv-2 before shipping. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
+current_step: "S-BL.ACCESS-CONNECTOR spec pipeline: product-owner authored L3/L4 — BC-2.04.009 v1.0 commissioned (access-node dials its router, completes genuine client-side NODE_IDENTIFY admission per BC-2.01.009, wires the live ARQ send-path; session-access/CAP-013, internal/accessdial, P2/PE) plus VP-081 (dial→admit→first-write round trip; every BC-2.01.009 handshake-phase failure mode retried via backoff, never fatal, wire-indistinguishable from a network drop; private key never on the wire) and VP-082 (arq.ARQ in-flight SendBuffer + session.AccessNode console-attachment/authorization state survive reconnect unchanged), both integration/P2/draft per the VP-080 backlog-stub precedent. BC-2.04.001 v1.1→v1.2 and BC-2.04.003 v1.3→v1.4 citation-only amendments cross-reference BC-2.04.009 as the connection-establishment authority each already presupposed (no behavioral content changed; both remain transport-agnostic). BC-INDEX v3.8→v3.9 (53→54 BCs); VP-INDEX v2.47→v2.48 (80→82 VPs). NEXT: architect placement note resolving product-owner's 3 flagged open items — SVTN-ID/router-addr sourcing, regular (non-retransmit) send-path composition, and inbound upstream-frame delivery target. S-BL.RESYNC-FRAME (Layer 1 protocol machinery, independent/buildable now) and S-BL.CONSOLE-CONNECTOR (design-blocked, RULING-W6TB-C) remain open in parallel. D-chain cite D-446 latest greenfield. trajectory-tail →21→7→4→3"
 historical_cycles: []
-timestamp: 2026-08-31T16:34:54Z
+timestamp: 2026-08-31T19:12:08Z
 last_update: 2026-08-31
 ---
 

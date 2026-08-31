@@ -2,7 +2,7 @@
 artifact_id: BC-2.04.001
 document_type: behavioral-contract
 level: L3
-version: "1.1"
+version: "1.2"
 status: draft
 producer: product-owner
 timestamp: 2026-06-23T00:00:00
@@ -17,13 +17,24 @@ scope_phase: E
 origin: greenfield
 lifecycle_status: active
 introduced: v0.1.0
-modified: []
+modified:
+  - date: 2026-08-31
+    version: "1.2"
+    change: "mechanical citation only (S-BL.DATAPLANE-CONNECTOR-scoping-note.md §5 item 1): Precondition 3 and Related BCs annotated with a cross-reference to the new BC-2.04.009, which is now the authority for the connection-establishment mechanism this precondition assumes. No behavioral content changed."
 deprecated: null
 deprecated_by: null
 replacement: null
 retired: null
 removed: null
 removal_reason: null
+inputs:
+  - '.factory/specs/domain-spec/capabilities.md'
+  - '.factory/specs/domain-spec/invariants.md'
+  - '.factory/specs/domain-spec/edge-cases.md'
+  - '.factory/specs/domain-spec/failure-modes.md'
+  - '_bmad-output/planning-artifacts/prd.md'
+input-hash: "90751bc"
+extracted_from: null
 inputDocuments:
   - '.factory/specs/domain-spec/capabilities.md'
   - '.factory/specs/domain-spec/invariants.md'
@@ -45,7 +56,7 @@ When the access node daemon starts, it connects to the local tmux server using c
 
 1. The access node daemon is running on a machine with tmux installed and in PATH.
 2. tmux server is running (or startable by the access node).
-3. The access node is admitted to an SVTN (or admission in progress).
+3. The access node is admitted to an SVTN (or admission in progress). **Mechanism cross-reference (2026-08-31):** the connection-establishment mechanism that discharges this precondition — dial, client-side `NODE_IDENTIFY` admission, and live wire wiring — is defined by BC-2.04.009, not by this BC. This BC continues to state admission as a given precondition and does not itself define how it is reached.
 
 ## Postconditions
 
@@ -105,3 +116,4 @@ Access node daemon startup; tmux session lifecycle events (create, close).
 
 - BC-2.04.002 — composes with: PTY fallback when this BC's control mode path fails
 - BC-2.03.001 — composes with: session publish triggers advertisement
+- BC-2.04.009 — depends on: this BC's Precondition 3 ("admitted to an SVTN, or admission in progress") is discharged by BC-2.04.009's dial + client-side NODE_IDENTIFY admission + live wire wiring. This BC's own content (local tmux control-mode connection, `internal/tmux`) is unchanged.
