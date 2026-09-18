@@ -1,6 +1,6 @@
 module github.com/arcavenae/switchboard
 
-go 1.25.4
+go 1.26.0
 
 require (
 	golang.org/x/sys v0.47.0
@@ -9,6 +9,6 @@ require (
 
 require github.com/leanovate/gopter v0.2.9
 
-require golang.org/x/crypto v0.55.0
+require golang.org/x/crypto v0.56.0
 
 require golang.org/x/term v0.45.0
