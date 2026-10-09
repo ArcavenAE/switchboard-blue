@@ -2,5 +2,18 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "local>ArcavenAE/renovate-config"
+  ],
+  "packageRules": [
+    {
+      "description": "Pinned by an operator ruling relayed 2026-10-09: the next version is a breaking change, and an upgrade investigation is tracked.",
+      "matchManagers": [
+        "asdf",
+        "mise"
+      ],
+      "matchPackageNames": [
+        "golang"
+      ],
+      "allowedVersions": "<1.26"
+    }
   ]
 }
