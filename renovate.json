@@ -7,13 +7,22 @@
     {
       "description": "Pinned by an operator ruling relayed 2026-10-09: the next version is a breaking change, and an upgrade investigation is tracked.",
       "matchManagers": [
-        "asdf",
-        "mise"
+        "asdf"
       ],
       "matchPackageNames": [
         "golang"
       ],
-      "allowedVersions": "<1.26"
+      "allowedVersions": "<1.27"
+    },
+    {
+      "description": "Pinned by an operator ruling relayed 2026-10-09: the next version is a breaking change, and an upgrade investigation is tracked.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepNames": [
+        "go"
+      ],
+      "allowedVersions": "<1.27"
     }
   ]
 }
