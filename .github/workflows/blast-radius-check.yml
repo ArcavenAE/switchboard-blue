@@ -2,6 +2,7 @@
 # Fails PRs whose body is missing the required "## Blast Radius" section
 # or leaves all three declaration slots empty.
 # See CONTRIBUTING.md §Blast radius and docs/architecture.md §Smoke invariants.
+# PRs authored by renovate[bot] are exempt; the bot cannot fill the section in.
 name: Blast Radius
 
 on:
@@ -20,6 +21,7 @@ concurrency:
 jobs:
   check:
     name: Declaration present
+    if: github.event.pull_request.user.login != 'renovate[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
