@@ -2503,7 +2503,10 @@ func TestServe_DrainCompletesWithinBudget_RulingI(t *testing.T) {
 	// forceClose the listener so Serve exits its accept loop.
 	swl.forceClose()
 	select {
-	case <-serveDone:
+	case err := <-serveDone:
+		if err != nil {
+			t.Logf("Serve returned: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Error("Serve did not exit after forceClose within 2s")
 	}

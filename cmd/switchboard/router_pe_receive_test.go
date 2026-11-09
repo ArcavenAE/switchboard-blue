@@ -143,7 +143,10 @@ func startRunRouterPE(t *testing.T, cfg *config.Config) *syncBuffer {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})

@@ -1058,7 +1058,10 @@ func TestRunRouterRun_RealSIGHUP_DoesNotExit(t *testing.T) {
 		// shutdown.  The daemon must return within 3s after receiving it.
 		_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})

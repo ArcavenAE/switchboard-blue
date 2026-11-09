@@ -260,7 +260,10 @@ func TestNodeIdentifyHandshake_Success_ServeConnBegins_FrameRouted(t *testing.T)
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -1210,7 +1213,10 @@ func TestNodeIdentifyHandshake_DuplicateNodeIdentify_E_ADM_023(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -1358,7 +1364,10 @@ func TestNodeIdentifyHandshake_CleanupFunc_UnbindInterface_Called(t *testing.T) 
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -1479,7 +1488,10 @@ func TestNodeIdentifyHandshake_NonceReplay_E_ADM_008_Logged(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -1761,7 +1773,10 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLogContainsE_ADM_024(t *test
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -1860,7 +1875,10 @@ func TestNodeIdentifyHandshake_CRSVTNIDMismatch_WarnLog_IncludesSVTNContextAndCo
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})

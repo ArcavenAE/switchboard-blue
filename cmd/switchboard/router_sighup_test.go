@@ -81,7 +81,9 @@ func startRunRouterForReload(t *testing.T, cfg *config.Config, cfgPath string) (
 	}()
 	if !waitForSocket(cfg.ManagementSocket, 2*time.Second) {
 		cancelFn()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("startRunRouterForReload: mgmt socket %q not created within 2s",
 			cfg.ManagementSocket)
 	}
@@ -256,7 +258,10 @@ func TestRunRouter_SIGHUPReload_EtoPE(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -337,7 +342,10 @@ func TestRunRouter_SIGHUPReload_BadConfig_FailClosed(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -480,7 +488,10 @@ func TestRunRouter_SIGHUPReload_LoadFileNotFound(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -563,7 +574,10 @@ func TestRunRouter_SIGHUPReload_MalformedYAML(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -658,7 +672,10 @@ func TestRunRouter_SIGHUPReload_SessionsNotInterrupted(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -781,7 +798,10 @@ func TestRunRouter_SIGHUPReload_PEtoE(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -884,7 +904,10 @@ func TestRunRouter_SIGHUPReload_PEtoPE(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -973,7 +996,10 @@ func TestRunRouter_SIGHUPReload_IdempotentResend(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -1078,7 +1104,10 @@ func TestRunRouter_SIGHUPReload_InvalidUpstreamAddr_FailClosed(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -1180,7 +1209,10 @@ func TestRunRouter_VP038_EtoPEViaConfigOnly(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})

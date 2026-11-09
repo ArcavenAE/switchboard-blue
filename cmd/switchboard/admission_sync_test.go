@@ -1635,7 +1635,9 @@ func TestRouterStartup_AdmissionStateFile_ConfiguredFileAbsent_EmptyKeyset_InfoL
 	}
 	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("AC-007 InfoLog: mgmt socket %q not created within 2s — runRouter did not start", sockPath)
 	}
 
@@ -1957,7 +1959,9 @@ func TestRouterMgmtListener_StartupInfoLog_BindAddress(t *testing.T) {
 	}
 	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("AC-008: mgmt socket %q not created within 2s — runRouter did not start", sockPath)
 	}
 
@@ -2042,7 +2046,9 @@ func TestRouterMgmtListener_TCPBind_ConnectionSucceeds(t *testing.T) {
 	}
 	if dialErr != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("AC-008 TCPBind: net.Dial(%q) failed within 3s: %v\n"+
 			"Ruling 10: runRouter with host:port management_socket must bind a TCP listener, not unix.\n"+
 			"F-2 fix: mgmtListenAddr auto-detects TCP when management_socket is a valid host:port.",
@@ -2128,7 +2134,9 @@ func TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds(t *testing.T) {
 	}
 	if !ready {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("AC-008 PushHandshake: TCP management listener at %q not ready within 3s — runRouter did not bind TCP", mgmtAddr)
 	}
 
@@ -2152,7 +2160,9 @@ func TestRouterMgmtListener_TCPBind_PushHandshakeSucceeds(t *testing.T) {
 	defer pushCancel()
 	if pushErr := syncClient.PushRegisterKey(pushCtx, svtnID, pub, admission.RoleAccess); pushErr != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("AC-008 PushHandshake: PushRegisterKey to TCP router addr %q failed: %v\n"+
 			"Ruling 10: admissionSyncClient must be able to push to runRouter with TCP management_socket.",
 			mgmtAddr, pushErr)

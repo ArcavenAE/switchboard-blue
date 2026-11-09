@@ -462,7 +462,9 @@ func TestRunRouter_DataListenerBinds(t *testing.T) {
 	}
 	if dialErr != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("TestRunRouter_DataListenerBinds: data-plane listener at %q did not accept "+
 			"within 1s: %v (runRouter must bind cfg.ListenAddr — S-BL.ROUTER-RUNTIME AC-002)",
 			dataAddr, dialErr)
@@ -528,7 +530,9 @@ func TestRunRouter_NoAdminHandlers(t *testing.T) {
 	}
 	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("TestRunRouter_NoAdminHandlers: mgmt socket %q not created within 1s", sockPath)
 	}
 
@@ -544,7 +548,9 @@ func TestRunRouter_NoAdminHandlers(t *testing.T) {
 	conn, err := net.DialTimeout("unix", sockPath, time.Second)
 	if err != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("dial mgmt socket: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
@@ -555,7 +561,9 @@ func TestRunRouter_NoAdminHandlers(t *testing.T) {
 	var challenge map[string]any
 	if err := json.NewDecoder(conn).Decode(&challenge); err != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("read challenge from router mgmt: %v", err)
 	}
 	if challenge["type"] != "challenge" {
@@ -625,7 +633,9 @@ func TestRunRouter_SIGTERMLifecycle(t *testing.T) {
 	}
 	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("TestRunRouter_SIGTERMLifecycle: mgmt socket %q not created within 1s", sockPath)
 	}
 
@@ -691,7 +701,9 @@ func TestRunRouter_DrainRequestChThirdSelectArm_ReachesShutdown_SameExitParityAs
 	}
 	if _, statErr := os.Stat(sockPath); os.IsNotExist(statErr) {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("TestRunRouter_DrainRequestChThirdSelectArm: mgmt socket %q not created within 1s", sockPath)
 	}
 
