@@ -279,7 +279,10 @@ func TestIntegration_ConcurrentRegisterAndRouteRaceClean(t *testing.T) {
 
 	cancel()
 	select {
-	case <-serveDone:
+	case err := <-serveDone:
+		if err != nil {
+			t.Fatalf("Serve: got %v want nil on ctx cancel", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("Serve did not return after ctx cancel")
 	}
