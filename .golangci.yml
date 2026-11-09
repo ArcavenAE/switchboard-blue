@@ -41,6 +41,12 @@ linters:
       # We enforce this — keeps `fmt.Errorf("...: %w", err)` uniform.
       checks: ["all"]
 
+issues:
+  # Show every hit, not the first few per linter and per message. Temporary, so one CI
+  # run lists them all; revert once the red is cleared.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 formatters:
   enable:
     - gofumpt        # stricter gofmt; CI also checks this separately
