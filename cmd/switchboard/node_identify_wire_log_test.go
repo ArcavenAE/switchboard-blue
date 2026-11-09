@@ -141,7 +141,10 @@ func TestNodeIdentifyHandshake_ErrNotAdmitted_LogsEADM003(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -198,7 +201,10 @@ func TestNodeIdentifyHandshake_ErrKeyRevoked_LogsEADM005(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -254,7 +260,10 @@ func TestNodeIdentifyHandshake_ErrKeyExpired_LogsEADM015(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -309,7 +318,10 @@ func TestNodeIdentifyHandshake_ErrSigVerifyFailed_LogsEADM001(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -387,7 +399,10 @@ func TestNodeIdentifyHandshake_Timeout_LogsEADM022(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})

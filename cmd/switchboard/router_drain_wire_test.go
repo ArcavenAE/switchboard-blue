@@ -353,7 +353,10 @@ func TestNetingress_OnAccept_RegistersNodeHandle(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -393,7 +396,10 @@ func TestRunRouter_NodeConnClose_CleansUpSendMap(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -508,7 +514,10 @@ func TestRouter_CtlFrame_ShortPayload_NoConnClose(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})
@@ -551,7 +560,10 @@ func TestRouter_CtlFrame_UnknownControlType_SilentIgnore(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(4 * time.Second):
 		}
 	})

@@ -108,7 +108,9 @@ func startRunRouterWithConfig(t *testing.T, cfg *config.Config, buf *syncBuffer)
 
 	if !waitForSocket(cfg.ManagementSocket, 1*time.Second) {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("startRunRouterWithConfig: mgmt socket %q not created within 1s",
 			cfg.ManagementSocket)
 	}
@@ -149,7 +151,10 @@ func TestRunRouter_HonorsCustomDrainTimeout(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(2 * time.Second):
 		}
 	})
@@ -199,14 +204,20 @@ func TestRunRouter_EmitsUpstreamModeE(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(2 * time.Second):
 		}
 	})
 
 	cancel()
 	select {
-	case <-errCh:
+	case err := <-errCh:
+		if err != nil {
+			t.Logf("run returned after cancel: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("runRouter did not return within 2s after ctx cancel")
 	}
@@ -250,14 +261,20 @@ func TestRunRouter_EmitsUpstreamModePE(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(2 * time.Second):
 		}
 	})
 
 	cancel()
 	select {
-	case <-errCh:
+	case err := <-errCh:
+		if err != nil {
+			t.Logf("run returned after cancel: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("runRouter did not return within 2s after ctx cancel")
 	}
@@ -357,7 +374,9 @@ func TestRunRouter_ForcedExitPastDrainTimeout(t *testing.T) {
 	conn, err := net.Dial("tcp", cfg.ListenAddr)
 	if err != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("dial live ingress conn: %v", err)
 	}
 	// Deferred Close is a safety net; the test doesn't rely on client-side
@@ -393,7 +412,9 @@ func TestRunRouter_ForcedExitPastDrainTimeout(t *testing.T) {
 	}()
 	if hsErr := <-hsErrCh; hsErr != nil {
 		cancel()
-		<-errCh
+		if err := <-errCh; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatalf("NODE_IDENTIFY handshake for live ingress conn: %v", hsErr)
 	}
 
@@ -486,14 +507,20 @@ func TestRunRouter_EmitsKeepaliveInterval(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(2 * time.Second):
 		}
 	})
 
 	cancel()
 	select {
-	case <-errCh:
+	case err := <-errCh:
+		if err != nil {
+			t.Logf("run returned after cancel: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("runRouter did not return within 2s after ctx cancel")
 	}

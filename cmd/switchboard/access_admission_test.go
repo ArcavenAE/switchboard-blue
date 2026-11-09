@@ -950,7 +950,9 @@ func TestDiscoveryRun_CtxCanceled_NotInternalFailure(t *testing.T) {
 	case <-started:
 	case <-time.After(300 * time.Millisecond):
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Logf("runAccessWithConnector after the failed start: %v", err)
+		}
 		t.Fatal("disc.Run was never started: cannot verify internalFailure=false for ctx.Canceled " +
 			"(regression guard: disc.Run must be started as a goroutine in runAccessWithConnector). " +
 			"Fix: start disc.Run goroutine in runAccessWithConnector. " +
@@ -1209,7 +1211,9 @@ func TestDiscoveryRun_StartupOrdering_AfterKeypairAndMgmtServer(t *testing.T) {
 	case <-started:
 	case <-time.After(300 * time.Millisecond):
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Logf("run returned after the failed start: %v", err)
+		}
 		t.Fatal("disc.Run was never started: startup-ordering cannot be verified " +
 			"(regression guard: disc.Run must start after keypair load + mgmt server start). " +
 			"Fix: start disc.Run after keypair load + mgmt server start. " +

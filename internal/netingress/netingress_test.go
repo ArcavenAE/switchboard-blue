@@ -350,7 +350,10 @@ func TestServeConn_RouteErrorDoesNotDropConnection(t *testing.T) {
 
 	_ = client.Close()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServeConn: got %v want nil on clean close", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("ServeConn did not return")
 	}
@@ -540,7 +543,10 @@ func TestReadFrame_MaxFrameBytesWireBound_MaxPayloadDecodes(t *testing.T) {
 	}
 	_ = client.Close()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ServeConn: got %v want nil on clean close", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("ServeConn did not return after client close")
 	}

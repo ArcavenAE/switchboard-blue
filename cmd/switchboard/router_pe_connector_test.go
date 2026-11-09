@@ -112,7 +112,10 @@ func TestRunRouter_PE_DialAndConnect_UpstreamReachable(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -176,7 +179,10 @@ func TestRunRouter_PE_SetEqualReconciliation_NoTeardownOnReorder(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -260,7 +266,10 @@ func TestRunRouter_PE_UnreachableUpstream_PartialPE(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -314,7 +323,10 @@ func TestRunRouter_PE_KeepalivePassedToConnector(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})
@@ -379,7 +391,10 @@ func TestRunRouter_PE_EFWD001ReconfirmationUnderLoad(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			if err != nil {
+				t.Logf("run returned after cancel: %v", err)
+			}
 		case <-time.After(3 * time.Second):
 		}
 	})

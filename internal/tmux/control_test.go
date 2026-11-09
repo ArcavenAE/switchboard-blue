@@ -192,7 +192,10 @@ func TestTmuxControlMode_Connect_EnumeratesSessions(t *testing.T) {
 	// dispatchLoop exits on EOF and signals via Err(); the fake stream is
 	// finite so this is deterministic.
 	select {
-	case <-cm.Err():
+	case err := <-cm.Err():
+		if err != nil {
+			t.Logf("dispatchLoop exit error: %v", err)
+		}
 		// dispatchLoop has finished processing.
 	case <-time.After(1 * time.Second):
 		t.Fatal("dispatchLoop did not signal exit within 1s")
@@ -248,7 +251,10 @@ func TestTmuxControlMode_SessionLifecycleEvents(t *testing.T) {
 	// dispatchLoop exits on EOF and signals via Err(); the fake stream is
 	// finite so this is deterministic.
 	select {
-	case <-cm.Err():
+	case err := <-cm.Err():
+		if err != nil {
+			t.Logf("dispatchLoop exit error: %v", err)
+		}
 		// dispatchLoop has finished processing.
 	case <-time.After(1 * time.Second):
 		t.Fatal("dispatchLoop did not signal exit within 1s")
@@ -379,7 +385,10 @@ func TestTmuxControlMode_NoSessionsOnStartup(t *testing.T) {
 	// dispatchLoop exits on EOF and signals via Err(); the fake stream is
 	// finite so this is deterministic.
 	select {
-	case <-cm.Err():
+	case err := <-cm.Err():
+		if err != nil {
+			t.Logf("dispatchLoop exit error: %v", err)
+		}
 		// dispatchLoop has finished processing.
 	case <-time.After(1 * time.Second):
 		t.Fatal("dispatchLoop did not signal exit within 1s")
@@ -479,7 +488,10 @@ func TestTmuxControlMode_LargeOutputLine_NoFalseDrop(t *testing.T) {
 
 	// Wait for dispatchLoop to process all events (stream EOF signals via Err()).
 	select {
-	case <-cm.Err():
+	case err := <-cm.Err():
+		if err != nil {
+			t.Logf("dispatchLoop exit error: %v", err)
+		}
 		// dispatchLoop exited after stream EOF — all events have been processed.
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("dispatchLoop did not signal exit within 500ms")
@@ -547,7 +559,10 @@ func TestTmuxControlMode_OversizePayload_Fragmented(t *testing.T) {
 
 	// Wait for dispatchLoop to finish processing.
 	select {
-	case <-cm.Err():
+	case err := <-cm.Err():
+		if err != nil {
+			t.Logf("dispatchLoop exit error: %v", err)
+		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("dispatchLoop did not signal exit within 500ms")
 	}
