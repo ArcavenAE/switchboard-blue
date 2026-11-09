@@ -9,7 +9,7 @@
       "matchManagers": [
         "asdf"
       ],
-      "matchPackageNames": [
+      "matchDepNames": [
         "golang"
       ],
       "allowedVersions": "<1.27"
