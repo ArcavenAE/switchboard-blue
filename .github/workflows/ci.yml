@@ -506,7 +506,11 @@ jobs:
   update-homebrew:
     name: Update Homebrew Tap (switchboard-a)
     needs: [build-binaries, sign-and-notarize, alpha-release]
+    # Skipped: the tap's update-formulas.yml syncs switchboard-a and sbctl-a from the release with a signed commit
+    # (ArcavenAE/switchboard-blue#158). This job pushed an unsigned commit, which the tap's required_signatures ruleset
+    # rejects. Kept so it can be re-enabled.
     if: |
+      false &&
       needs.alpha-release.result == 'success' &&
       needs.sign-and-notarize.result == 'success'
     permissions:
